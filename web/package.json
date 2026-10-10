@@ -18,7 +18,6 @@
   "dependencies": {
     "@supabase/ssr": "0.7.0",
     "@supabase/supabase-js": "2.75.0",
-    "@tanstack/react-table": "8.21.3",
     "@tanstack/react-virtual": "3.13.12",
     "geist": "1.5.1",
     "lightweight-charts": "5.0.9",
@@ -26,6 +25,7 @@
     "radix-ui": "1.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "server-only": "0.0.1",
     "zod": "4.1.12"
   },
   "devDependencies": {

@@ -27,6 +27,8 @@ LABELS = {
     "beta_252": "Beta frente al benchmark (12m)",
     "gap_freq": "Frecuencia de gaps > 2 ATR (126d)",
     "concentration": "Concentración del movimiento en 5 sesiones (126d)",
+    "atr_pct": "ATR14 / precio (informativo, no puntúa)",
+    "residual_mom": "Liderazgo: momentum residual tras beta (informativo)",
 }
 
 

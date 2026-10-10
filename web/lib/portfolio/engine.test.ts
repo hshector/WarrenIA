@@ -1,0 +1,172 @@
+import { describe, expect, it } from "vitest";
+
+import { addDays, computePortfolio, contributionPlan, PortfolioError, targetDeviation, toEur, type PriceSeries } from "./engine";
+import { DEFAULT_SETTINGS, type Instrument, type Transaction } from "./types";
+import { xirr } from "./xirr";
+
+const ETF: Instrument = { id: "etf", name: "MSCI World", isin: "IE00B4L5Y983", kind: "etf", bucket: "core", currency: "EUR", price_source: "eodhd", market_ticker: null, eodhd_symbol: "EUNL.XETRA", sector: null };
+const GOLD: Instrument = { id: "gold", name: "Gold ETC", isin: "DE000A0S9GB0", kind: "etc", bucket: "gold", currency: "EUR", price_source: "eodhd", market_ticker: null, eodhd_symbol: "4GLD.XETRA", sector: null };
+const NVDA: Instrument = { id: "nvda", name: "NVIDIA", isin: "US67066G1040", kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: "NVDA", eodhd_symbol: null, sector: "Technology" };
+
+let n = 0;
+function tx(p: Partial<Transaction> & Pick<Transaction, "type" | "trade_date">): Transaction {
+  return { id: `t${n++}`, instrument_id: null, quantity: null, price: null, amount: null, fees: 0, taxes: 0, currency: "EUR", fx_rate: 1, split_ratio: null, note: null, source: "manual", ...p };
+}
+
+function flat(id: string, price: number, from = "2026-01-01", days = 400, currency = "EUR"): Record<string, PriceSeries> {
+  const points = [];
+  for (let i = 0; i < days; i++) points.push({ date: addDays(from, i), price });
+  return { [id]: { currency, source: "test", points } };
+}
+
+describe("FIFO and P&L", () => {
+  it("realises gains FIFO with fees in cost and proceeds", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 3000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 10, price: 100, fees: 1 }),
+      tx({ type: "buy", trade_date: "2026-02-02", instrument_id: "etf", quantity: 10, price: 120, fees: 1 }),
+      tx({ type: "sell", trade_date: "2026-03-02", instrument_id: "etf", quantity: 15, price: 130, fees: 1 }),
+    ];
+    const r = computePortfolio([ETF], txs, flat("etf", 130), {}, "2026-03-02");
+    const p = r.positions[0];
+    // proceeds 15*130-1 = 1949; cost FIFO = 1001 + 5/10*1201 = 1601.5
+    expect(p.realizedEur).toBeCloseTo(1949 - 1601.5, 6);
+    expect(p.qty).toBeCloseTo(5);
+    expect(p.costEur).toBeCloseTo(600.5, 6);
+    expect(p.valueEur).toBeCloseTo(650, 6);
+    expect(p.unrealizedEur).toBeCloseTo(49.5, 6);
+    expect(r.cashEur).toBeCloseTo(3000 - 1001 - 1201 + 1949, 6);
+    expect(r.totals.fees).toBeCloseTo(3, 6);
+    expect(r.totals.value).toBeCloseTo(r.cashEur + 650, 6);
+  });
+
+  it("rejects selling more than held", () => {
+    const txs = [
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 1, price: 100 }),
+      tx({ type: "sell", trade_date: "2026-01-03", instrument_id: "etf", quantity: 2, price: 100 }),
+    ];
+    expect(() => computePortfolio([ETF], txs, {}, {}, "2026-01-05")).toThrow(PortfolioError);
+  });
+
+  it("applies splits to quantity without changing cost", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 1000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "nvda", quantity: 2, price: 500, currency: "EUR" }),
+      tx({ type: "split", trade_date: "2026-02-02", instrument_id: "nvda", split_ratio: 10 }),
+    ];
+    const r = computePortfolio([NVDA], txs, flat("nvda", 55, "2026-01-01", 60, "USD"), { USD: [["2026-01-01", 1.1]] }, "2026-02-10");
+    expect(r.positions[0].qty).toBeCloseTo(20);
+    expect(r.positions[0].costEur).toBeCloseTo(1000);
+    expect(r.positions[0].valueEur).toBeCloseTo((20 * 55) / 1.1, 6); // USD -> EUR with ECB rate
+  });
+});
+
+describe("contributions, cash and returns", () => {
+  it("infers missing contributions and warns", () => {
+    const txs = [tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 4, price: 100, fees: 1 })];
+    const r = computePortfolio([ETF], txs, flat("etf", 100), {}, "2026-01-10");
+    expect(r.totals.inferredDeposits).toBeCloseTo(401);
+    expect(r.totals.netContributions).toBeCloseTo(401);
+    expect(r.cashEur).toBeCloseTo(0);
+    expect(r.warnings.join(" ")).toMatch(/inferido/);
+  });
+
+  it("TWR ignores the size and timing of contributions", () => {
+    // Price +10% in January, +10% in February; a large deposit in between.
+    const pts = [];
+    for (let i = 0; i < 70; i++) {
+      const d = addDays("2026-01-01", i);
+      const price = d < "2026-02-01" ? 100 : d < "2026-03-01" ? 110 : 121;
+      pts.push({ date: d, price });
+    }
+    const prices = { etf: { currency: "EUR", source: "t", points: pts } };
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-01", amount: 1000 }),
+      tx({ type: "buy", trade_date: "2026-01-01", instrument_id: "etf", quantity: 10, price: 100 }),
+      tx({ type: "deposit", trade_date: "2026-02-01", amount: 11000 }),
+      tx({ type: "buy", trade_date: "2026-02-01", instrument_id: "etf", quantity: 100, price: 110 }),
+    ];
+    const r = computePortfolio([ETF], txs, prices, {}, "2026-03-05");
+    expect(r.twr.cumulative).toBeCloseTo(0.21, 6);
+    expect(r.totals.value).toBeCloseTo(110 * 121, 6);
+    // Money-weighted return is lower than TWR because most money came before the smaller gain.
+    expect(r.mwr.xirr).not.toBeNull();
+  });
+
+  it("dividends and interest add to value but are not external flows", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 1000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 10, price: 100 }),
+      tx({ type: "dividend", trade_date: "2026-01-20", instrument_id: "etf", amount: 5, taxes: 1 }),
+      tx({ type: "interest", trade_date: "2026-01-25", amount: 2 }),
+    ];
+    const r = computePortfolio([ETF], txs, flat("etf", 100), {}, "2026-01-31");
+    expect(r.totals.netContributions).toBe(1000);
+    expect(r.totals.dividends).toBe(5);
+    expect(r.totals.interest).toBe(2);
+    expect(r.twr.cumulative).toBeCloseTo(0.007, 6);
+  });
+
+  it("flags positions without a price source", () => {
+    const txs = [tx({ type: "deposit", trade_date: "2026-01-02", amount: 100 }), tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "gold", quantity: 1, price: 90 })];
+    const r = computePortfolio([GOLD], txs, {}, {}, "2026-01-05");
+    expect(r.positions[0].priceSource).toMatch(/último precio/);
+    expect(r.warnings.some((w) => w.includes("Gold ETC"))).toBe(true);
+  });
+
+  it("converts with ECB rates (units per EUR)", () => {
+    expect(toEur(110, "USD", { USD: [["2026-01-01", 1.1]] }, "2026-01-05")).toBeCloseTo(100);
+    expect(toEur(110, "USD", {}, "2026-01-05")).toBeNull();
+  });
+});
+
+describe("xirr", () => {
+  it("matches a simple one-year case", () => {
+    expect(xirr([{ date: "2025-01-01", amount: -1000 }, { date: "2026-01-01", amount: 1100 }])).toBeCloseTo(0.1, 6);
+  });
+  it("handles losses and multiple flows", () => {
+    const r = xirr([
+      { date: "2025-01-01", amount: -1000 },
+      { date: "2025-07-01", amount: -1000 },
+      { date: "2026-01-01", amount: 1800 },
+    ]);
+    expect(r).not.toBeNull();
+    expect(r!).toBeLessThan(0);
+  });
+  it("returns null when undefined", () => {
+    expect(xirr([{ date: "2025-01-01", amount: -1000 }])).toBeNull();
+    expect(xirr([{ date: "2025-01-01", amount: 100 }, { date: "2026-01-01", amount: 100 }])).toBeNull();
+  });
+});
+
+describe("targets and contribution plan", () => {
+  it("detects deviations outside 5/25 bands", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 1000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 9, price: 100 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "gold", quantity: 1, price: 100 }),
+    ];
+    const prices = { ...flat("etf", 100), ...flat("gold", 100) };
+    const r = computePortfolio([ETF, GOLD], txs, prices, {}, "2026-01-05");
+    const dev = targetDeviation(r, DEFAULT_SETTINGS);
+    const core = dev.find((d) => d.bucket === "core")!;
+    const mom = dev.find((d) => d.bucket === "momentum")!;
+    expect(core.weight).toBeCloseTo(0.9);
+    expect(core.outsideBand).toBe(true); // +15 pp
+    expect(mom.outsideBand).toBe(true); // 0% vs 15%
+  });
+
+  it("splits a contribution towards targets without selling", () => {
+    const plan = contributionPlan({ core: 900, gold: 100, momentum: 0 }, 0, DEFAULT_SETTINGS.targets, 450);
+    expect(plan.core + plan.gold + plan.momentum).toBeCloseTo(450);
+    expect(plan.momentum).toBeGreaterThan(plan.core);
+    expect(plan.core).toBeGreaterThanOrEqual(0);
+  });
+
+  it("first contribution follows the targets exactly", () => {
+    const plan = contributionPlan({ core: 0, gold: 0, momentum: 0 }, 0, DEFAULT_SETTINGS.targets, 400);
+    expect(plan.core).toBeCloseTo(300);
+    expect(plan.gold).toBeCloseTo(40);
+    expect(plan.momentum).toBeCloseTo(60);
+  });
+});
