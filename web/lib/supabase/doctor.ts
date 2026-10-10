@@ -28,7 +28,7 @@ export function keyKind(key: string | undefined): "secret" | "publishable" | "se
 async function get(url: string, key: string) {
   try {
     const r = await fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store", signal: AbortSignal.timeout(10_000) });
-    return { status: r.status, text: (await r.text()).slice(0, 400) };
+    return { status: r.status, text: await r.text() };
   } catch (e) {
     return { status: 0, text: e instanceof Error ? e.name : "error" };
   }
