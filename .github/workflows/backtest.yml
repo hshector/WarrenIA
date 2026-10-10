@@ -20,6 +20,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_BUCKET: ${{ vars.SUPABASE_BUCKET || 'market' }}
+      WARRENIA_CONFIG_DIR: ${{ github.workspace }}/config
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,5 +28,5 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: engine/pyproject.toml
-      - run: pip install ./engine
+      - run: pip install -e ./engine
       - run: python -m warrenia_engine backtest

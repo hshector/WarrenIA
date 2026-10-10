@@ -52,7 +52,8 @@ def update_fx(storage: Storage, now: datetime, currencies=("USD", "GBP", "CHF"))
 
 
 def list_instruments() -> list[dict]:
-    url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SECRET_KEY")
     if not (url and key):
         return []
     http = HttpClient("supabase-rest")

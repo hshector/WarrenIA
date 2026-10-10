@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import { cloneElement, isValidElement, useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -98,12 +98,24 @@ export function Select({ className, children, ...p }: SelectHTMLAttributes<HTMLS
 }
 
 export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
+  // Explicit label/id association (wrapping a <select> would leak its options into the accessible name).
+  const id = useId();
+  const child = isValidElement<{ id?: string; "aria-describedby"?: string }>(children)
+    ? cloneElement(children, { id: children.props.id ?? id, "aria-describedby": hint ? `${id}-hint` : undefined })
+    : children;
+  const forId = isValidElement<{ id?: string }>(children) ? (children.props.id ?? id) : undefined;
   return (
-    <label className={cx("flex flex-col gap-1.5", className)}>
-      <span className="t-label">{label}</span>
-      {children}
-      {hint && <span className="t-meta">{hint}</span>}
-    </label>
+    <div className={cx("flex flex-col gap-1.5", className)}>
+      <label htmlFor={forId} className="t-label">
+        {label}
+      </label>
+      {child}
+      {hint && (
+        <span id={`${id}-hint`} className="t-meta">
+          {hint}
+        </span>
+      )}
+    </div>
   );
 }
 
