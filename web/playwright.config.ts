@@ -23,6 +23,6 @@ export default defineConfig({
     command: `node node_modules/next/dist/bin/next start -p 3100`,
     port: 3100,
     reuseExistingServer: false,
-    env: { WARRENIA_LOCAL_MODE: "1", WARRENIA_LOCAL_STORE: store, WARRENIA_DATA_DIR: path.resolve(process.cwd(), "..", "data") },
+    env: { WARRENIA_LOCAL_MODE: "1", WARRENIA_LOCAL_STORE: store, WARRENIA_DATA_DIR: process.env.E2E_DATA_DIR || path.resolve(process.cwd(), "..", "data") },
   },
 });

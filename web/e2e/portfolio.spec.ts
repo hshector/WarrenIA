@@ -60,7 +60,7 @@ test("register instrument, deposit and buy; oversell is rejected", async ({ page
 
   await page.reload();
   await expect(page.getByText("Valor total")).toBeVisible();
-  await expect(page.getByText("Núcleo de prueba (SPY)")).toBeVisible();
+  await expect(page.getByText("Núcleo de prueba (SPY)", { exact: true })).toBeVisible();
   await expect(page.getByText("Rentabilidad de tu dinero")).toBeVisible();
 });
 
