@@ -60,14 +60,13 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
     const el = ref.current;
     if (!el) return;
     const ink3 = cssVar("var(--ink-3)");
-    const line = cssVar("var(--line)");
     const nf = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
     const chart = createChart(el, {
       height,
       localization: { locale: "es-ES", priceFormatter: (v: number) => nf.format(v), dateFormat: "dd MMM yyyy" },
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: ink3, fontFamily: "var(--font-geist-sans), system-ui", fontSize: 11, attributionLogo: false },
-      grid: { vertLines: { visible: false }, horzLines: { color: line } },
+      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: ink3, fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 11, attributionLogo: false },
+      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
       leftPriceScale: { visible: false, borderVisible: false },
       timeScale: {
@@ -100,7 +99,7 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
         const ser = chart.addSeries(LineSeries, { ...common, color, lineWidth: (s.width ?? 2) as 1 | 2 | 3 | 4, lineStyle: s.dashed ? LineStyle.Dashed : LineStyle.Solid, crosshairMarkerRadius: 3 });
         ser.setData(data);
       } else if (s.kind === "area") {
-        const ser = chart.addSeries(AreaSeries, { ...common, lineColor: color, topColor: alpha(color, 0.22), bottomColor: alpha(color, 0.0), lineWidth: (s.width ?? 2) as 1 | 2 | 3 | 4 });
+        const ser = chart.addSeries(AreaSeries, { ...common, lineColor: color, topColor: alpha(color, 0.18), bottomColor: alpha(color, 0.0), lineWidth: (s.width ?? 2) as 1 | 2 | 3 | 4, crosshairMarkerRadius: 4 });
         ser.setData(data);
       } else {
         const ser = chart.addSeries(HistogramSeries, { ...common, color: alpha(color, 0.35) });

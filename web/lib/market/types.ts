@@ -235,3 +235,25 @@ export const STATE_SHORT: Record<StateKey, string> = {
   speculative: "Speculative",
   neutral: "Neutral",
 };
+
+/** Plain-language labels used in the interface. */
+export const STATE_SIMPLE: Record<StateKey, string> = {
+  strong: "Tendencia fuerte",
+  improving: "Mejorando",
+  breakout: "Ruptura",
+  extended: "Sobreextendida",
+  weakening: "Perdiendo fuerza",
+  speculative: "Muy volátil",
+  neutral: "Sin señal clara",
+};
+
+/** One-sentence explanation of each state for non-experts. */
+export const STATE_EXPLAIN: Record<StateKey, string> = {
+  strong: "Sube de forma sostenida, por encima de sus medias y cerca de máximos.",
+  improving: "Su impulso está mejorando frente al resto del mercado.",
+  breakout: "Acaba de superar sus máximos recientes con volumen. Falta confirmación.",
+  extended: "Tendencia fuerte, pero el precio se ha alejado mucho de su media.",
+  weakening: "Era una líder y está perdiendo impulso.",
+  speculative: "Movimientos muy bruscos: riesgo elevado.",
+  neutral: "No cumple las reglas de ninguna categoría concreta.",
+};

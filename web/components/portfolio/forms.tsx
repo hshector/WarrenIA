@@ -15,12 +15,12 @@ function Sheet({ title, trigger, children, open, setOpen }: { title: string; tri
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-y-auto rounded-t-[16px] border border-line-2 bg-canvas-2 p-5 shadow-2xl focus:outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-[8vh] sm:w-[560px] sm:-translate-x-1/2 sm:rounded-[14px]">
-          <div className="mb-4 flex items-center justify-between">
-            <Dialog.Title className="text-[16px] font-semibold">{title}</Dialog.Title>
-            <Dialog.Close className="rounded p-1 text-ink-3 hover:text-ink" aria-label="Cerrar">
-              <IconClose size={17} />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/25 backdrop-blur-[2px]" />
+        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-y-auto rounded-t-[28px] bg-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl focus:outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-[8vh] sm:w-[540px] sm:-translate-x-1/2 sm:rounded-[28px]">
+          <div className="mb-5 flex items-center justify-between">
+            <Dialog.Title className="text-[20px] font-bold">{title}</Dialog.Title>
+            <Dialog.Close className="rounded-full bg-surface-2 p-2 text-ink-2" aria-label="Cerrar">
+              <IconClose size={16} />
             </Dialog.Close>
           </div>
           <Dialog.Description className="sr-only">{title}</Dialog.Description>
@@ -33,13 +33,13 @@ function Sheet({ title, trigger, children, open, setOpen }: { title: string; tri
 
 function Result({ state }: { state: ActionResult }) {
   if (!state) return null;
-  return <p className={state.ok ? "text-[13px] text-pos" : "text-[13px] text-neg"}>{state.message}</p>;
+  return <p className={state.ok ? "text-[14px] font-medium text-pos" : "text-[14px] text-neg"}>{state.message}</p>;
 }
 
 const TYPES_WITH_INSTRUMENT: TxType[] = ["buy", "sell", "dividend", "split"];
 
-export function TransactionForm({ instruments }: { instruments: Instrument[] }) {
-  const [open, setOpen] = useState(false);
+export function TransactionForm({ instruments, defaultOpen = false }: { instruments: Instrument[]; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [type, setType] = useState<TxType>("buy");
   const [currency, setCurrency] = useState("EUR");
   const [state, action, pending] = useActionState<ActionResult, FormData>(addTransaction, null);
@@ -57,7 +57,7 @@ export function TransactionForm({ instruments }: { instruments: Instrument[] }) 
       open={open}
       setOpen={setOpen}
       trigger={
-        <Button variant="primary">
+        <Button variant="primary" size="sm">
           <IconPlus size={16} /> Operación
         </Button>
       }
@@ -138,13 +138,11 @@ export function TransactionForm({ instruments }: { instruments: Instrument[] }) 
         </Field>
         <div className="col-span-2 flex items-center justify-between gap-3 pt-1">
           <Result state={state} />
-          <Button variant="primary" type="submit" disabled={pending} className="ml-auto">
+          <Button variant="primary" type="submit" disabled={pending} className="ml-auto min-w-32">
             {pending ? "Guardando…" : "Guardar"}
           </Button>
         </div>
-        <p className="col-span-2 t-meta">
-          Aportaciones: registra cada ingreso de dinero en el bróker como «Aportación» para que TWR y TIR sean exactas. Las operaciones se registran manualmente: WarrenIA no se conecta a tu bróker.
-        </p>
+        <p className="col-span-2 text-[13px] text-ink-3">Registra también cada ingreso de dinero en el bróker como «Aportación»: así la rentabilidad es exacta.</p>
       </form>
     </Sheet>
   );
@@ -167,7 +165,7 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
       setOpen={setOpen}
       trigger={
         trigger ?? (
-          <Button>
+          <Button size="sm">
             <IconPlus size={16} /> Instrumento
           </Button>
         )
@@ -231,7 +229,7 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
         </Field>
         <div className="col-span-2 flex items-center justify-between gap-3 pt-1">
           <Result state={state} />
-          <Button variant="primary" type="submit" disabled={pending} className="ml-auto">
+          <Button variant="primary" type="submit" disabled={pending} className="ml-auto min-w-32">
             {pending ? "Guardando…" : "Guardar"}
           </Button>
         </div>
@@ -255,7 +253,7 @@ export function DeleteButton({ id, kind, label }: { id: string; kind: "tx" | "in
           setErr(null);
           start(() => (kind === "tx" ? deleteTransaction(id) : deleteInstrument(id)).catch((e: Error) => setErr(e.message)));
         }}
-        className="rounded p-1 text-ink-3 hover:bg-neg-soft hover:text-neg disabled:opacity-40"
+        className="rounded-full p-2 text-ink-3 hover:bg-neg-soft hover:text-neg disabled:opacity-40"
       >
         <IconTrash size={15} />
       </button>
@@ -324,28 +322,39 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   );
 }
 
+const PLAN_DOT = { core: "bg-accent", gold: "bg-[#e3a008]", momentum: "bg-[#7048e8]" } as const;
+
 export function ContributionPlanner({ values, other, settings }: { values: Record<"core" | "gold" | "momentum", number>; other: number; settings: Settings }) {
   const [amount, setAmount] = useState(String(settings.monthly_contribution));
   const a = Number(amount.replace(",", ".")) || 0;
   const plan = contributionPlan(values, other, settings.targets, a);
   return (
-    <div className="flex flex-col gap-3">
-      <label className="flex items-center gap-3">
-        <span className="t-label">Próxima aportación</span>
-        <Input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="h-8 w-28 text-right num" aria-label="Importe de la aportación" />
-        <span className="text-[13px] text-ink-3">€</span>
+    <div className="flex flex-col gap-4">
+      <label className="flex items-center justify-between gap-3 rounded-[14px] bg-surface-2 px-4 py-2">
+        <span className="text-[15px] text-ink-2">Importe</span>
+        <span className="flex items-center gap-1">
+          <input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            inputMode="decimal"
+            aria-label="Importe de la aportación"
+            className="num w-24 bg-transparent text-right text-[22px] font-bold outline-none"
+          />
+          <span className="text-[22px] font-bold">€</span>
+        </span>
       </label>
-      <div className="grid grid-cols-3 gap-2">
+      <ul className="flex flex-col gap-3">
         {(["core", "gold", "momentum"] as const).map((k) => (
-          <div key={k} className="rounded-[8px] border border-line bg-canvas-2 px-3 py-2">
-            <div className="t-meta truncate">{BUCKET_LABELS[k]}</div>
-            <div className="num text-[15px] font-semibold">{money(plan[k], "EUR", 0)}</div>
-          </div>
+          <li key={k} className="flex items-center justify-between text-[15px]">
+            <span className="flex items-center gap-2.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${PLAN_DOT[k]}`} />
+              {BUCKET_LABELS[k]}
+            </span>
+            <span className="num font-semibold">{money(plan[k], "EUR", 0)}</span>
+          </li>
         ))}
-      </div>
-      <p className="t-meta">
-        Reparto que acerca la cartera a los pesos objetivo usando solo la nueva aportación (sin ventas). Es una ayuda de cálculo, no una orden: la ejecución es siempre manual.
-      </p>
+      </ul>
+      <p className="text-[13px] text-ink-3">Reparto que te acerca a tu objetivo sin vender nada. Las compras las haces tú en tu bróker.</p>
     </div>
   );
 }

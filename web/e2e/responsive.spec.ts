@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const p of ["/", "/radar", "/research", "/research/X412", "/portfolio", "/watchlist", "/settings", "/settings?tab=method", "/settings?tab=backtest"]) {
+for (const p of ["/", "/radar", "/research/X412", "/portfolio", "/portfolio/transactions", "/settings", "/settings?tab=data", "/settings?tab=method", "/settings?tab=backtest"]) {
   test(`no horizontal page scroll on ${p}`, async ({ page }) => {
     await page.goto(p);
     await page.waitForLoadState("networkidle");
@@ -9,12 +9,12 @@ for (const p of ["/", "/radar", "/research", "/research/X412", "/portfolio", "/w
   });
 }
 
-test("mobile radar uses compact rows and bottom navigation", async ({ page }) => {
+test("mobile: bottom tab bar and tappable radar rows", async ({ page }) => {
   await page.goto("/radar");
-  await expect(page.getByRole("navigation", { name: "Principal" }).last()).toBeVisible();
-  await expect(page.locator('[role="table"]')).toHaveCount(0);
-  const first = page.locator("button", { hasText: /Demo/ }).first();
-  await first.click();
+  const tabs = page.getByRole("navigation", { name: "Principal" }).last();
+  await expect(tabs).toBeVisible();
+  await expect(tabs.getByRole("link")).toHaveCount(4);
+  await page.locator("main ul li a").first().click();
   await expect(page).toHaveURL(/\/research\//);
 });
 

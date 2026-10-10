@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Delta, ScoreBar, StatePill, Ticker } from "@/components/fin/fin";
-import { AssetCharts } from "@/components/research/asset-charts";
-import { ReportSections, RuleTrace } from "@/components/research/report";
+import { AssetAvatar, Delta, Meter, StatePill } from "@/components/fin/fin";
+import { AssetCharts, RankChart } from "@/components/research/asset-charts";
+import { RuleTrace } from "@/components/research/report";
 import { WatchButton } from "@/components/research/watch-button";
-import { IconCompare } from "@/components/ui/icons";
-import { Badge, Callout, Panel } from "@/components/ui/primitives";
-import { compactUsd, dateLabel, num, pct, score } from "@/lib/format";
+import { IconChevronDown } from "@/components/ui/icons";
+import { Callout, Card } from "@/components/ui/primitives";
+import { compactUsd, dateLabel, num, pct } from "@/lib/format";
+import { riskLabel } from "@/lib/market/radar";
 import { getAsset, getRadar, loadMarket } from "@/lib/market/source";
-import type { Component } from "@/lib/market/types";
+import { STATE_EXPLAIN, type Component } from "@/lib/market/types";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { portfolioRelevance } from "@/lib/portfolio/relevance";
 import { requireStore } from "@/lib/user/store";
@@ -19,36 +20,47 @@ export async function generateMetadata({ params }: { params: Promise<{ ticker: s
   return { title: decodeURIComponent(ticker).toUpperCase() };
 }
 
-const SCORE_META = [
-  { key: "momentum", label: "Momentum", field: "m", desc: "Fortaleza de la tendencia: retornos 12-1 y 6-1 meses ajustados por volatilidad." },
-  { key: "trend_quality", label: "Trend Quality", field: "tq", desc: "Consistencia y limpieza de la tendencia." },
-  { key: "acceleration", label: "Acceleration", field: "a", desc: "Evolución reciente del impulso y de la fuerza relativa." },
-  { key: "risk", label: "Risk", field: "rk", desc: "0 = menor riesgo del universo · 100 = mayor riesgo." },
+const SCORES = [
+  { key: "momentum", field: "m", label: "Fuerza de tendencia", help: "Cuánto ha subido en 6 y 12 meses, ajustado por su volatilidad." },
+  { key: "trend_quality", field: "tq", label: "Calidad de la tendencia", help: "Si sube de forma constante y ordenada." },
+  { key: "acceleration", field: "a", label: "Aceleración", help: "Si el impulso está creciendo en las últimas semanas." },
 ] as const;
 
-function Components({ list, invert }: { list: Component[]; invert?: boolean }) {
+function Bullets({ items }: { items: string[] }) {
   return (
-    <table className="w-full text-[12.5px]">
-      <thead>
-        <tr className="text-left text-ink-3">
-          <th className="pb-1.5 font-normal">Componente</th>
-          <th className="pb-1.5 text-right font-normal">Valor</th>
-          <th className="pb-1.5 text-right font-normal">Percentil</th>
-          <th className="pb-1.5 text-right font-normal">Peso</th>
-        </tr>
-      </thead>
+    <ul className="flex flex-col gap-2.5">
+      {items.map((t, i) => (
+        <li key={i} className="flex gap-3 text-[15px] leading-relaxed text-ink">
+          <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+          <span>{t}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Fold({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="group border-t border-line first:border-t-0">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-[15px] font-medium [&::-webkit-details-marker]:hidden">
+        {title}
+        <IconChevronDown size={18} className="text-ink-3 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="px-5 pb-5">{children}</div>
+    </details>
+  );
+}
+
+function ComponentsTable({ list }: { list: Component[] }) {
+  return (
+    <table className="w-full text-[13.5px]">
       <tbody>
         {list.map((c) => (
-          <tr key={c.key} className="border-t border-line">
-            <td className="py-1.5 pr-2 text-ink-2">{c.label}</td>
-            <td className="num py-1.5 text-right text-ink">{num(c.raw, Math.abs(c.raw ?? 0) >= 10 ? 1 : 3)}</td>
-            <td className="py-1.5 text-right">
-              <span className="inline-flex items-center gap-2">
-                <span className="num">{score(c.pct)}</span>
-                <ScoreBar v={c.pct} invert={invert} width="w-10" />
-              </span>
-            </td>
-            <td className="num py-1.5 text-right text-ink-3">{Math.round(c.weight * 100)} %</td>
+          <tr key={c.key} className="border-t border-line first:border-t-0">
+            <td className="py-2 pr-3 text-ink-2">{c.label}</td>
+            <td className="num py-2 text-right">{num(c.raw, Math.abs(c.raw ?? 0) >= 10 ? 1 : 3)}</td>
+            <td className="num w-16 py-2 text-right text-ink-3">p{c.pct === null ? "—" : Math.round(c.pct)}</td>
+            <td className="num w-12 py-2 text-right text-ink-3">{Math.round(c.weight * 100)}%</td>
           </tr>
         ))}
       </tbody>
@@ -66,189 +78,198 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   const store = await requireStore();
   const [watch, pf] = await Promise.all([store.watchlist(), loadPortfolio(store, latest, meta)]);
   const r = asset.row;
-  const n = radar?.rows.filter((x) => x.cls === r.cls).length ?? 0;
-  const held = pf.result?.positions.some((p) => p.instrument.market_ticker === ticker && p.qty > 0) ?? false;
+  const total = radar?.rows.filter((x) => x.cls === r.cls).length ?? 0;
+  const rep = asset.report;
+  const risk = riskLabel(r.rk);
 
   return (
-    <div className="flex flex-col gap-5">
-      <nav className="t-meta">
-        <Link href="/radar" className="hover:text-ink-2">
-          Momentum Radar
-        </Link>{" "}
-        / <span className="text-ink-2">{ticker}</span>
-      </nav>
+    <div className="mx-auto flex max-w-[760px] flex-col gap-4">
+      <Link href="/radar" className="text-[15px] font-medium text-accent">
+        ‹ Radar
+      </Link>
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <Ticker t={ticker} className="text-[22px]" />
-            {asset.eligible && <StatePill state={r.st} />}
-            {held && <Badge tone="accent">En cartera</Badge>}
-            {r.flags?.includes("ADR") && <Badge>ADR</Badge>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <AssetAvatar t={ticker} size={52} />
+          <div className="min-w-0">
+            <h1 className="truncate text-[24px] font-bold tracking-[-0.02em]">{r.n}</h1>
+            <p className="text-[14px] text-ink-2">
+              {ticker} · {r.cls === "etf" ? "ETF" : (r.sec ?? "Acción")}
+            </p>
           </div>
-          <p className="mt-1 truncate text-[15px] text-ink-2">{r.n}</p>
-          <p className="t-meta mt-1">
-            {r.cls === "etf" ? "ETF" : (r.sec ?? "Sector no disponible")} · {r.ex ?? "—"} {r.mcap ? `· Cap. ${compactUsd(r.mcap)}` : ""} · Cierre {dateLabel(latest?.data_asof)}
-          </p>
         </div>
-        <div className="flex items-end gap-6">
-          <div className="text-right">
-            <div className="num text-[30px] font-semibold leading-none tracking-[-0.025em]">{num(r.px)}</div>
-            <div className="mt-1.5 text-[13px]">
-              <Delta v={r.d1} /> <span className="text-ink-3">· USD</span>
-            </div>
-          </div>
-          {asset.eligible && (
-            <div className="text-right">
-              <div className="t-label">Rank</div>
-              <div className="num text-[22px] font-semibold leading-tight">
-                #{r.rank}
-                <span className="text-[13px] font-normal text-ink-3"> / {n}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
         <WatchButton ticker={ticker} initial={watch.some((w) => w.ticker === ticker)} />
-        <Link href={`/research/compare?t=${ticker},${meta.primary_benchmark}`} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-line-2 px-2.5 text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
-          <IconCompare size={15} /> Comparar
-        </Link>
       </div>
 
-      {!asset.eligible && (
-        <Callout tone="warn" title="Fuera del universo puntuable">
-          {asset.excluded?.join(" · ") || "No cumple los filtros del universo."} Se muestran datos de precio sin puntuaciones.
+      <div>
+        <div className="num text-[40px] font-bold leading-tight tracking-[-0.03em]">{num(r.px)} $</div>
+        <p className="text-[14px] text-ink-2">
+          <Delta v={r.d1} className="font-semibold" /> hoy · cierre del {dateLabel(latest?.data_asof)}
+        </p>
+      </div>
+
+      <Card>
+        {asset.series ? <AssetCharts sessions={meta.sessions} close={asset.series.c} bench={bench?.series?.c} benchName={meta.primary_benchmark} /> : <p className="text-ink-3">Sin serie de precios.</p>}
+      </Card>
+
+      {!asset.eligible ? (
+        <Callout tone="warn" title="Sin puntuación">
+          No entra en el universo analizado: {asset.excluded?.join(" · ").toLowerCase() || "no cumple los filtros"}.
         </Callout>
+      ) : (
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[14px] text-ink-2">Puntuación de momentum</p>
+              <p className="num mt-1 text-[44px] font-bold leading-none tracking-[-0.03em]">
+                {Math.round(r.ov)}
+                <span className="text-[18px] font-semibold text-ink-3">/100</span>
+              </p>
+              <p className="mt-2 text-[14px] text-ink-2">
+                Puesto {r.rank} de {total}
+              </p>
+            </div>
+            <StatePill state={r.st} className="mt-1" />
+          </div>
+          <p className="mt-4 rounded-[14px] bg-surface-2 px-4 py-3 text-[14.5px] text-ink">{STATE_EXPLAIN[r.st]}</p>
+          <div className="mt-5 flex flex-col gap-4">
+            {SCORES.map((s) => (
+              <div key={s.key}>
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <span className="text-[15px]" title={s.help}>
+                    {s.label}
+                  </span>
+                  <span className="num text-[15px] font-semibold">{Math.round(r[s.field])}</span>
+                </div>
+                <Meter v={r[s.field]} />
+              </div>
+            ))}
+            <div>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-[15px]">Riesgo</span>
+                <span className={`text-[15px] font-semibold ${risk.cls}`}>{risk.text}</span>
+              </div>
+              <Meter v={r.rk} invert />
+            </div>
+          </div>
+        </Card>
       )}
 
-      {asset.eligible && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <div className="col-span-2 flex flex-col gap-2 rounded-[var(--radius-panel)] border border-accent-line bg-[linear-gradient(160deg,var(--accent-soft),transparent_70%)] p-4 md:col-span-1">
-            <span className="t-label">Overall</span>
-            <span className="t-kpi text-gradient-accent">{score(r.ov)}</span>
-            <ScoreBar v={r.ov} width="w-full" />
-            <span className="t-meta">percentil del universo</span>
-          </div>
-          {SCORE_META.map((s) => (
-            <div key={s.key} className="flex flex-col gap-2 rounded-[var(--radius-panel)] border border-line bg-surface p-4" title={s.desc}>
-              <span className="t-label">{s.label}</span>
-              <span className={`t-kpi ${s.key === "risk" && r.rk >= 75 ? "text-neg" : ""}`}>{score(r[s.field])}</span>
-              <ScoreBar v={r[s.field]} invert={s.key === "risk"} width="w-full" />
-              <span className="t-meta truncate">{s.key === "risk" ? "0 = menor riesgo" : s.key === "acceleration" && r.dm !== null ? `ΔMomentum 21d: ${r.dm > 0 ? "+" : ""}${Math.round(r.dm)}` : "percentil"}</span>
+      <Card title="Rentabilidad">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(
+            [
+              ["1 mes", r.r1m],
+              ["3 meses", r.r3m],
+              ["6 meses", r.r6m],
+              ["1 año", r.r12m],
+            ] as const
+          ).map(([l, v]) => (
+            <div key={l} className="rounded-[14px] bg-surface-2 px-3 py-3 text-center">
+              <p className="text-[12.5px] text-ink-2">{l}</p>
+              <Delta v={v} className="whitespace-nowrap text-[17px] font-semibold" />
             </div>
           ))}
         </div>
+        {radar?.bench[meta.primary_benchmark] && (
+          <p className="mt-3 text-[13.5px] text-ink-2">
+            Frente a {meta.primary_benchmark} en 6 meses:{" "}
+            <Delta
+              v={r.r6m !== null && radar.bench[meta.primary_benchmark].r6m !== null ? (1 + r.r6m) / (1 + (radar.bench[meta.primary_benchmark].r6m as number)) - 1 : null}
+              className="font-semibold"
+            />
+          </p>
+        )}
+      </Card>
+
+      {rep && (
+        <>
+          <Card title="Por qué destaca">
+            <Bullets items={rep.thesis.slice(0, 1)} />
+          </Card>
+          <Card title="Riesgos">
+            <Bullets items={rep.risks} />
+          </Card>
+          <Card title="Qué vigilar" sub="Señales que debilitarían la tendencia">
+            <Bullets items={rep.invalidation} />
+          </Card>
+          <Card title="En tu cartera">
+            <Bullets items={portfolioRelevance(r, pf.result, pf.instruments, pf.settings)} />
+          </Card>
+        </>
       )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <Panel title="Precio y tendencia">
-            {asset.series ? (
-              <AssetCharts sessions={meta.sessions} close={asset.series.c} volume={asset.series.v} bench={bench?.series?.c} benchName={meta.primary_benchmark} hist={asset.hist} />
-            ) : (
-              <p className="t-body">Sin serie de precios publicada.</p>
-            )}
-          </Panel>
-          <Panel title="Rentabilidad" meta="Precio ajustado por splits y dividendos (rentabilidad total si hay dividendos disponibles)" pad={false}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-[13px]">
-                <thead>
-                  <tr className="text-right text-[11px] uppercase tracking-[0.05em] text-ink-3">
-                    <th className="px-4 py-2 text-left font-medium md:px-5"> </th>
-                    {["1m", "3m", "6m", "12m", "YTD"].map((h) => (
-                      <th key={h} className="px-3 py-2 font-medium">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-t border-line">
-                    <td className="px-4 py-2 text-ink md:px-5">{ticker}</td>
-                    {[r.r1m, r.r3m, r.r6m, r.r12m, r.ytd].map((v, i) => (
-                      <td key={i} className="px-3 py-2 text-right">
-                        <Delta v={v} />
-                      </td>
-                    ))}
-                  </tr>
-                  {radar &&
-                    Object.keys(meta.benchmarks).map((b) => {
-                      const br = radar.bench[b];
-                      if (!br) return null;
-                      return (
-                        <tr key={b} className="border-t border-line">
-                          <td className="px-4 py-2 text-ink-3 md:px-5">
-                            {ticker} vs {b}
-                          </td>
-                          {(["r1m", "r3m", "r6m", "r12m", "ytd"] as const).map((h) => {
-                            const a = r[h];
-                            const bv = br[h];
-                            const rel = a !== null && a !== undefined && bv !== null && bv !== undefined ? (1 + a) / (1 + bv) - 1 : null;
-                            return (
-                              <td key={h} className="px-3 py-2 text-right">
-                                <Delta v={rel} />
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+      <section className="card overflow-hidden">
+        <h2 className="px-5 pb-1 pt-5 text-[17px] font-semibold">Detalle técnico</h2>
+        <p className="px-5 pb-2 text-[13.5px] text-ink-2">Para quien quiera ver cómo se calcula todo.</p>
+        {asset.state && (
+          <Fold title="Por qué tiene este estado">
+            <RuleTrace trace={asset.state.trace} state={asset.state.state} />
+          </Fold>
+        )}
+        {asset.components && (
+          <Fold title="Componentes de cada puntuación">
+            <div className="flex flex-col gap-5">
+              {(["momentum", "trend_quality", "acceleration", "risk"] as const).map((k) => (
+                <div key={k}>
+                  <p className="mb-1 text-[14px] font-semibold">{{ momentum: "Fuerza de tendencia", trend_quality: "Calidad de la tendencia", acceleration: "Aceleración", risk: "Riesgo (0 = menor)" }[k]}</p>
+                  <ComponentsTable list={asset.components![k]} />
+                </div>
+              ))}
             </div>
-          </Panel>
-          {asset.report && <ReportSections report={asset.report} relevance={portfolioRelevance(r, pf.result, pf.instruments, pf.settings)} />}
-        </div>
+          </Fold>
+        )}
+        {rep && (
+          <Fold title="Todos los datos">
+            <dl className="divide-y divide-line">
+              {rep.evidence.map((e) => (
+                <div key={e.label} className="flex flex-col gap-0.5 py-2.5 sm:flex-row sm:justify-between sm:gap-4">
+                  <dt className="text-[14px] text-ink-2">{e.label}</dt>
+                  <dd className="num text-[14px] sm:text-right">
+                    {e.value}
+                    {e.context && <span className="block text-[12.5px] text-ink-3">{e.context}</span>}
+                  </dd>
+                </div>
+              ))}
+              <div className="flex justify-between py-2.5 text-[14px]">
+                <dt className="text-ink-2">Capitalización</dt>
+                <dd className="num">{compactUsd(r.mcap)}</dd>
+              </div>
+              <div className="flex justify-between py-2.5 text-[14px]">
+                <dt className="text-ink-2">Volatilidad 63 días</dt>
+                <dd className="num">{pct(r.vol, 0, false)}</dd>
+              </div>
+            </dl>
+          </Fold>
+        )}
+        {asset.hist && asset.hist.d.length > 1 && (
+          <Fold title="Evolución en el ranking">
+            <RankChart hist={asset.hist} />
+          </Fold>
+        )}
+        {rep && (
+          <Fold title="Calidad de los datos">
+            <ul className="flex flex-col gap-1.5 text-[14px] text-ink-2">
+              <li>Fuente: {rep.data_quality.source} · cierre del {dateLabel(rep.data_quality.asof)}</li>
+              <li>{rep.data_quality.history_sessions} sesiones de historia</li>
+              {rep.data_quality.notes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+              {(asset.events ?? []).slice(-5).map(([d, , kind, detail]) => (
+                <li key={d + kind}>
+                  {kind === "split" ? `Split ${detail}` : `Dividendo ${detail} $`} el {dateLabel(d)}
+                </li>
+              ))}
+            </ul>
+          </Fold>
+        )}
+      </section>
 
-        <div className="flex flex-col gap-4">
-          {asset.state && (
-            <Panel title="Clasificación" meta="Reglas explícitas evaluadas en esta ejecución">
-              <RuleTrace trace={asset.state.trace} state={asset.state.state} />
-            </Panel>
-          )}
-          {asset.components &&
-            SCORE_META.map((s) => (
-              <Panel key={s.key} title={`${s.label} · ${score(r[s.field])}`} meta={s.desc}>
-                <Components list={asset.components![s.key]} invert={s.key === "risk"} />
-              </Panel>
-            ))}
-          {asset.indicators && (
-            <Panel title="Indicadores clave">
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px]">
-                {[
-                  ["Precio vs SMA20", pct(asset.indicators.px_vs_sma20 as number)],
-                  ["Precio vs SMA50", pct(asset.indicators.px_vs_sma50 as number)],
-                  ["Precio vs SMA100", pct(asset.indicators.px_vs_sma100 as number)],
-                  ["Precio vs SMA200", pct(asset.indicators.px_vs_sma200 as number)],
-                  ["ATR14 / precio", pct(asset.indicators.atr_pct as number, 2, false)],
-                  ["ATRs sobre SMA50", num(asset.indicators.atr_above_sma50 as number, 1)],
-                  ["Volumen relativo", `${num(asset.indicators.rel_volume as number, 2)}x`],
-                  ["Gaps > 2 ATR (6m)", pct(asset.indicators.gap_freq as number, 0, false)],
-                  ["Pendiente tendencia (anual.)", pct(asset.indicators.trend_slope_126 as number, 0)],
-                  ["Liderazgo (residual)", num(asset.indicators.residual_mom as number, 2)],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex flex-col">
-                    <dt className="t-meta">{k}</dt>
-                    <dd className="num text-ink">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </Panel>
-          )}
-          {asset.events && asset.events.length > 0 && (
-            <Panel title="Eventos corporativos (2 años)" meta="Usados para ajustar el precio">
-              <ul className="flex flex-col gap-1 text-[12.5px] text-ink-2">
-                {asset.events.slice(-8).map(([d, f, kind, detail]) => (
-                  <li key={d + kind} className="flex justify-between">
-                    <span>{dateLabel(d)}</span>
-                    <span className="num text-ink-3">{kind === "split" ? `Split ${detail}` : `Dividendo ${detail} $ (factor ${f.toFixed(4)})`}</span>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
-        </div>
+      <div className="flex items-center justify-between gap-3 px-1">
+        <p className="text-[12.5px] text-ink-3">Análisis cuantitativo de precios. No es una recomendación.</p>
+        <Link href={`/research/compare?t=${ticker},${meta.primary_benchmark}`} className="shrink-0 text-[14px] font-medium text-accent">
+          Comparar
+        </Link>
       </div>
     </div>
   );

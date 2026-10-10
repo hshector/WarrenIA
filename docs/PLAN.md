@@ -11,6 +11,7 @@
 | D3 | Aún no hay productos comprados. Plan: aportaciones de 400‑500 €/mes con objetivo 75/10/15. Los instrumentos se dan de alta en la app al comprarlos. |
 | D4 | Exportación de Trade Republic desconocida: entrada manual + importador CSV genérico con plantilla. |
 | D5 | Vercel Hobby + Supabase Free + GitHub Actions (todo gratuito). |
+| D9 | **Rediseño visual** (tras la primera revisión): estética clara tipo iOS/Revolut/Trade Republic, blanco con un único acento naranja «nebulosa», 4 secciones (Inicio, Radar, Cartera, Ajustes), lenguaje llano y detalle técnico plegado. |
 | D6‑D8 | Nombre «WarrenIA» con lenguaje visual Orbital; ADRs incluidos (marcados); LLM opcional aplazado (los informes son deterministas). |
 
 Cambio respecto al borrador: con datos gratuitos y la necesidad de evitar consultas por activo, los resultados de

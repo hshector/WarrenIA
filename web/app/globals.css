@@ -1,69 +1,40 @@
 @import "tailwindcss";
 
-/* ------------------------------------------------------------------ tokens
-   ORBITAL — deep-space surfaces, warm orange identity, warm whites for text.
-   Green / red are reserved for gains and losses. Gradients only on brand marks,
-   the primary KPI and high score fills. */
+/* -------------------------------------------------------------- tokens
+   Light, calm, app-like (iOS / Revolut / Trade Republic). One accent colour:
+   a warm "nebula" orange, used for primary actions and one hero surface per
+   screen. Green / red only for gains and losses. */
 
-:root,
-:root[data-theme="dark"] {
-  --canvas: #07090d;
-  --canvas-2: #0a0d13;
-  --surface: #0d1118;
-  --surface-2: #121722;
-  --surface-3: #192030;
-  --line: rgb(255 255 255 / 0.065);
-  --line-2: rgb(255 255 255 / 0.11);
-  --ink: #f2eee8;
-  --ink-2: #a9a8a6;
-  --ink-3: #6d6f75;
-  --accent: #f0883a;
-  --accent-2: #ffad6b;
-  --accent-ink: #1a0d03;
-  --accent-soft: rgb(240 136 58 / 0.12);
-  --accent-line: rgb(240 136 58 / 0.35);
-  --pos: #3fb68b;
-  --pos-soft: rgb(63 182 139 / 0.12);
-  --neg: #e5564e;
-  --neg-soft: rgb(229 86 78 / 0.12);
-  --warn: #e0b04a;
-  --warn-soft: rgb(224 176 74 / 0.12);
-  --info: #8aa4e8;
-  --info-soft: rgb(138 164 232 / 0.12);
-  --grad-accent: linear-gradient(135deg, #ffb877 0%, #f0883a 48%, #c9561f 100%);
-  color-scheme: dark;
-}
-
-:root[data-theme="light"] {
-  --canvas: #f6f4f0;
-  --canvas-2: #efece6;
+:root {
+  --canvas: #f4f3f1;
   --surface: #ffffff;
-  --surface-2: #f4f1ec;
-  --surface-3: #ebe6df;
-  --line: rgb(20 18 15 / 0.08);
-  --line-2: rgb(20 18 15 / 0.14);
-  --ink: #17140f;
-  --ink-2: #5d5953;
-  --ink-3: #8d8880;
-  --accent: #d96a1c;
-  --accent-2: #b8540f;
+  --surface-2: #f4f3f1;
+  --surface-3: #ebe9e6;
+  --line: rgb(17 17 17 / 0.07);
+  --line-2: rgb(17 17 17 / 0.12);
+  --ink: #111111;
+  --ink-2: #6b6966;
+  --ink-3: #a3a09b;
+  --accent: #f2611d;
+  --accent-2: #d9500f;
   --accent-ink: #ffffff;
-  --accent-soft: rgb(217 106 28 / 0.1);
-  --accent-line: rgb(217 106 28 / 0.35);
-  --pos: #1d8a62;
-  --pos-soft: rgb(29 138 98 / 0.1);
-  --neg: #c63c34;
-  --neg-soft: rgb(198 60 52 / 0.1);
-  --warn: #a8780f;
-  --warn-soft: rgb(168 120 15 / 0.12);
-  --info: #3f5fb8;
-  --info-soft: rgb(63 95 184 / 0.1);
+  --accent-soft: #fff1e8;
+  --accent-line: rgb(242 97 29 / 0.3);
+  --canvas-2: #f4f3f1;
+  --pos: #0b9b63;
+  --pos-soft: #e7f6ef;
+  --neg: #e0453a;
+  --neg-soft: #fdeceb;
+  --warn: #b7791f;
+  --warn-soft: #fbf3e4;
+  --info: #4c6ef5;
+  --info-soft: #edf1fe;
+  --shadow-card: 0 1px 2px rgb(17 17 17 / 0.04), 0 4px 16px rgb(17 17 17 / 0.04);
   color-scheme: light;
 }
 
 @theme inline {
   --color-canvas: var(--canvas);
-  --color-canvas-2: var(--canvas-2);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
@@ -77,6 +48,7 @@
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
   --color-accent-line: var(--accent-line);
+  --color-canvas-2: var(--canvas-2);
   --color-pos: var(--pos);
   --color-pos-soft: var(--pos-soft);
   --color-neg: var(--neg);
@@ -85,107 +57,94 @@
   --color-warn-soft: var(--warn-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-geist-sans), system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --radius-panel: 12px;
-  --radius-ctl: 8px;
 }
 
-/* ------------------------------------------------------------------- base */
-
-html {
+html,
+body {
   background: var(--canvas);
 }
 
 body {
-  background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: "cv11", "ss01";
-}
-
-/* A single, quiet depth cue at the top of the canvas (no stars, no particles). */
-.orbital-canvas {
-  background:
-    radial-gradient(1100px 520px at 78% -12%, rgb(240 136 58 / 0.055), transparent 62%),
-    radial-gradient(900px 480px at -10% -20%, rgb(52 72 128 / 0.16), transparent 60%),
-    var(--canvas);
-}
-:root[data-theme="light"] .orbital-canvas {
-  background: radial-gradient(1100px 520px at 78% -12%, rgb(217 106 28 / 0.06), transparent 62%), var(--canvas);
+  -webkit-tap-highlight-color: transparent;
 }
 
 ::selection {
   background: var(--accent-soft);
-  color: var(--ink);
 }
 
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-2) transparent;
-}
-
-/* ------------------------------------------------------------- typography */
 
 @utility num {
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum", "cv11";
 }
 
 @utility t-label {
-  font-size: 11px;
-  line-height: 14px;
-  font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
 }
 
 @utility t-meta {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--ink-3);
 }
 
 @utility t-title {
-  font-size: 20px;
-  line-height: 26px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 @utility t-kpi {
-  font-size: 28px;
-  line-height: 32px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 700;
   letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
 }
 
 @utility t-body {
-  font-size: 14px;
-  line-height: 21px;
+  font-size: 15px;
+  line-height: 22px;
   color: var(--ink-2);
 }
 
 @utility text-gradient-accent {
-  background: var(--grad-accent);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--accent);
 }
 
-/* ----------------------------------------------------------------- motion */
+@utility card {
+  background: var(--surface);
+  border-radius: 22px;
+  box-shadow: var(--shadow-card);
+}
+
+/* The one decorative surface: a soft orange nebula behind the portfolio value. */
+@utility nebula {
+  background:
+    radial-gradient(60% 90% at 12% 18%, rgb(255 168 102 / 0.95) 0%, transparent 60%),
+    radial-gradient(55% 80% at 88% 10%, rgb(255 110 64 / 0.85) 0%, transparent 62%),
+    radial-gradient(70% 90% at 70% 100%, rgb(255 205 160 / 0.9) 0%, transparent 65%),
+    radial-gradient(45% 60% at 35% 85%, rgb(170 120 255 / 0.28) 0%, transparent 70%),
+    linear-gradient(135deg, #ff9a52 0%, #f2611d 100%);
+  color: #fff;
+}
 
 @keyframes shimmer {
   from {
@@ -200,7 +159,7 @@ body {
   background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
   background-size: 800px 100%;
   animation: shimmer 1.4s linear infinite;
-  border-radius: 6px;
+  border-radius: 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {

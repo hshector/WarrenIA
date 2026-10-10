@@ -114,3 +114,10 @@ def test_eligibility_reasons_and_leveraged_regex(cfg):
     assert "price" in el.loc["PEN", "reasons"]
     assert "leveraged" in el.loc["LEV", "reasons"] and "leveraged" in el.loc["TQQ", "reasons"]
     assert el.loc["SHY", "eligible"]
+
+
+def test_local_storage_relative_root(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = LocalStorage("rel-data")
+    write_json(s, "a/b.json", {"x": 1})
+    assert s.list("a") == ["a/b.json"]

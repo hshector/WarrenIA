@@ -30,7 +30,7 @@ class Storage(Protocol):
 
 class LocalStorage:
     def __init__(self, root: str | Path):
-        self.root = Path(root)
+        self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _p(self, path: str) -> Path:

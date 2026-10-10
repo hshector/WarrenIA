@@ -8,10 +8,11 @@ test.beforeAll(() => {
 
 test.describe.configure({ mode: "serial" });
 
-test("empty portfolio offers onboarding and a contribution split", async ({ page }) => {
+test("empty portfolio offers onboarding; home shows the contribution split", async ({ page }) => {
   await page.goto("/portfolio");
-  await expect(page.getByText("Empieza tu cartera")).toBeVisible();
-  await expect(page.getByText("Reparto de tu próxima aportación")).toBeVisible();
+  await expect(page.getByText("Tu cartera está vacía")).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByText("Tu próxima aportación")).toBeVisible();
 });
 
 test("register instrument, deposit and buy; oversell is rejected", async ({ page }) => {
@@ -58,9 +59,9 @@ test("register instrument, deposit and buy; oversell is rejected", async ({ page
   await page.keyboard.press("Escape");
 
   await page.reload();
-  await expect(page.getByText("Valor actual").first()).toBeVisible();
-  await expect(page.getByRole("cell", { name: /Núcleo de prueba/ })).toBeVisible();
-  await expect(page.getByText("TWR").first()).toBeVisible();
+  await expect(page.getByText("Valor total")).toBeVisible();
+  await expect(page.getByText("Núcleo de prueba (SPY)")).toBeVisible();
+  await expect(page.getByText("Rentabilidad de tu dinero")).toBeVisible();
 });
 
 test("CSV import: preview, validation errors, idempotent re-import", async ({ page }) => {

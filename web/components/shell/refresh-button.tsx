@@ -77,13 +77,12 @@ export function RefreshButton() {
         disabled={!st?.configured || running}
         title={title}
         aria-label={title}
-        className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-line-2 px-2.5 text-[12.5px] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-3/70 text-ink-2 transition-colors hover:text-ink disabled:opacity-40"
       >
-        <IconRefresh size={15} className={cx(running && "animate-spin [animation-duration:2s]")} />
-        <span className="hidden sm:inline">{running ? "Actualizando…" : "Actualizar"}</span>
+        <IconRefresh size={16} className={cx(running && "animate-spin [animation-duration:2s]")} />
       </button>
       {msg && (
-        <span role="status" className="absolute right-0 top-10 z-50 w-64 rounded-[8px] border border-line-2 bg-surface-2 p-2.5 text-[12px] text-ink-2 shadow-lg">
+        <span role="status" className="card absolute right-0 top-11 z-50 w-64 p-3 text-[13px] text-ink-2">
           {msg}
         </span>
       )}

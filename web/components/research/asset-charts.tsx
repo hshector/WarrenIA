@@ -3,22 +3,20 @@
 import { useMemo, useState } from "react";
 
 import { TimeSeriesChart, type SeriesSpec } from "@/components/charts/time-series";
-import { Segmented } from "@/components/ui/primitives";
-import { drawdown, relativeStrength, sliceFrom, sma, toPoints } from "@/lib/market/series";
+import { cx, Segmented } from "@/components/ui/primitives";
+import { pct } from "@/lib/format";
+import { relativeStrength, sliceFrom, sma, toPoints } from "@/lib/market/series";
 
-type Tab = "price" | "rs" | "dd" | "rank";
-type Range = "6m" | "1y" | "2y";
-const RANGE: Record<Range, number> = { "6m": 126, "1y": 252, "2y": 504 };
+type Range = "1m" | "6m" | "1y" | "2y";
+const RANGE: Record<Range, number> = { "1m": 21, "6m": 126, "1y": 252, "2y": 504 };
 
+/** Clean price chart (iOS Stocks style): one line, range selector, optional comparison. */
 export function AssetCharts({
   sessions,
   close,
-  volume,
   bench,
   benchName,
-  hist,
-  height = 300,
-  compact = false,
+  height = 260,
 }: {
   sessions: string[];
   close: (number | null)[];
@@ -29,69 +27,83 @@ export function AssetCharts({
   height?: number;
   compact?: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>("price");
   const [range, setRange] = useState<Range>("1y");
+  const [mode, setMode] = useState<"price" | "rel">("price");
+  const [showMa, setShowMa] = useState(false);
   const full = useMemo(() => toPoints(sessions, close), [sessions, close]);
+  const view = useMemo(() => sliceFrom(full, RANGE[range]), [full, range]);
+  const change = view.length > 1 ? view[view.length - 1].value / view[0].value - 1 : null;
+
   const specs: SeriesSpec[] = useMemo(() => {
-    const n = RANGE[range];
-    if (tab === "price") {
-      const s50 = sma(full, 50);
-      const s200 = sma(full, 200);
-      const out: SeriesSpec[] = [
-        { kind: "area", data: sliceFrom(full, n), color: "var(--ink)", width: 2, title: "" },
-        { kind: "line", data: sliceFrom(s50, n), color: "var(--accent)", width: 1, title: "SMA50" },
-        { kind: "line", data: sliceFrom(s200, n), color: "var(--info)", width: 1, dashed: true, title: "SMA200" },
-      ];
-      if (volume && !compact) out.push({ kind: "histogram", data: sliceFrom(toPoints(sessions, volume), n), color: "var(--ink-3)", scale: "volume" });
-      return out;
-    }
-    if (tab === "rs" && bench) {
-      const b = toPoints(sessions, bench);
-      const rs = relativeStrength(sliceFrom(full, n), b);
+    if (mode === "rel" && bench) {
+      const rs = relativeStrength(view, toPoints(sessions, bench));
       return [
-        { kind: "line", data: rs, color: "var(--accent)", width: 2, priceFormat: "index", title: `vs ${benchName}` },
+        { kind: "area", data: rs, color: "var(--accent)", width: 2, priceFormat: "index" },
         { kind: "line", data: rs.map((p) => ({ time: p.time, value: 100 })), color: "var(--ink-3)", width: 1, dashed: true, priceFormat: "index" },
       ];
     }
-    if (tab === "dd") {
-      return [{ kind: "area", data: drawdown(sliceFrom(full, n)), color: "var(--neg)", width: 1, priceFormat: "percent" }];
+    const out: SeriesSpec[] = [{ kind: "area", data: view, color: "var(--accent)", width: 2 }];
+    if (showMa) {
+      out.push({ kind: "line", data: sliceFrom(sma(full, 50), RANGE[range]), color: "var(--info)", width: 1 });
+      out.push({ kind: "line", data: sliceFrom(sma(full, 200), RANGE[range]), color: "var(--ink-3)", width: 1, dashed: true });
     }
-    if (tab === "rank" && hist) {
-      // Negative ranks so that rank #1 is at the top of the chart.
-      const pts = hist.d.map((d, i) => ({ time: d, value: hist.r[i] === null ? NaN : -(hist.r[i] as number) })).filter((p) => Number.isFinite(p.value));
-      return [{ kind: "line", data: pts, color: "var(--accent)", width: 2, priceFormat: "rank" }];
-    }
-    return [];
-  }, [tab, range, full, sessions, volume, bench, benchName, hist, compact]);
+    return out;
+  }, [mode, bench, view, sessions, showMa, full, range]);
 
-  const tabs: { value: Tab; label: string }[] = [
-    { value: "price", label: "Precio" },
-    ...(bench ? [{ value: "rs" as Tab, label: "Fuerza relativa" }] : []),
-    { value: "dd", label: "Drawdown" },
-    ...(hist && hist.d.length > 1 ? [{ value: "rank" as Tab, label: "Ranking" }] : []),
-  ];
-  const caption =
-    tab === "price"
-      ? "Precio ajustado por splits y dividendos · SMA50 (naranja) · SMA200 (azul, discontinua)"
-      : tab === "rs"
-        ? `Precio relativo frente a ${benchName}, base 100 al inicio del periodo. Sube = lo hace mejor que el benchmark.`
-        : tab === "dd"
-          ? "Caída desde el máximo previo del periodo mostrado."
-          : "Posición en el Overall Rank recalculada con datos disponibles en cada fecha (diaria reciente, semanal antes).";
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Segmented size="sm" value={tab} onChange={setTab} options={tabs} ariaLabel="Gráfico" />
-        {tab !== "rank" && <Segmented size="sm" value={range} onChange={setRange} options={[{ value: "6m", label: "6M" }, { value: "1y", label: "1A" }, { value: "2y", label: "2A" }]} ariaLabel="Periodo" />}
+    <div className="flex flex-col gap-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className={cx("num text-[15px] font-semibold", change === null ? "text-ink-2" : change >= 0 ? "text-pos" : "text-neg")}>
+          {pct(change)} <span className="font-normal text-ink-3">en el periodo</span>
+        </span>
+        {bench && (
+          <Segmented
+            size="sm"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "price", label: "Precio" },
+              { value: "rel", label: `vs ${benchName}` },
+            ]}
+            ariaLabel="Vista"
+          />
+        )}
       </div>
-      {specs.length && specs[0].data.length > 1 ? (
-        <TimeSeriesChart series={specs} height={height} ariaLabel={caption} />
+      {specs[0]?.data.length > 1 ? (
+        <TimeSeriesChart series={specs} height={height} ariaLabel={mode === "rel" ? `Evolución relativa frente a ${benchName}` : "Evolución del precio"} />
       ) : (
-        <div className="flex items-center justify-center text-[13px] text-ink-3" style={{ height }}>
-          Sin datos suficientes para este gráfico.
+        <div className="flex items-center justify-center text-[14px] text-ink-3" style={{ height }}>
+          Sin datos suficientes.
         </div>
       )}
-      <p className="t-meta">{caption}</p>
+      <div className="flex items-center justify-between gap-3">
+        <Segmented
+          value={range}
+          onChange={setRange}
+          className="flex-1 sm:flex-none"
+          options={[
+            { value: "1m", label: "1M" },
+            { value: "6m", label: "6M" },
+            { value: "1y", label: "1A" },
+            { value: "2y", label: "2A" },
+          ]}
+          ariaLabel="Periodo"
+        />
+        {mode === "price" && (
+          <label className="flex shrink-0 items-center gap-2 text-[13px] text-ink-2">
+            <input type="checkbox" checked={showMa} onChange={(e) => setShowMa(e.target.checked)} className="h-4 w-4 accent-[var(--accent)]" />
+            Medias 50/200
+          </label>
+        )}
+      </div>
+      {mode === "rel" && <p className="text-[13px] text-ink-3">Si la línea sube, el activo lo hace mejor que {benchName}. Base 100 al inicio del periodo.</p>}
     </div>
   );
+}
+
+/** Rank history (technical detail). */
+export function RankChart({ hist }: { hist: { d: string[]; r: (number | null)[] } }) {
+  const pts = hist.d.map((d, i) => ({ time: d, value: hist.r[i] === null ? NaN : -(hist.r[i] as number) })).filter((p) => Number.isFinite(p.value));
+  if (pts.length < 2) return <p className="text-[14px] text-ink-3">Sin histórico suficiente.</p>;
+  return <TimeSeriesChart series={[{ kind: "line", data: pts, color: "var(--accent)", width: 2, priceFormat: "rank" }]} height={180} ariaLabel="Evolución de la posición en el ranking" />;
 }

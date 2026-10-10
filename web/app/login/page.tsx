@@ -14,9 +14,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <div className="mb-8">
           <Wordmark />
         </div>
-        <div className="rounded-[var(--radius-panel)] border border-line bg-surface p-6">
-          <h1 className="text-[17px] font-semibold">Accede a tu espacio</h1>
-          <p className="t-body mt-1 mb-5">Te enviaremos un enlace de un solo uso. Sin contraseñas.</p>
+        <div className="card p-6">
+          <h1 className="text-[24px] font-bold tracking-[-0.02em]">Entrar</h1>
+          <p className="t-body mt-1 mb-5">Te enviamos un enlace a tu correo. Sin contraseñas.</p>
           {sp.error === "not_allowed" && <p className="mb-4 text-[13px] text-neg">Esta cuenta no está autorizada.</p>}
           {mode === "supabase" ? (
             <LoginForm next={sp.next ?? "/"} />

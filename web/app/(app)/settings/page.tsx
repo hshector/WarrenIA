@@ -5,8 +5,8 @@ import { SettingsForm } from "@/components/portfolio/forms";
 import { BacktestChart } from "@/components/settings/backtest-chart";
 import { PageHeader } from "@/components/shell/page-header";
 import { RefreshButton } from "@/components/shell/refresh-button";
-import { IconLogout } from "@/components/ui/icons";
-import { Badge, Button, Callout, cx, EmptyState, Panel } from "@/components/ui/primitives";
+import { IconChevronRight, IconLogout } from "@/components/ui/icons";
+import { Badge, Button, Callout, EmptyState, Panel } from "@/components/ui/primitives";
 import { dateLabel, dateTimeLabel, int, num, pct } from "@/lib/format";
 import { computeFreshness } from "@/lib/market/freshness";
 import { getBacktest, getExcluded, loadMarket } from "@/lib/market/source";
@@ -17,35 +17,80 @@ import { requireStore } from "@/lib/user/store";
 export const metadata = { title: "Datos y ajustes" };
 
 const TABS = [
-  ["data", "Estado de datos"],
-  ["method", "Metodología"],
-  ["backtest", "Validación"],
-  ["portfolio", "Objetivos de cartera"],
+  ["data", "Estado de los datos"],
+  ["method", "Cómo se calcula"],
+  ["backtest", "Validación histórica"],
+  ["portfolio", "Objetivo de cartera"],
   ["account", "Cuenta"],
 ] as const;
 
 const SCORE_LABEL: Record<string, string> = { momentum: "Momentum Score", trend_quality: "Trend Quality", acceleration: "Acceleration Score", risk: "Risk Score (0 = menor riesgo)", inverse_risk: "100 − Risk" };
 
+const MENU: { group: string; items: { href: string; label: string; sub: string }[] }[] = [
+  {
+    group: "Datos",
+    items: [
+      { href: "/settings?tab=data", label: "Estado de los datos", sub: "Fecha, fuentes y cobertura" },
+      { href: "/settings?tab=method", label: "Cómo se calcula", sub: "Metodología del radar" },
+      { href: "/settings?tab=backtest", label: "Validación histórica", sub: "Backtest y sus límites" },
+    ],
+  },
+  {
+    group: "Cartera",
+    items: [
+      { href: "/settings?tab=portfolio", label: "Objetivo y aportación mensual", sub: "75 / 10 / 15 y bandas" },
+      { href: "/portfolio/transactions", label: "Operaciones e instrumentos", sub: "Editar o borrar" },
+      { href: "/portfolio/import", label: "Importar CSV", sub: "Con vista previa" },
+    ],
+  },
+  { group: "Cuenta", items: [{ href: "/settings?tab=account", label: "Cuenta", sub: "Sesión" }] },
+];
+
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string }> }) {
   const sp = await searchParams;
-  const tab = (TABS.find(([k]) => k === sp.tab)?.[0] ?? "data") as (typeof TABS)[number][0];
+  const tab = TABS.find(([k]) => k === sp.tab)?.[0];
   const { latest, meta } = await loadMarket();
+  if (!tab) {
+    return (
+      <div className="mx-auto max-w-[760px]">
+        <PageHeader title="Ajustes" />
+        <div className="flex flex-col gap-6">
+          {MENU.map((g) => (
+            <div key={g.group}>
+              <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">{g.group}</p>
+              <div className="card divide-y divide-line overflow-hidden">
+                {g.items.map((it) => (
+                  <Link key={it.href} href={it.href} className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2">
+                    <span>
+                      <span className="block text-[15.5px]">{it.label}</span>
+                      <span className="block text-[13px] text-ink-3">{it.sub}</span>
+                    </span>
+                    <IconChevronRight size={18} className="text-ink-3" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+          <p className="px-5 text-[12.5px] text-ink-3">WarrenIA es una herramienta de análisis: no ejecuta operaciones ni da recomendaciones.</p>
+        </div>
+      </div>
+    );
+  }
+  const title = TABS.find(([k]) => k === tab)![1];
   return (
-    <>
-      <PageHeader title="Datos y ajustes" sub="Fuentes, frescura, metodología, validación y configuración." />
-      <div className="-mx-4 mb-5 flex gap-1 overflow-x-auto border-b border-line px-4 md:mx-0 md:px-0">
-        {TABS.map(([k, label]) => (
-          <Link key={k} href={`/settings?tab=${k}`} className={cx("-mb-px shrink-0 border-b-2 px-3 py-2 text-[13px]", tab === k ? "border-accent text-ink" : "border-transparent text-ink-3 hover:text-ink-2")}>
-            {label}
-          </Link>
-        ))}
+    <div className="mx-auto max-w-[960px]">
+      <Link href="/settings" className="text-[15px] font-medium text-accent">
+        ‹ Ajustes
+      </Link>
+      <div className="mt-3">
+        <PageHeader title={title} />
       </div>
       {tab === "data" && <DataTab latest={latest} meta={meta} q={sp.q} />}
-      {tab === "method" && (meta ? <MethodTab meta={meta} /> : <EmptyState title="Sin ejecución publicada" />)}
+      {tab === "method" && (meta ? <MethodTab meta={meta} /> : <EmptyState title="Sin datos publicados" />)}
       {tab === "backtest" && <BacktestTab />}
       {tab === "portfolio" && <PortfolioTab />}
       {tab === "account" && <AccountTab />}
-    </>
+    </div>
   );
 }
 

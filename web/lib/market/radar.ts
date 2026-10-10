@@ -3,8 +3,17 @@
 
 import type { BenchReturns, RadarRow, StateKey } from "./types";
 
+/** Plain-language risk bucket from the Risk percentile. */
+export function riskLabel(rk: number | null | undefined): { text: string; cls: string } {
+  if (rk === null || rk === undefined || !Number.isFinite(rk)) return { text: "—", cls: "text-ink-3" };
+  if (rk < 34) return { text: "Bajo", cls: "text-pos" };
+  if (rk < 67) return { text: "Medio", cls: "text-ink-2" };
+  return { text: "Alto", cls: "text-neg" };
+}
+
+
 export type Horizon = "r1m" | "r3m" | "r6m" | "r12m";
-export type PresetKey = "all" | "strongest" | "accel" | "lowvol" | "fading" | "breakouts" | "improvers";
+export type PresetKey = "all" | "strongest" | "accel" | "lowvol" | "fading" | "breakouts" | "improvers" | "watch";
 
 export interface Preset {
   key: PresetKey;
@@ -18,8 +27,8 @@ export interface Preset {
 export type SortKey = keyof RadarRow | "ret" | "rel";
 
 export const PRESETS: Preset[] = [
-  { key: "all", label: "Ranking completo", question: "Metodología completa (Overall Momentum Rank)", sort: { key: "rank", dir: "asc" } },
-  { key: "strongest", label: "Momentum más fuerte", question: "¿Qué acciones tienen el momentum más fuerte ahora?", sort: { key: "m", dir: "desc" } },
+  { key: "all", label: "Top", question: "Las acciones con mayor fuerza de tendencia, según la puntuación completa", sort: { key: "rank", dir: "asc" } },
+  { key: "strongest", label: "Más fuertes", question: "¿Qué acciones tienen el momentum más fuerte ahora?", sort: { key: "m", dir: "desc" } },
   {
     key: "accel",
     label: "Acelerando",
@@ -29,21 +38,21 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "lowvol",
-    label: "Fuerte y baja volatilidad",
+    label: "Fuertes y estables",
     question: "¿Qué acciones combinan momentum fuerte con volatilidad relativamente baja?",
     filter: (r) => r.m >= 80,
     sort: { key: "rk", dir: "asc" },
   },
   {
     key: "fading",
-    label: "Líderes perdiendo impulso",
+    label: "Perdiendo fuerza",
     question: "¿Qué líderes están empezando a perder impulso?",
     filter: (r) => r.m >= 70 && (r.st === "weakening" || (r.dm !== null && r.dm <= -15)),
     sort: { key: "dm", dir: "asc" },
   },
   {
     key: "breakouts",
-    label: "Rupturas con volumen",
+    label: "Rupturas",
     question: "¿Qué empresas están rompiendo máximos con confirmación de volumen?",
     note: "Con datos diarios (cierre): la confirmación es de volumen diario, no intradía.",
     filter: (r) => r.bo || (r.h52 && (r.rvol ?? 0) >= 1.5),
@@ -51,11 +60,12 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "improvers",
-    label: "Mayor mejora del mes",
+    label: "Más mejoradas",
     question: "¿Cuáles han mejorado más su posición en el ranking durante el último mes?",
     filter: (r) => r.dr !== null,
     sort: { key: "dr", dir: "desc" },
   },
+  { key: "watch", label: "Siguiendo", question: "Activos que sigues", sort: { key: "rank", dir: "asc" } },
 ];
 
 export interface Filters {
@@ -120,7 +130,7 @@ export function applyRadar(
     if (f.maxVol < 10 && !(r.vol !== null && r.vol <= f.maxVol)) return false;
     if (f.exchange && r.ex !== f.exchange) return false;
     if (f.onlyHeld && !ctx.held.has(r.t)) return false;
-    if (f.onlyWatch && !ctx.watch.has(r.t)) return false;
+    if ((f.onlyWatch || preset.key === "watch") && !ctx.watch.has(r.t)) return false;
     return true;
   });
   const dir = sort.dir === "asc" ? 1 : -1;
