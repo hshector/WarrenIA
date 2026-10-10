@@ -27,7 +27,8 @@ HISTORY_SESSIONS = 540  # ~2y + buffer (free plans typically allow 2 years)
 
 
 def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_seconds: float | None = None,
-           history_sessions: int = HISTORY_SESSIONS, fundamentals_provider=None) -> dict:
+           history_sessions: int = HISTORY_SESSIONS, fundamentals_provider=None,
+           dividend_budget_s: float = 45 * 60) -> dict:
     t0 = time.monotonic()
     now = now or datetime.now(timezone.utc)
     last = last_closed_session(now).session
@@ -115,23 +116,20 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
             warnings.append(f"Lista de valores no actualizada ({e.status}); se usa la anterior.")
             log.warning("ingest: tickers refresh failed: %s", e)
 
-    # Corporate actions: incremental with a 10-day overlap.
+    # Corporate actions: incremental with a 10-day overlap. Dividends are large (hundreds of pages
+    # over 2 years on free plans), so their history is backfilled in monthly chunks across runs.
     first = min(wanted) if wanted else last
-    for name, fn, cols, keys in (("splits", provider.splits, SPLIT_COLUMNS, ["ticker", "ex_date"]),
-                                 ("dividends", provider.dividends, DIVIDEND_COLUMNS, ["ticker", "ex_date"])):
-        since = st.get(f"{name}_through")
-        start = (date.fromisoformat(since) - timedelta(days=10)) if since else first
-        try:
-            ev = fn(start, last + timedelta(days=7))
-            lake.upsert_events(name, ev if not ev.empty else empty(cols), keys)
-            st[f"{name}_through"] = last.isoformat()
-            st[f"{name}_available"] = True
-        except ProviderError as e:
-            st[f"{name}_available"] = False
-            warnings.append(f"{name}: no disponible en el proveedor ({e.status}). "
-                            + ("Rentabilidades sin dividendos." if name == "dividends" else "Splits sin ajustar."))
-            log.warning("ingest: %s unavailable: %s", name, e)
-
+    since = st.get("splits_through")
+    try:
+        ev = provider.splits((date.fromisoformat(since) - timedelta(days=10)) if since else first, last + timedelta(days=7))
+        lake.upsert_events("splits", ev if not ev.empty else empty(SPLIT_COLUMNS), ["ticker", "ex_date"])
+        st["splits_through"] = last.isoformat()
+        st["splits_available"] = True
+    except ProviderError as e:
+        st["splits_available"] = False
+        warnings.append(f"splits: no disponible en el proveedor ({e.status}). Splits sin ajustar.")
+        log.warning("ingest: splits unavailable: %s", e)
+    warnings.extend(_ingest_dividends(provider, lake, st, first, last, budget_s=dividend_budget_s))
     if fundamentals_provider is not None and (_older_than(refreshed.get("fundamentals"), days=7, now=now)
                                               or lake.read_ref("fundamentals") is None):
         try:
@@ -149,6 +147,53 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
     return {"fetched": len(fetched), "missing_before": len(missing), "empty": [d.isoformat() for d in empty_sessions],
             "stopped": stopped, "warnings": warnings, "last_closed": last.isoformat(),
             "seconds": round(time.monotonic() - t0, 1)}
+
+
+DIVIDEND_CHUNK_DAYS = 30
+
+
+def _ingest_dividends(provider, lake: Lake, st: dict, first: date, last: date, budget_s: float) -> list[str]:
+    """Forward update [through-10d, last+7d], then backfill older history in 30-day chunks within a time budget.
+
+    State: dividends_through (newest covered) and dividends_from (oldest covered). Saved after each chunk,
+    so an interrupted or budget-limited run resumes where it stopped.
+    """
+    t0 = time.monotonic()
+    keys = ["ticker", "ex_date"]
+
+    def fetch(a: date, b: date) -> None:
+        ev = provider.dividends(a, b)
+        lake.upsert_events("dividends", ev if not ev.empty else empty(DIVIDEND_COLUMNS), keys)
+
+    try:
+        through = st.get("dividends_through")
+        if through and st.get("dividends_from"):
+            fetch(date.fromisoformat(through) - timedelta(days=10), last + timedelta(days=7))
+        else:  # first run (or legacy state): start the backfill at the newest end
+            st.pop("dividends_from", None)
+        st["dividends_through"] = last.isoformat()
+        lake.save_state(st)
+        frm = date.fromisoformat(st["dividends_from"]) if st.get("dividends_from") else last + timedelta(days=8)
+        chunks = 0
+        while frm > first and (chunks == 0 or time.monotonic() - t0 < budget_s):  # at least one chunk per run
+            chunks += 1
+            b = frm - timedelta(days=1)
+            a = max(first, b - timedelta(days=DIVIDEND_CHUNK_DAYS - 1))
+            fetch(a, b)
+            frm = a
+            st["dividends_from"] = frm.isoformat()
+            lake.save_state(st)
+        st["dividends_available"] = True
+    except ProviderError as e:
+        log.warning("ingest: dividends: %s", e)
+        if not st.get("dividends_from"):
+            st["dividends_available"] = False
+            return [f"dividends: no disponible en el proveedor ({e.status}). Rentabilidades sin dividendos."]
+    frm = st.get("dividends_from")
+    if frm and date.fromisoformat(frm) > first:
+        log.info("ingest: dividends covered from %s (target %s)", frm, first)
+        return [f"Dividendos cargados desde el {frm}; el histórico se completa en las próximas actualizaciones."]
+    return []
 
 
 def _older_than(ts: str | None, days: int, now: datetime) -> bool:

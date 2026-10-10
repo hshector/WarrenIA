@@ -62,8 +62,8 @@ class MassiveProvider:
             nxt = data.get("next_url")
             url = f"{nxt}&apiKey={self.key}" if nxt else None
             pages += 1
-            if pages > 400:
-                raise ProviderError("massive: paginación anómala (>400 páginas)")
+            if pages > 2000:
+                raise ProviderError("massive: paginación anómala (>2000 páginas)")
         return out
 
     # ---------------------------------------------------------------- API

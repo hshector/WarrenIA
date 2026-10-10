@@ -71,3 +71,20 @@ def test_sic_from_cached_parquet_with_nan():
     assert _int_or_none(None) is None
     assert _int_or_none(3571.0) == 3571
     assert _int_or_none(pd.NA) is None
+
+
+def test_dividends_backfill_in_chunks_and_resume(tmp_path):
+    last, lake, cfg = _setup(tmp_path)
+    prov = SyntheticProvider(end=last, sessions=400, n_stocks=30, n_etfs=5)
+    calls = []
+    orig = prov.dividends
+    prov.dividends = lambda a, b: (calls.append((a, b)), orig(a, b))[1]
+    out = ingest(prov, lake, cfg, now=NOW, history_sessions=120, dividend_budget_s=0)
+    st = lake.state()
+    assert len(calls) == 1  # budget 0: exactly one chunk per run
+    assert st["dividends_through"] == last.isoformat() and st["dividends_from"]
+    assert any("Dividendos cargados desde" in w for w in out["warnings"])
+    ingest(prov, lake, cfg, now=NOW, history_sessions=120)  # second run finishes the backfill
+    first = previous_sessions(last, 120)[0]
+    assert lake.state()["dividends_from"] == first.isoformat()
+    assert all(a <= b for a, b in calls)
