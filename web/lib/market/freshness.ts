@@ -13,9 +13,9 @@ export interface Freshness {
   label: string;
 }
 
-// The daily job runs ~01:35 UTC with a 06:05 retry. A closed session is "due"
+// The daily job runs ~05:15 UTC with an 11:05 retry. A closed session is "due"
 // once this much time has passed since its close; before that we say "pending".
-export const PUBLISH_GRACE_HOURS = 11;
+export const PUBLISH_GRACE_HOURS = 16;
 
 export function computeFreshness(
   dataAsof: string,

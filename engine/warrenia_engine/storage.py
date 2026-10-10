@@ -17,7 +17,7 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-from .http import HttpClient
+from .http import HttpClient, ProviderError
 
 log = logging.getLogger(__name__)
 
@@ -89,8 +89,13 @@ class SupabaseStorage:
 
     def read_bytes(self, path: str) -> bytes | None:
         r = self.http.request("GET", f"{self.base}/object/{self.bucket}/{path}", headers=self.headers, allow_status={400, 404})
-        if r.status_code in (400, 404):
+        if r.status_code == 404:
             return None
+        if r.status_code == 400:
+            # Storage uses 400 both for "not found" and for real errors: only the former means "missing".
+            if re.search(r"not.?found|\"404\"", r.text, re.I):
+                return None
+            raise ProviderError(f"supabase: HTTP 400 reading {path}: {r.text[:200]}", 400)
         return r.content
 
     def write_bytes(self, path: str, data: bytes, content_type: str = "application/octet-stream") -> None:

@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from .calendar import last_closed_session
+from .calendar import last_closed_session, previous_sessions
 from .storage import supabase_base_url, supabase_headers
 
 SECRETS_PAGE = "GitHub → Settings → Secrets and variables → Actions"
@@ -116,7 +116,8 @@ def _check_db(base: str, key: str) -> Check:
 
 def _check_massive(key: str, now: datetime) -> Check:
     base = os.environ.get("MASSIVE_BASE_URL", "https://api.polygon.io").rstrip("/")
-    day = last_closed_session(now).session.isoformat()
+    # The session before the last one: always available on free plans (today's may not be yet).
+    day = previous_sessions(last_closed_session(now).session, 2)[0].isoformat()
     try:
         r = requests.get(f"{base}/v2/aggs/grouped/locale/us/market/stocks/{day}",
                          params={"adjusted": "false", "apiKey": key}, timeout=30)

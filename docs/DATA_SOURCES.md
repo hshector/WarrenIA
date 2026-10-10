@@ -37,7 +37,7 @@ intercambiable que no afecta al resto del pipeline.
 
 **Proceso programado** (`.github/workflows/market-data.yml`):
 
-- Se ejecuta de martes a sábado a las 01:35 UTC, con un reintento a las 06:05 UTC.
+- Se ejecuta de martes a sábado a las 05:15 UTC (pasada la medianoche de Nueva York), con un reintento a las 11:05 UTC.
 - **Primera ejecución:** descarga ~540 sesiones a 5/min, unas **2 horas** en total. Si se corta, la siguiente
   ejecución continúa donde quedó (descarga incremental, de la más reciente a la más antigua).
 - **Ejecuciones diarias:** de 1 a 3 llamadas de barras, eventos con 10 días de solapamiento, referencias semanales

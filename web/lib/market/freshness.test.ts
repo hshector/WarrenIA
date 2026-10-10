@@ -22,7 +22,7 @@ describe("computeFreshness", () => {
   });
 
   it("is stale once the grace period after a close has passed", () => {
-    const f = computeFreshness("2026-10-09", cal, new Date("2026-10-13T09:00:00Z"));
+    const f = computeFreshness("2026-10-09", cal, new Date("2026-10-13T13:00:00Z"));
     expect(f.status).toBe("stale");
     expect(f.missedSessions).toBe(1);
   });

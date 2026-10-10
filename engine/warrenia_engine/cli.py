@@ -69,6 +69,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command in ("update", "compute"):
         from .pipeline import compute_and_publish, ingest
+        from .storage import read_json
+
+        # Scheduled retry after a successful run: nothing to do (saves provider quota and storage egress).
+        if args.command == "update" and os.environ.get("GITHUB_EVENT_NAME") == "schedule":
+            pub = read_json(storage, "published/latest.json")
+            if pub and not pub.get("demo") and pub.get("status") == "ok" \
+                    and pub.get("data_asof") == last_closed_session(now).session.isoformat():
+                print(json.dumps({"skipped": "ya publicado", "data_asof": pub["data_asof"]}))
+                return 0
 
         if args.command == "update":
             from .providers.massive import MassiveProvider

@@ -125,6 +125,9 @@ class MassiveProvider:
             return empty(DIVIDEND_COLUMNS)
         df = pd.DataFrame(res)
         df = df[df["cash_amount"].notna() & (df["cash_amount"] > 0)]
-        return pd.DataFrame({"ticker": df["ticker"], "ex_date": pd.to_datetime(df["ex_dividend_date"]).dt.date,
-                             "cash_amount": df["cash_amount"].astype(float),
-                             "currency": df.get("currency", pd.Series("USD", index=df.index)).fillna("USD").str.upper()})
+        out = pd.DataFrame({"ticker": df["ticker"], "ex_date": pd.to_datetime(df["ex_dividend_date"]).dt.date,
+                            "cash_amount": df["cash_amount"].astype(float),
+                            "currency": df.get("currency", pd.Series("USD", index=df.index)).fillna("USD").str.upper()})
+        # One row per ticker and ex-date, so a later re-fetch (corrected amount) replaces it instead of adding.
+        return out.groupby(["ticker", "ex_date"], as_index=False).agg(cash_amount=("cash_amount", "sum"),
+                                                                     currency=("currency", "first"))
