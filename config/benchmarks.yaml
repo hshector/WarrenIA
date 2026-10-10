@@ -1,0 +1,28 @@
+# Benchmarks. The primary benchmark is used for relative-strength lines, beta and
+# residual (leadership) momentum. Others are offered in the UI for relative returns.
+# NOTE: a constant benchmark subtracted from every asset does not change a
+# cross-sectional percentile rank, so the benchmark choice does not alter scores.
+version: 1
+primary: SPY
+options:
+  SPY: "S&P 500 (SPDR) — referencia principal, gran capitalización EE. UU."
+  RSP: "S&P 500 equiponderado — neutraliza el peso de las megacaps"
+  QQQ: "Nasdaq-100 — referencia para tecnología/crecimiento"
+  MDY: "S&P MidCap 400 — referencia para mediana capitalización"
+etf_primary: SPY
+
+# Sector ETFs (SPDR Select Sector). Used for sector strength and stock-vs-sector
+# relative returns. Sector assignment for stocks comes from SEC SIC codes mapped to
+# these buckets (approximation, NOT GICS).
+sectors:
+  Technology: XLK
+  Communication: XLC
+  Consumer Discretionary: XLY
+  Consumer Staples: XLP
+  Energy: XLE
+  Financials: XLF
+  Health Care: XLV
+  Industrials: XLI
+  Materials: XLB
+  Real Estate: XLRE
+  Utilities: XLU

@@ -1,0 +1,230 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+import { computePortfolio, PortfolioError } from "@/lib/portfolio/engine";
+import { parseTransactionsCsv, type ParsedRow } from "@/lib/portfolio/csv";
+import type { Instrument, Transaction } from "@/lib/portfolio/types";
+import { requireStore } from "@/lib/user/store";
+
+export type ActionResult = { ok: boolean; message: string } | null;
+
+const today = () => new Date().toISOString().slice(0, 10);
+const opt = <T extends z.ZodTypeAny>(s: T) => z.preprocess((v) => (v === "" || v === null ? undefined : v), s.optional());
+const numStr = z.coerce.number().refine(Number.isFinite);
+
+const InstrumentSchema = z.object({
+  id: opt(z.string().uuid()),
+  name: z.string().trim().min(1).max(120),
+  isin: opt(z.string().trim().toUpperCase().regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/, "ISIN no válido")),
+  kind: z.enum(["etf", "stock", "etc", "fund", "other"]),
+  bucket: z.enum(["core", "gold", "momentum", "other"]),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+  price_source: z.enum(["us_market", "eodhd", "manual"]),
+  market_ticker: opt(z.string().trim().toUpperCase().regex(/^[A-Z0-9.\-]{1,12}$/, "Ticker no válido")),
+  eodhd_symbol: opt(z.string().trim().toUpperCase().regex(/^[A-Z0-9.\-]{1,24}$/, "Símbolo EODHD no válido")),
+  sector: opt(z.string().trim().max(60)),
+});
+
+function msg(e: unknown) {
+  if (e instanceof z.ZodError) return e.issues.map((i) => i.message).join(" · ");
+  return e instanceof Error ? e.message : "Error inesperado";
+}
+
+export async function saveInstrument(_: ActionResult, form: FormData): Promise<ActionResult> {
+  try {
+    const d = InstrumentSchema.parse(Object.fromEntries(form));
+    if (d.price_source === "us_market" && !d.market_ticker) return { ok: false, message: "Indica el ticker de EE. UU. para valorar con el motor de mercado" };
+    if (d.price_source === "eodhd" && !d.eodhd_symbol) return { ok: false, message: "Indica el símbolo EODHD (p. ej. EUNL.XETRA)" };
+    const store = await requireStore();
+    await store.upsertInstrument({
+      ...(d.id ? { id: d.id } : {}),
+      name: d.name, isin: d.isin ?? null, kind: d.kind, bucket: d.bucket, currency: d.price_source === "us_market" ? "USD" : d.currency,
+      price_source: d.price_source, market_ticker: d.market_ticker ?? null, eodhd_symbol: d.eodhd_symbol ?? null, sector: d.sector ?? null,
+    });
+    revalidatePath("/portfolio", "layout");
+    return { ok: true, message: "Instrumento guardado" };
+  } catch (e) {
+    return { ok: false, message: msg(e) };
+  }
+}
+
+export async function deleteInstrument(id: string) {
+  const store = await requireStore();
+  const txs = await store.transactions();
+  if (txs.some((t) => t.instrument_id === id)) throw new Error("El instrumento tiene operaciones: bórralas primero");
+  await store.deleteInstrument(z.string().uuid().parse(id));
+  revalidatePath("/portfolio", "layout");
+}
+
+const TxSchema = z.object({
+  type: z.enum(["buy", "sell", "deposit", "withdrawal", "dividend", "interest", "fee", "tax", "split"]),
+  trade_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  instrument_id: opt(z.string().uuid()),
+  quantity: opt(numStr.pipe(z.number().positive())),
+  price: opt(numStr.pipe(z.number().nonnegative())),
+  amount: opt(numStr.pipe(z.number().nonnegative())),
+  fees: opt(numStr.pipe(z.number().nonnegative())),
+  taxes: opt(numStr.pipe(z.number().nonnegative())),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).default("EUR"),
+  fx_rate: opt(numStr.pipe(z.number().positive())),
+  split_ratio: opt(numStr.pipe(z.number().positive())),
+  note: opt(z.string().trim().max(500)),
+});
+
+/** Validate a candidate set of transactions by replaying the ledger (no oversells). */
+async function validateLedger(instruments: Instrument[], txs: Transaction[]) {
+  computePortfolio(instruments, txs, {}, {}, today());
+}
+
+export async function addTransaction(_: ActionResult, form: FormData): Promise<ActionResult> {
+  try {
+    const raw = Object.fromEntries([...form.entries()].map(([k, v]) => [k, typeof v === "string" ? v.replace(",", ".") : v]));
+    const d = TxSchema.parse({ ...raw, note: form.get("note") });
+    if (d.trade_date > today()) return { ok: false, message: "La fecha no puede ser futura" };
+    const needsIns = ["buy", "sell", "dividend", "split"].includes(d.type);
+    if (needsIns && !d.instrument_id) return { ok: false, message: "Selecciona el instrumento" };
+    if ((d.type === "buy" || d.type === "sell") && (d.quantity === undefined || d.price === undefined)) return { ok: false, message: "Cantidad y precio son obligatorios" };
+    if (["deposit", "withdrawal", "dividend", "interest", "fee", "tax"].includes(d.type) && d.amount === undefined) return { ok: false, message: "Indica el importe" };
+    if (d.type === "split" && !d.split_ratio) return { ok: false, message: "Indica el ratio del split (acciones nuevas por cada antigua)" };
+    if (d.currency !== "EUR" && !d.fx_rate) return { ok: false, message: "Operación en divisa: indica el tipo de cambio aplicado (EUR por unidad)" };
+    const store = await requireStore();
+    const [instruments, txs] = await Promise.all([store.instruments(), store.transactions()]);
+    const tx: Omit<Transaction, "id"> = {
+      type: d.type, trade_date: d.trade_date, instrument_id: needsIns ? d.instrument_id! : null,
+      quantity: d.quantity ?? null, price: d.price ?? null, amount: d.amount ?? null, fees: d.fees ?? 0, taxes: d.taxes ?? 0,
+      currency: d.currency, fx_rate: d.currency === "EUR" ? 1 : d.fx_rate!, split_ratio: d.split_ratio ?? null, note: d.note ?? null, source: "manual",
+    };
+    await validateLedger(instruments, [...txs, { ...tx, id: "new" }]);
+    await store.addTransactions([tx]);
+    revalidatePath("/portfolio", "layout");
+    revalidatePath("/");
+    return { ok: true, message: "Operación registrada" };
+  } catch (e) {
+    if (e instanceof PortfolioError) return { ok: false, message: e.message };
+    return { ok: false, message: msg(e) };
+  }
+}
+
+export async function deleteTransaction(id: string) {
+  const store = await requireStore();
+  const [instruments, txs] = await Promise.all([store.instruments(), store.transactions()]);
+  try {
+    await validateLedger(instruments, txs.filter((t) => t.id !== id));
+  } catch (e) {
+    if (e instanceof PortfolioError) throw new Error(`No se puede borrar: ${e.message}`);
+    throw e;
+  }
+  await store.deleteTransaction(id);
+  revalidatePath("/portfolio", "layout");
+  revalidatePath("/");
+}
+
+// ------------------------------------------------------------------ import
+
+export interface ImportPreview {
+  ok: boolean;
+  message: string;
+  headerErrors: string[];
+  rows: (ParsedRow & { match: string | null; willCreate: boolean })[];
+  valid: number;
+  invalid: number;
+}
+
+async function buildPreview(text: string): Promise<ImportPreview> {
+  if (text.length > 2_000_000) return { ok: false, message: "Fichero demasiado grande (máx. 2 MB)", headerErrors: [], rows: [], valid: 0, invalid: 0 };
+  const store = await requireStore();
+  const instruments = await store.instruments();
+  const parsed = parseTransactionsCsv(text, today());
+  const rows = parsed.rows.map((r) => {
+    const m = instruments.find((i) => (r.isin && i.isin === r.isin) || (r.ticker && i.market_ticker === r.ticker));
+    const needs = r.tx && ["buy", "sell", "dividend", "split"].includes(r.tx.type);
+    return { ...r, match: m?.name ?? null, willCreate: !!(needs && !m) };
+  });
+  const valid = rows.filter((r) => r.ok).length;
+  return { ok: !parsed.headerErrors.length, message: "", headerErrors: parsed.headerErrors, rows, valid, invalid: rows.length - valid };
+}
+
+export async function previewImport(text: string): Promise<ImportPreview> {
+  return buildPreview(text);
+}
+
+export async function commitImport(text: string): Promise<{ ok: boolean; message: string }> {
+  // Re-parse on the server: the client preview is never trusted.
+  const p = await buildPreview(text);
+  if (!p.ok) return { ok: false, message: p.headerErrors.join(" · ") || p.message };
+  const good = p.rows.filter((r) => r.ok && r.tx);
+  if (!good.length) return { ok: false, message: "No hay filas válidas que importar" };
+  const store = await requireStore();
+  let instruments = await store.instruments();
+  for (const r of good) {
+    if (!r.willCreate) continue;
+    if (instruments.some((i) => (r.isin && i.isin === r.isin) || (r.ticker && i.market_ticker === r.ticker))) continue;
+    const isUs = (r.isin ?? "").startsWith("US") && !!r.ticker;
+    await store.upsertInstrument({
+      name: r.name || r.ticker || r.isin || "Instrumento", isin: r.isin, kind: isUs ? "stock" : "etf", bucket: isUs ? "momentum" : "other",
+      currency: isUs ? "USD" : "EUR", price_source: isUs ? "us_market" : "manual", market_ticker: r.ticker, eodhd_symbol: null, sector: null,
+    });
+    instruments = await store.instruments();
+  }
+  const txs = good.map((r) => {
+    const ins = instruments.find((i) => (r.isin && i.isin === r.isin) || (r.ticker && i.market_ticker === r.ticker));
+    const needs = ["buy", "sell", "dividend", "split"].includes(r.tx!.type);
+    return { ...r.tx!, instrument_id: needs ? (ins?.id ?? null) : null };
+  });
+  const existing = await store.transactions();
+  const fresh = txs.filter((t) => !existing.some((e) => e.import_hash && e.import_hash === t.import_hash));
+  try {
+    await validateLedger(instruments, [...existing, ...fresh.map((t, i) => ({ ...t, id: `n${i}` }))]);
+  } catch (e) {
+    if (e instanceof PortfolioError) return { ok: false, message: `Importación cancelada: ${e.message}` };
+    throw e;
+  }
+  const n = await store.addTransactions(fresh);
+  revalidatePath("/portfolio", "layout");
+  revalidatePath("/");
+  return { ok: true, message: `${n} operaciones importadas · ${txs.length - fresh.length} ya existían · ${p.invalid} filas con errores omitidas` };
+}
+
+// --------------------------------------------------------------- settings
+
+const SettingsSchema = z.object({
+  core: numStr.pipe(z.number().min(0).max(100)),
+  gold: numStr.pipe(z.number().min(0).max(100)),
+  momentum: numStr.pipe(z.number().min(0).max(100)),
+  band_abs: numStr.pipe(z.number().min(0.5).max(50)),
+  band_rel: numStr.pipe(z.number().min(5).max(100)),
+  monthly_contribution: numStr.pipe(z.number().min(0).max(1_000_000)),
+});
+
+export async function saveSettings(_: ActionResult, form: FormData): Promise<ActionResult> {
+  try {
+    const d = SettingsSchema.parse(Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).replace(",", ".")])));
+    if (Math.abs(d.core + d.gold + d.momentum - 100) > 0.01) return { ok: false, message: "Los pesos objetivo deben sumar 100 %" };
+    const store = await requireStore();
+    await store.saveSettings({
+      targets: { core: d.core / 100, gold: d.gold / 100, momentum: d.momentum / 100 },
+      band_abs: d.band_abs / 100, band_rel: d.band_rel / 100, monthly_contribution: d.monthly_contribution,
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Ajustes guardados" };
+  } catch (e) {
+    return { ok: false, message: msg(e) };
+  }
+}
+
+const PriceSchema = z.object({ instrument_id: z.string().uuid(), price_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), price: numStr.pipe(z.number().positive()) });
+
+export async function addManualPrice(_: ActionResult, form: FormData): Promise<ActionResult> {
+  try {
+    const d = PriceSchema.parse({ ...Object.fromEntries(form), price: String(form.get("price") ?? "").replace(",", ".") });
+    if (d.price_date > today()) return { ok: false, message: "Fecha futura" };
+    const store = await requireStore();
+    await store.addManualPrice(d);
+    revalidatePath("/portfolio", "layout");
+    return { ok: true, message: "Precio guardado" };
+  } catch (e) {
+    return { ok: false, message: msg(e) };
+  }
+}

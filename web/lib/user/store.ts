@@ -1,0 +1,247 @@
+import "server-only";
+
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
+
+import { DEFAULT_SETTINGS, type Instrument, type ManualPrice, type Settings, type Transaction } from "@/lib/portfolio/types";
+import { appMode, isAllowedEmail } from "@/lib/supabase/env";
+import { supabaseServer } from "@/lib/supabase/server";
+
+export interface WatchItem {
+  ticker: string;
+  note: string | null;
+  added_at: string;
+}
+
+export interface UserStore {
+  readonly kind: "supabase" | "local";
+  readonly email: string | null;
+  instruments(): Promise<Instrument[]>;
+  upsertInstrument(i: Omit<Instrument, "id"> & { id?: string }): Promise<Instrument>;
+  deleteInstrument(id: string): Promise<void>;
+  transactions(): Promise<Transaction[]>;
+  addTransactions(txs: Omit<Transaction, "id">[]): Promise<number>;
+  deleteTransaction(id: string): Promise<void>;
+  manualPrices(): Promise<ManualPrice[]>;
+  addManualPrice(p: Omit<ManualPrice, "id">): Promise<void>;
+  watchlist(): Promise<WatchItem[]>;
+  setWatch(ticker: string, on: boolean, note?: string | null): Promise<void>;
+  settings(): Promise<Settings>;
+  saveSettings(s: Settings): Promise<void>;
+}
+
+export class AuthError extends Error {}
+
+/** Resolve the store for the current request. Throws AuthError if not signed in / not allowed. */
+export async function requireStore(): Promise<UserStore> {
+  const mode = appMode();
+  if (mode === "local") return new LocalStore();
+  if (mode === "misconfigured") throw new AuthError("Aplicación sin configurar");
+  const sb = await supabaseServer();
+  const { data } = await sb.auth.getUser();
+  if (!data.user || !isAllowedEmail(data.user.email)) throw new AuthError("No autorizado");
+  return new SupabaseStore(sb, data.user.email ?? null);
+}
+
+// ------------------------------------------------------------------ Supabase
+
+type Sb = Awaited<ReturnType<typeof supabaseServer>>;
+
+function check<T>(res: { data: T | null; error: { message: string } | null }): T {
+  if (res.error) throw new Error(res.error.message);
+  return res.data as T;
+}
+
+const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+
+function normTx(r: Record<string, unknown>): Transaction {
+  return {
+    id: String(r.id),
+    instrument_id: (r.instrument_id as string) ?? null,
+    type: r.type as Transaction["type"],
+    trade_date: String(r.trade_date),
+    quantity: num(r.quantity),
+    price: num(r.price),
+    amount: num(r.amount),
+    fees: Number(r.fees ?? 0),
+    taxes: Number(r.taxes ?? 0),
+    currency: String(r.currency ?? "EUR"),
+    fx_rate: Number(r.fx_rate ?? 1),
+    split_ratio: num(r.split_ratio),
+    note: (r.note as string) ?? null,
+    source: (r.source as "manual" | "csv") ?? "manual",
+    import_hash: (r.import_hash as string) ?? null,
+  };
+}
+
+class SupabaseStore implements UserStore {
+  readonly kind = "supabase" as const;
+  constructor(private sb: Sb, readonly email: string | null) {}
+
+  async instruments() {
+    return check(await this.sb.from("instruments").select("*").order("name")) as Instrument[];
+  }
+  async upsertInstrument(i: Omit<Instrument, "id"> & { id?: string }) {
+    const row = check(await this.sb.from("instruments").upsert(i).select().single());
+    return row as unknown as Instrument;
+  }
+  async deleteInstrument(id: string) {
+    check(await this.sb.from("instruments").delete().eq("id", id));
+  }
+  async transactions() {
+    const rows = check(await this.sb.from("transactions").select("*").order("trade_date").order("created_at"));
+    return (rows as Record<string, unknown>[]).map(normTx);
+  }
+  async addTransactions(txs: Omit<Transaction, "id">[]) {
+    if (!txs.length) return 0;
+    const res = await this.sb.from("transactions").upsert(txs, { onConflict: "user_id,import_hash", ignoreDuplicates: true }).select("id");
+    return (check(res) as unknown[]).length;
+  }
+  async deleteTransaction(id: string) {
+    check(await this.sb.from("transactions").delete().eq("id", id));
+  }
+  async manualPrices() {
+    const rows = check(await this.sb.from("manual_prices").select("*").order("price_date"));
+    return (rows as Record<string, unknown>[]).map((r) => ({ id: String(r.id), instrument_id: String(r.instrument_id), price_date: String(r.price_date), price: Number(r.price) }));
+  }
+  async addManualPrice(p: Omit<ManualPrice, "id">) {
+    check(await this.sb.from("manual_prices").upsert(p, { onConflict: "instrument_id,price_date" }));
+  }
+  async watchlist() {
+    return check(await this.sb.from("watchlist").select("ticker,note,added_at").order("added_at")) as WatchItem[];
+  }
+  async setWatch(ticker: string, on: boolean, note: string | null = null) {
+    if (on) check(await this.sb.from("watchlist").upsert({ ticker, note }));
+    else check(await this.sb.from("watchlist").delete().eq("ticker", ticker));
+  }
+  async settings() {
+    const rows = check(await this.sb.from("settings").select("*").limit(1)) as Record<string, unknown>[];
+    if (!rows.length) return DEFAULT_SETTINGS;
+    const r = rows[0];
+    return {
+      targets: (r.targets as Settings["targets"]) ?? DEFAULT_SETTINGS.targets,
+      band_abs: Number(r.band_abs),
+      band_rel: Number(r.band_rel),
+      monthly_contribution: Number(r.monthly_contribution),
+    };
+  }
+  async saveSettings(s: Settings) {
+    check(await this.sb.from("settings").upsert({ ...s, updated_at: new Date().toISOString() }));
+  }
+}
+
+// --------------------------------------------------------------------- Local
+
+interface LocalData {
+  instruments: Instrument[];
+  transactions: Transaction[];
+  manual_prices: ManualPrice[];
+  watchlist: WatchItem[];
+  settings: Settings;
+}
+
+const LOCAL_FILE = () => process.env.WARRENIA_LOCAL_STORE || path.resolve(process.cwd(), ".data", "user.json");
+
+let lock: Promise<unknown> = Promise.resolve();
+
+class LocalStore implements UserStore {
+  readonly kind = "local" as const;
+  readonly email = null;
+
+  private async load(): Promise<LocalData> {
+    try {
+      const d = JSON.parse(await readFile(/*turbopackIgnore: true*/ LOCAL_FILE(), "utf8")) as Partial<LocalData>;
+      return {
+        instruments: d.instruments ?? [],
+        transactions: d.transactions ?? [],
+        manual_prices: d.manual_prices ?? [],
+        watchlist: d.watchlist ?? [],
+        settings: d.settings ?? DEFAULT_SETTINGS,
+      };
+    } catch {
+      return { instruments: [], transactions: [], manual_prices: [], watchlist: [], settings: DEFAULT_SETTINGS };
+    }
+  }
+
+  private async mutate<T>(fn: (d: LocalData) => T): Promise<T> {
+    const run = lock.then(async () => {
+      const d = await this.load();
+      const out = fn(d);
+      const file = LOCAL_FILE();
+      await mkdir(/*turbopackIgnore: true*/ path.dirname(file), { recursive: true });
+      await writeFile(/*turbopackIgnore: true*/ file + ".tmp", JSON.stringify(d, null, 1));
+      await rename(/*turbopackIgnore: true*/ file + ".tmp", file);
+      return out;
+    });
+    lock = run.catch(() => undefined);
+    return run;
+  }
+
+  async instruments() {
+    return (await this.load()).instruments.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  async upsertInstrument(i: Omit<Instrument, "id"> & { id?: string }) {
+    return this.mutate((d) => {
+      const existing = d.instruments.find((x) => (i.id && x.id === i.id) || (i.isin && x.isin === i.isin));
+      if (existing) {
+        Object.assign(existing, i, { id: existing.id });
+        return existing;
+      }
+      const row = { ...i, id: randomUUID() } as Instrument;
+      d.instruments.push(row);
+      return row;
+    });
+  }
+  async deleteInstrument(id: string) {
+    await this.mutate((d) => {
+      if (d.transactions.some((t) => t.instrument_id === id)) throw new Error("El instrumento tiene operaciones registradas");
+      d.instruments = d.instruments.filter((x) => x.id !== id);
+    });
+  }
+  async transactions() {
+    return (await this.load()).transactions.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+  }
+  async addTransactions(txs: Omit<Transaction, "id">[]) {
+    return this.mutate((d) => {
+      let n = 0;
+      for (const t of txs) {
+        if (t.import_hash && d.transactions.some((x) => x.import_hash === t.import_hash)) continue;
+        d.transactions.push({ ...t, id: randomUUID() });
+        n++;
+      }
+      return n;
+    });
+  }
+  async deleteTransaction(id: string) {
+    await this.mutate((d) => {
+      d.transactions = d.transactions.filter((x) => x.id !== id);
+    });
+  }
+  async manualPrices() {
+    return (await this.load()).manual_prices;
+  }
+  async addManualPrice(p: Omit<ManualPrice, "id">) {
+    await this.mutate((d) => {
+      d.manual_prices = d.manual_prices.filter((x) => !(x.instrument_id === p.instrument_id && x.price_date === p.price_date));
+      d.manual_prices.push({ ...p, id: randomUUID() });
+    });
+  }
+  async watchlist() {
+    return (await this.load()).watchlist;
+  }
+  async setWatch(ticker: string, on: boolean, note: string | null = null) {
+    await this.mutate((d) => {
+      d.watchlist = d.watchlist.filter((w) => w.ticker !== ticker);
+      if (on) d.watchlist.push({ ticker, note, added_at: new Date().toISOString() });
+    });
+  }
+  async settings() {
+    return (await this.load()).settings;
+  }
+  async saveSettings(s: Settings) {
+    await this.mutate((d) => {
+      d.settings = s;
+    });
+  }
+}

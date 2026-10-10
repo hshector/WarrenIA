@@ -1,0 +1,99 @@
+# Momentum methodology v1. See docs/METHODOLOGY.md for the rationale of every
+# component and weight. Weights were fixed a priori (literature + interpretability),
+# NOT optimised on a backtest. Any change bumps the config hash of new runs.
+version: 1
+methodology_version: "1.0"
+
+windows:
+  skip: 21          # sessions skipped for 12-1 / 6-1 (short-term reversal)
+  m1: 21
+  m3: 63
+  m6: 126
+  m12: 252
+  vol_long: 252
+  vol_short: 63
+  atr: 14
+  r2: 126
+  beta: 252
+  gap: 126
+  concentration: 126
+  high52: 252
+  rs_recent: 21
+  rs_prior: 63
+  accel_lookback: 21
+
+# Each score = weighted mean of cross-sectional percentiles of its components,
+# re-expressed as a percentile (0-100) within the eligible universe of its class.
+scores:
+  momentum:
+    mom_12_1_riskadj: 0.5     # (P[t-21]/P[t-252]-1) / vol252
+    mom_6_1_riskadj: 0.5      # (P[t-21]/P[t-126]-1) / vol252
+  trend_quality:
+    consistency: 0.25         # sign(R12-1) * (%up days - %down days), t-252..t-21
+    signed_r2: 0.25           # R^2 of log-price trend over 126d * sign(slope)
+    ma_structure: 0.25        # 0..5 checks on SMA50/SMA200 alignment and slopes
+    high52_proximity: 0.25    # close / 52-week high
+  acceleration:
+    mom_pct_change: 0.5       # Momentum percentile today - 21 sessions ago
+    rs_slope_change: 0.5      # Theil-Sen slope of log RS (21d) - prior 63d, vol-normalised
+  risk:                       # convention: 0 = lowest risk in universe, 100 = highest
+    vol_63: 0.2
+    maxdd_252: 0.2
+    beta_252: 0.2
+    gap_freq: 0.2
+    concentration: 0.2
+    # atr_pct is reported but NOT scored: rank-correlated ~0.9 with vol_63 (double counting)
+
+min_component_weight: 0.5     # a score needs >= 50% of its component weight available
+
+overall:
+  momentum: 0.50
+  trend_quality: 0.25
+  acceleration: 0.10
+  inverse_risk: 0.15          # uses (100 - Risk)
+
+classification:
+  speculative:                # absolute anchors so it is not "always the top 10%"
+    abs_vol_63: 0.60          # vol63 >= 60% annualised, or
+    min_risk: 90              # Risk >= p90 AND
+    min_vol_63_with_risk: 0.40  # vol63 >= 40%
+  extended:
+    min_momentum: 70
+    atr_above_sma50: 3.0
+    dist200_own_percentile: 0.95
+    min_own_history: 252
+  weakening:                  # a leader (Momentum >= 60) with >= 2 deterioration signals
+    min_momentum: 60
+    mom_pct_drop: 10
+    sma50_days_above: 40
+    max_acceleration: 25
+    min_signals: 2
+  breakout:
+    lookback_high: 126
+    recent_sessions: 10
+    volume_multiple: 1.5
+    volume_avg_window: 50
+    consolidation_window: 40
+    consolidation_max_atr: 8.0
+  strong:
+    min_momentum: 80
+    min_trend_quality: 70
+    max_dist_52w_high: 0.10
+  improving:
+    mom_pct_rise: 15
+    min_acceleration: 70
+
+rank_history:
+  daily_sessions: 25          # daily points for the most recent sessions
+  weekly_back: 252            # then every 5th session back to this many sessions
+
+reports:
+  top_stocks: 25
+  top_etfs: 10
+
+sensitivity:
+  samples: 500
+  concentration: 40           # Dirichlet concentration around the base weights
+  top_n: 25
+  seed: 7
+  target_median_topn_overlap: 0.70

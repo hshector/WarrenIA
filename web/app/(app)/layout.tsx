@@ -1,0 +1,34 @@
+import Link from "next/link";
+
+import { Wordmark } from "@/components/shell/brand";
+import { DataBanners, FreshnessStamp } from "@/components/shell/freshness";
+import { TabBar, TopNav } from "@/components/shell/nav";
+import { RefreshButton } from "@/components/shell/refresh-button";
+import { computeFreshness } from "@/lib/market/freshness";
+import { loadMarket } from "@/lib/market/source";
+
+export const dynamic = "force-dynamic";
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const { latest, meta } = await loadMarket();
+  const fresh = latest ? computeFreshness(latest.data_asof, meta?.calendar?.sessions) : null;
+  return (
+    <div className="flex min-h-dvh flex-col">
+      <header className="sticky top-0 z-30 border-b border-line/60 bg-canvas/85 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-3 px-4 md:px-8">
+          <Link href="/" aria-label="Inicio">
+            <Wordmark />
+          </Link>
+          <TopNav />
+          <div className="flex items-center gap-2">
+            <FreshnessStamp latest={latest} fresh={fresh} />
+            <RefreshButton />
+          </div>
+        </div>
+      </header>
+      <DataBanners latest={latest} fresh={fresh} warnings={meta?.warnings} />
+      <main className="mx-auto w-full max-w-[1120px] flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-16">{children}</main>
+      <TabBar />
+    </div>
+  );
+}

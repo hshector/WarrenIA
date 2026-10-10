@@ -1,0 +1,6 @@
+fecha;tipo;isin;ticker;nombre;cantidad;precio;importe;comision;impuestos;divisa;tipo_cambio;ratio;nota
+02/01/2026;aportación;;;;;;450,00;;;EUR;;;Aportación mensual
+02/01/2026;compra;IE00B4L5Y983;;iShares Core MSCI World UCITS ETF (Acc);3,2;105,10;;1,00;;EUR;;;
+02/01/2026;compra;DE000A0S9GB0;;Xetra-Gold;0,5;90,00;;1,00;;EUR;;;
+15/01/2026;compra;US67066G1040;NVDA;NVIDIA;0,4;160,00;;1,00;;EUR;;;Precio en EUR del bróker
+31/01/2026;intereses;;;;;;3,10;;;EUR;;;Intereses del efectivo

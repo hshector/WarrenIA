@@ -1,7 +1,22 @@
-# WarrenIA — Plan maestro (v0.1, pendiente de validación)
+# WarrenIA — Plan maestro (v1.0, validado)
 
-> Estado: **borrador para validar**. No se ha escrito código de producto todavía.
-> Fecha: 2026-10-10.
+> Estado: **validado e implementado** (fases 1‑8). Fecha: 2026-10-10.
+
+## Decisiones validadas
+
+| # | Decisión |
+|---|---|
+| D1 | No hay código previo: proyecto nuevo. |
+| D2 | **Opción A, gratuita**: Massive Basic + SEC + BCE (+ EODHD gratuito opcional). El backtest queda marcado como no concluyente hasta disponer de más historia. |
+| D3 | Aún no hay productos comprados. Plan: aportaciones de 400‑500 €/mes con objetivo 75/10/15. Los instrumentos se dan de alta en la app al comprarlos. |
+| D4 | Exportación de Trade Republic desconocida: entrada manual + importador CSV genérico con plantilla. |
+| D5 | Vercel Hobby + Supabase Free + GitHub Actions (todo gratuito). |
+| D9 | **Rediseño visual** (tras la primera revisión): estética clara tipo iOS/Revolut/Trade Republic, blanco con un único acento naranja «nebulosa», 4 secciones (Inicio, Radar, Cartera, Ajustes), lenguaje llano y detalle técnico plegado. |
+| D6‑D8 | Nombre «WarrenIA» con lenguaje visual Orbital; ADRs incluidos (marcados); LLM opcional aplazado (los informes son deterministas). |
+
+Cambio respecto al borrador: con datos gratuitos y la necesidad de evitar consultas por activo, los resultados de
+mercado se publican como **artefactos versionados en Supabase Storage** en lugar de tablas Postgres (ver
+docs/ARCHITECTURE.md). Postgres guarda solo los datos del usuario.
 
 ---
 

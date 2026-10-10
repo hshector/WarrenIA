@@ -1,0 +1,42 @@
+# Universe definition. Every threshold here is applied point-in-time by the engine
+# (using only data available on the evaluation date). Changing a value changes the
+# config hash stored with every run, so results stay reproducible.
+version: 1
+
+coverage_statement: >-
+  Acciones ordinarias y ADRs cotizados en NYSE, Nasdaq y NYSE American con
+  capitalización estimada >= 2.000 M$ y volumen monetario medio >= 20 M$/día, más
+  ETFs cotizados en EE. UU. con volumen monetario medio >= 10 M$/día (sin
+  apalancados ni inversos). No cubre OTC, otros mercados ni microcaps.
+
+stocks:
+  types: [CS, ADRC]          # Massive ticker types: common stock, ADR common
+  exchanges: [XNYS, XNAS, XASE, ARCX, BATS]
+  min_price: 5.0
+  min_adv_usd: 20_000_000    # mean(close_raw * volume_raw) over adv_window sessions
+  adv_window: 63
+  min_market_cap_usd: 2_000_000_000
+  # When shares outstanding are unknown (e.g. some ADRs) the stock is only kept if it
+  # is very liquid; it is then flagged "mcap n/d".
+  unknown_mcap_min_adv_usd: 100_000_000
+  min_history_sessions: 273  # 252 + 21: enough for 12-1 momentum and SMA200
+  max_missing_fraction: 0.02 # over the last min_history_sessions
+  include_adrs: true
+
+etfs:
+  types: [ETF]
+  min_price: 5.0
+  min_adv_usd: 10_000_000
+  adv_window: 63
+  min_history_sessions: 273
+  max_missing_fraction: 0.02
+  # Leveraged / inverse products are excluded by a documented name heuristic.
+  exclude_name_regex: >-
+    (?i)(\b[1-9](\.\d+)?x\b|\-[1-9]x\b|\bultra(pro)?\b|\binverse\b|\bbear\b|\bbull\b|leveraged|\bshort\b(?!\s*[-\s]?(term|duration|maturity|treasury|bond|vol)))
+
+data_quality:
+  bad_tick_abs_return: 0.25      # |r| above this followed by a reversal is a bad tick
+  bad_tick_reversal_tolerance: 0.05
+  extreme_move_flag: 0.50        # informative flag only (biotech news moves are real)
+  stale_max_sessions: 0          # last bar must be on the evaluation session
+  min_universe_coverage: 0.80    # fraction of previous run's eligible count; below => run degraded

@@ -1,0 +1,69 @@
+import numpy as np
+import pandas as pd
+
+from warrenia_engine.backtest import BacktestConfig, metrics, rebalance_indices, run_backtest, signals, simulate
+from warrenia_engine.calendar import last_closed_session
+from warrenia_engine.compute import build_context
+from warrenia_engine.panels import build_panels
+from warrenia_engine.providers.synthetic import SyntheticProvider
+
+from .conftest import NOW
+
+
+def _ctx(cfg, seed=5):
+    prov = SyntheticProvider(end=last_closed_session(NOW).session, sessions=380, n_stocks=120, n_etfs=10, seed=seed)
+    bars = prov._bars
+    P = build_panels(bars, prov._splits, prov._divs, sessions=prov.sessions)
+    return build_context(cfg, P, prov.tickers(), prov.fundamentals(prov.tickers()))
+
+
+def test_rebalance_dates_are_month_ends():
+    d = pd.bdate_range("2025-01-01", "2025-04-30")
+    idx = rebalance_indices(d, 0, len(d) - 1)
+    assert [d[i].strftime("%Y-%m-%d") for i in idx] == ["2025-01-31", "2025-02-28", "2025-03-31"]
+
+
+def test_signals_have_no_look_ahead(cfg):
+    ctx = _ctx(cfg)
+    rebal = rebalance_indices(ctx.P.dates, 300, len(ctx.P.dates) - 1)
+    t0 = rebal[0]
+    before = signals(ctx, [t0], ["overall", "pure_12_1"], 10)
+    # Poison every price after the signal date: picks at t0 must not change.
+    P = ctx.P
+    for arr in (P.close, P.close_ff, P.open, P.high, P.low):
+        arr[t0 + 1:] *= np.random.default_rng(0).uniform(0.2, 5.0, arr[t0 + 1:].shape)
+    P.logret[t0 + 1:] = np.random.default_rng(1).normal(0, 0.2, P.logret[t0 + 1:].shape)
+    ctx2 = build_context(cfg, P, pd.DataFrame(ctx.ref.reset_index()), None)
+    ctx2.shares, ctx2.sector = ctx.shares, ctx.sector
+    after = signals(ctx2, [t0], ["overall", "pure_12_1"], 10)
+    assert before == after
+
+
+def test_simulate_single_asset_arithmetic(cfg, dates):
+    from .conftest import make_bars
+    px = 100 * np.cumprod(np.r_[1, np.full(len(dates) - 1, 1.001)])
+    bars = make_bars({"SPY": px, "AAA": px * 2}, dates)
+    bars.loc[(bars.ticker == "AAA"), "open"] = bars.loc[(bars.ticker == "AAA"), "close"] / 1.001  # open = prev close
+    P = build_panels(bars, None, None)
+    tk = pd.DataFrame([{"ticker": "SPY", "name": "S", "type": "ETF", "exchange": "ARCX", "active": True, "cik": None, "currency": "USD"},
+                       {"ticker": "AAA", "name": "A", "type": "CS", "exchange": "XNAS", "active": True, "cik": None, "currency": "USD"}])
+    ctx = build_context(cfg, P, tk, None)
+    df = simulate(ctx, {100: ["AAA"]}, end_t=150, cost_bps=10)
+    # buy at open of 101, then +0.1%/day; cost 10 bp on 100% turnover at entry
+    expected = 1.001 ** 50 * (1 - 0.001)
+    assert np.isclose((1 + df["ret"]).prod(), expected, rtol=1e-9)
+    assert df.attrs["turnover"] == [1.0]
+
+
+def test_metrics_basic():
+    r = pd.Series([0.01, -0.02, 0.01, 0.0] * 63)
+    m = metrics(r)
+    assert m["days"] == 252 and m["max_drawdown"] > 0 and m["vol"] > 0
+
+
+def test_short_history_is_reported_not_faked(cfg):
+    ctx = _ctx(cfg)
+    out = run_backtest(ctx, BacktestConfig(top_n=10))
+    assert out["status"] == "ok" and out["conclusive"] is False
+    assert out["period"]["rebalances"] >= 2
+    assert any("NO concluyentes" in x for x in out["limitations"])
