@@ -99,6 +99,14 @@ begin
   end loop;
 end $$;
 
+-- Explicit privileges (projects created with "auto-expose new tables" off grant nothing).
+-- RLS above still limits `authenticated` to its own rows; `anon` gets nothing.
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on public.instruments, public.transactions, public.watchlist,
+  public.manual_prices, public.settings to authenticated, service_role;
+revoke all on public.instruments, public.transactions, public.watchlist,
+  public.manual_prices, public.settings from anon;
+
 -- ------------------------------------------------------------ market storage
 -- Private bucket for the engine's data lake and published artifacts. Only the
 -- secret/service key (GitHub Actions + Vercel server) can read or write it.

@@ -6,7 +6,7 @@ import { AssetCharts, RankChart } from "@/components/research/asset-charts";
 import { RuleTrace } from "@/components/research/report";
 import { WatchButton } from "@/components/research/watch-button";
 import { IconChevronDown } from "@/components/ui/icons";
-import { Callout, Card } from "@/components/ui/primitives";
+import { Callout, Card, EmptyState } from "@/components/ui/primitives";
 import { compactUsd, dateLabel, num, pct } from "@/lib/format";
 import { riskLabel } from "@/lib/market/radar";
 import { getAsset, getRadar, loadMarket } from "@/lib/market/source";
@@ -73,7 +73,13 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   const ticker = decodeURIComponent(raw).toUpperCase();
   const { latest, meta } = await loadMarket();
   const [asset, radar] = await Promise.all([getAsset(latest, ticker), getRadar(latest)]);
-  if (!asset || !meta) notFound();
+  if (!meta)
+    return (
+      <EmptyState title="Todavía no hay datos de mercado">
+        <p>Aparecerán cuando termine la primera descarga diaria.</p>
+      </EmptyState>
+    );
+  if (!asset) notFound();
   const bench = await getAsset(latest, meta.primary_benchmark);
   const store = await requireStore();
   const [watch, pf] = await Promise.all([store.watchlist(), loadPortfolio(store, latest, meta)]);

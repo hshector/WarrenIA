@@ -11,12 +11,13 @@ import io
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Protocol
 
 import pandas as pd
 
-from .http import HttpClient
+from .http import HttpClient, ProviderError
 
 log = logging.getLogger(__name__)
 
@@ -65,22 +66,36 @@ class LocalStorage:
                 p.unlink()
 
 
+def supabase_base_url(url: str) -> str:
+    """Project URL without trailing slash or a pasted API path (/rest/v1, /storage/v1)."""
+    u = url.strip().rstrip("/")
+    return re.sub(r"/(rest|storage|auth)/v1$", "", u)
+
+
+def supabase_headers(key: str) -> dict[str, str]:
+    """Same as supabase-js: the key in `apikey` and as Bearer (sb_secret_ and legacy JWT keys alike)."""
+    key = key.strip()
+    return {"apikey": key, "Authorization": f"Bearer {key}"}
+
+
 class SupabaseStorage:
     """Minimal Supabase Storage REST client (private bucket, service-role key)."""
 
     def __init__(self, url: str, service_key: str, bucket: str, http: HttpClient | None = None):
-        self.base = url.rstrip("/") + "/storage/v1"
+        self.base = supabase_base_url(url) + "/storage/v1"
         self.bucket = bucket
         self.http = http or HttpClient(name="supabase", min_interval=0.0, max_retries=4)
-        # New-style secret keys (sb_secret_...) go in `apikey` only; legacy JWT keys also as Bearer.
-        self.headers = {"apikey": service_key}
-        if service_key.startswith("eyJ"):
-            self.headers["Authorization"] = f"Bearer {service_key}"
+        self.headers = supabase_headers(service_key)
 
     def read_bytes(self, path: str) -> bytes | None:
         r = self.http.request("GET", f"{self.base}/object/{self.bucket}/{path}", headers=self.headers, allow_status={400, 404})
-        if r.status_code in (400, 404):
+        if r.status_code == 404:
             return None
+        if r.status_code == 400:
+            # Storage uses 400 both for "not found" and for real errors: only the former means "missing".
+            if re.search(r"not.?found|\"404\"", r.text, re.I):
+                return None
+            raise ProviderError(f"supabase: HTTP 400 reading {path}: {r.text[:200]}", 400)
         return r.content
 
     def write_bytes(self, path: str, data: bytes, content_type: str = "application/octet-stream") -> None:

@@ -24,6 +24,8 @@ Necesitas cuentas en: **GitHub** (ya la tienes), **Supabase**, **Vercel** y **Ma
    - *Site URL*: la URL de Vercel del paso 4 (puedes volver después).
    - *Redirect URLs*: añade `https://TU-APP.vercel.app/auth/callback` y, para desarrollo,
      `http://localhost:3000/auth/callback`.
+   - Comprobación: abre `https://TU-APP.vercel.app/setup/check`. Revisa en vivo las variables de
+     Vercel, las claves, las tablas y el almacén de datos, y dice qué falta sin mostrar ninguna clave.
 5. *Authentication → Sign In / Providers → Email*: activado. Cuando hayas entrado por primera vez, puedes desactivar
    *Allow new users to sign up*. Además, la app solo deja entrar a los correos de `ALLOWED_EMAILS`.
 
@@ -54,7 +56,7 @@ Después:
 3. Al terminar, en Supabase → *Storage → market* verás `published/latest.json`.
 4. *(Opcional)* Workflow **backtest** → *Run workflow*. Después se ejecuta solo cada sábado.
 
-A partir de ahí se ejecuta solo de martes a sábado a las 01:35 UTC, con un reintento a las 06:05 UTC.
+A partir de ahí se ejecuta solo de martes a sábado a las 05:15 UTC (pasada la medianoche de Nueva York), con un reintento a las 11:05 UTC.
 
 ## 4. Vercel (la web) — plan Hobby
 

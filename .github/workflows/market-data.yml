@@ -6,9 +6,10 @@ name: market-data
 
 on:
   schedule:
-    # Tue-Sat 01:35 UTC (after the US close + provider settle time) and a 06:05 UTC retry.
-    - cron: "35 1 * * 2-6"
-    - cron: "5 6 * * 2-6"
+    # Tue-Sat 05:15 UTC: after midnight New York time, so free plans already serve the
+    # previous session in full. 11:05 UTC retry (exits in seconds if already published).
+    - cron: "15 5 * * 2-6"
+    - cron: "5 11 * * 2-6"
   workflow_dispatch:
     inputs:
       mode:
@@ -38,19 +39,9 @@ jobs:
       MASSIVE_MIN_INTERVAL: ${{ vars.MASSIVE_MIN_INTERVAL || '12.5' }}
       SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
       EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
-      INGEST_MAX_MINUTES: "300"
+      INGEST_MAX_MINUTES: "180"  # leaves ~2.5h for corporate actions, SEC, compute and publish
     steps:
       - uses: actions/checkout@v4
-      - name: Check configuration
-        run: |
-          missing=""
-          for v in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY MASSIVE_API_KEY; do
-            if [ -z "${!v}" ]; then missing="$missing $v"; fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Faltan secrets del repositorio:$missing (ver docs/DEPLOY.md)"; exit 1
-          fi
-          [ -z "$SEC_USER_AGENT" ] && echo "::warning::SEC_USER_AGENT no configurado: sin capitalización ni sectores" || true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -58,8 +49,11 @@ jobs:
           cache-dependency-path: engine/pyproject.toml
       - name: Install engine
         run: pip install -e ./engine
+      - name: Check secrets and permissions
+        run: python -m warrenia_engine doctor
       - name: Ingest + compute + publish
+        id: ingest
         run: python -m warrenia_engine ${{ github.event.inputs.mode || 'update' }}
       - name: EUR prices + ECB FX (portfolio)
-        if: always()
+        if: success() || failure() && steps.ingest.outcome == 'failure'
         run: python -m warrenia_engine eu-prices

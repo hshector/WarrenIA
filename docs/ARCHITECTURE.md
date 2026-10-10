@@ -2,7 +2,7 @@
 
 ```
  Massive (EOD EE. UU.) ─┐
- SEC EDGAR ─────────────┤      GitHub Actions (cron 01:35 UTC + manual + botón web)
+ SEC EDGAR ─────────────┤      GitHub Actions (cron 05:15 UTC + manual + botón web)
  BCE (FX) ──────────────┤      engine/ (Python)
  EODHD (EUR, opcional) ─┘      ingest → validate → lake → panels/ajustes → indicadores → scores
                                 → clasificación → informes → publish

@@ -49,9 +49,9 @@ class SecFundamentals:
 
     @classmethod
     def from_env(cls) -> "SecFundamentals | None":
-        ua = os.environ.get("SEC_USER_AGENT", "")
-        if not ua:
-            log.warning("SEC_USER_AGENT no configurado: sin capitalización ni sectores")
+        ua = os.environ.get("SEC_USER_AGENT", "").strip()
+        if not ua or "@" not in ua:
+            log.warning("SEC_USER_AGENT ausente o sin e-mail: sin capitalización ni sectores")
             return None
         return cls(ua)
 
@@ -83,9 +83,9 @@ class SecFundamentals:
         # SIC codes: reuse cached values, fetch only new CIKs.
         known: dict[int, tuple] = {}
         if previous is not None and not previous.empty and "sic" in previous:
-            for r in previous.dropna(subset=["cik"]).itertuples():
+            for r in previous.dropna(subset=["cik", "sic"]).itertuples():  # missing SIC: re-fetch
                 try:
-                    known[int(r.cik)] = (r.sic, r.sic_description)
+                    known[int(r.cik)] = (int(r.sic), r.sic_description)
                 except (TypeError, ValueError):
                     pass
         for cik in sorted(set(want["cik"]) - set(known)):
@@ -93,16 +93,22 @@ class SecFundamentals:
                 sub = self.http.get_json(f"https://data.sec.gov/submissions/CIK{cik:010d}.json")
                 known[cik] = (sub.get("sic") or None, sub.get("sicDescription"))
             except ProviderError as e:
-                log.warning("sec: submissions CIK %s: %s", cik, e)
-                known[cik] = (None, None)
+                log.warning("sec: submissions CIK %s: %s", cik, e)  # not cached: retried next refresh
 
         rows = []
         for r in want.itertuples():
             sh = shares.get(r.cik)
             sic, desc = known.get(r.cik, (None, None))
-            rows.append({"ticker": r.ticker, "cik": f"{r.cik:010d}", "sic": int(sic) if sic else None,
+            rows.append({"ticker": r.ticker, "cik": f"{r.cik:010d}", "sic": _int_or_none(sic),
                          "sic_description": desc, "shares": sh[0] if sh else None,
                          "shares_asof": sh[1] if sh else None, "source": "SEC EDGAR"})
         log.info("sec: %d tickers, %d with shares, %d with SIC", len(rows),
                  sum(1 for x in rows if x["shares"]), sum(1 for x in rows if x["sic"]))
         return pd.DataFrame(rows, columns=FUNDAMENTAL_COLUMNS) if rows else empty(FUNDAMENTAL_COLUMNS)
+
+
+def _int_or_none(v) -> int | None:
+    try:
+        return None if v is None or pd.isna(v) else int(v)
+    except (TypeError, ValueError):
+        return None

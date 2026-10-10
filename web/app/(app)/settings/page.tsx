@@ -170,7 +170,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
             <li><span className="text-ink">Precios en EUR de ETFs/ETCs:</span> EODHD, plan gratuito (~20 llamadas/día): suficiente para unos pocos instrumentos de cartera.</li>
           </ul>
           <ul className="flex flex-col gap-2">
-            <li><span className="text-ink">Frecuencia:</span> un proceso programado en GitHub Actions tras cada cierre de NYSE (≈ 01:35 UTC, reintento 06:05 UTC) y bajo demanda con «Actualizar» (cada 15 min como máximo).</li>
+            <li><span className="text-ink">Frecuencia:</span> un proceso programado en GitHub Actions tras cada cierre de NYSE (≈ 05:15 UTC, reintento 11:05 UTC) y bajo demanda con «Actualizar» (cada 15 min como máximo).</li>
             <li><span className="text-ink">Tipo de dato:</span> cierre diario. Sin tiempo real ni intradía.</li>
             <li><span className="text-ink">Coste:</span> 0 €/mes en la configuración actual. Ampliar historia (backtest robusto) requiere un plan de pago.</li>
             <li><span className="text-ink">Uso:</span> personal y privado; los datos no se redistribuyen (la app requiere login).</li>

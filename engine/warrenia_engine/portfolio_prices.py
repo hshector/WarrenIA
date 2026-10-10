@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta, timezone
 import pandas as pd
 
 from .http import HttpClient, ProviderError
-from .storage import Storage, read_json, write_json
+from .storage import Storage, read_json, supabase_base_url, supabase_headers, write_json
 
 log = logging.getLogger(__name__)
 
@@ -57,10 +57,8 @@ def list_instruments() -> list[dict]:
     if not (url and key):
         return []
     http = HttpClient("supabase-rest")
-    headers = {"apikey": key}
-    if key.startswith("eyJ"):
-        headers["Authorization"] = f"Bearer {key}"
-    rows = http.get_json(f"{url.rstrip('/')}/rest/v1/instruments?select=eodhd_symbol,currency&eodhd_symbol=not.is.null",
+    headers = supabase_headers(key)
+    rows = http.get_json(f"{supabase_base_url(url)}/rest/v1/instruments?select=eodhd_symbol,currency&eodhd_symbol=not.is.null",
                          headers=headers)
     seen, out = set(), []
     for r in rows:
@@ -109,11 +107,16 @@ def update_portfolio_prices(storage: Storage, now: datetime | None = None) -> di
     except ProviderError as e:
         out["fx"] = {"error": str(e)}
     key = os.environ.get("EODHD_API_KEY")
-    instruments = list_instruments()
     if not key:
         out["prices"] = {"skipped": "EODHD_API_KEY no configurada"}
-    elif not instruments:
+        return out
+    try:
+        instruments = list_instruments()
+    except ProviderError as e:
+        out["prices"] = {"error": str(e)}
+        return out
+    if not instruments:
         out["prices"] = {"skipped": "sin instrumentos con eodhd_symbol"}
     else:
-        out["prices"] = update_prices(storage, instruments[:18], now, key)  # stay within free daily quota
+        out["prices"] = update_prices(storage, instruments[:9], now, key)  # 2 runs/day stay within the free daily quota
     return out

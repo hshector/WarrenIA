@@ -43,3 +43,26 @@ describe("allowlist", () => {
     expect(isAllowedEmail(null)).toBe(false);
   });
 });
+
+describe("supabaseBaseUrl", () => {
+  it("strips trailing slashes and pasted API paths", async () => {
+    const { supabaseBaseUrl } = await import("./env");
+    for (const u of ["https://x.supabase.co", "https://x.supabase.co/", "https://x.supabase.co/rest/v1/", " https://x.supabase.co/rest/v1 "]) {
+      expect(supabaseBaseUrl(u)).toBe("https://x.supabase.co");
+    }
+  });
+});
+
+describe("misconfiguration fails closed into /setup", () => {
+  it("malformed URL or empty allowlist on Vercel", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_x");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("ALLOWED_EMAILS", "me@x.com");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "x.supabase.co");
+    expect(appMode()).toBe("misconfigured");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://x.supabase.co/rest/v1/");
+    expect(appMode()).toBe("supabase");
+    vi.stubEnv("ALLOWED_EMAILS", "");
+    expect(appMode()).toBe("misconfigured");
+  });
+});

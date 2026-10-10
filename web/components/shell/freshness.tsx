@@ -16,14 +16,19 @@ export function FreshnessStamp({ latest, fresh }: { latest: Latest | null; fresh
   );
 }
 
-export function DataBanners({ latest, fresh, warnings = [] }: { latest: Latest | null; fresh: Freshness | null; warnings?: string[] }) {
-  if (!latest) return null;
+export function DataBanners({ latest, fresh, warnings = [], error }: { latest: Latest | null; fresh: Freshness | null; warnings?: string[]; error?: string | null }) {
   const msgs: { tone: "accent" | "warn"; text: React.ReactNode }[] = [];
+  if (error) msgs.push({ tone: "warn", text: error });
+  if (!latest) return msgs.length ? <Banners msgs={msgs} /> : null;
   if (latest.demo) msgs.push({ tone: "accent", text: "Estás viendo datos de demostración (ficticios). Conecta los datos reales en Ajustes." });
   if (!latest.demo && fresh?.status === "stale")
     msgs.push({ tone: "warn", text: <>Datos desactualizados: son del cierre del {dateLabel(latest.data_asof)} y ya ha cerrado el {dateLabel(fresh.expected)}.</> });
   if (latest.status === "degraded" && !latest.demo) msgs.push({ tone: "warn", text: warnings[0] ?? "La última actualización terminó con avisos." });
   if (!msgs.length) return null;
+  return <Banners msgs={msgs} />;
+}
+
+function Banners({ msgs }: { msgs: { tone: "accent" | "warn"; text: React.ReactNode }[] }) {
   return (
     <div className="mx-auto w-full max-w-[1120px] px-4 pt-3 md:px-8">
       {msgs.map((m, i) => (

@@ -10,7 +10,7 @@ import { loadMarket } from "@/lib/market/source";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { latest, meta } = await loadMarket();
+  const { latest, meta, error } = await loadMarket();
   const fresh = latest ? computeFreshness(latest.data_asof, meta?.calendar?.sessions) : null;
   return (
     <div className="flex min-h-dvh flex-col">
@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </header>
-      <DataBanners latest={latest} fresh={fresh} warnings={meta?.warnings} />
+      <DataBanners latest={latest} fresh={fresh} warnings={meta?.warnings} error={error} />
       <main className="mx-auto w-full max-w-[1120px] flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-16">{children}</main>
       <TabBar />
     </div>

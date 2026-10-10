@@ -58,30 +58,44 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
             lake.save_state(st)
             buffer = []
 
-    for d in missing:
-        if max_seconds and time.monotonic() - t0 > max_seconds:
-            stopped = "time_budget"
-            break
-        try:
-            df = provider.grouped_daily(d)
-        except ProviderError as e:
-            if e.status in (401, 402, 403):
-                # Plan restriction for older dates: never retry below this floor.
-                log.warning("ingest: provider refused %s (%s); history floor set", d, e.status)
-                st = lake.state()
-                st["plan_limited_before"] = d.isoformat()
-                lake.save_state(st)
-                stopped = "plan_limit"
+    refused: list[date] = []
+    try:
+        for d in missing:
+            if max_seconds and time.monotonic() - t0 > max_seconds:
+                stopped = "time_budget"
                 break
-            raise
-        if df is None or df.empty:
-            empty_sessions.append(d)  # will be retried on the next run
-            continue
-        buffer.append(df)
-        fetched.append(d)
-        if len(buffer) >= 20:
-            flush()
-    flush()
+            try:
+                df = provider.grouped_daily(d)
+            except ProviderError as e:
+                if e.status == 401:
+                    raise ProviderError(f"{provider.name}: la API key no es válida (401)", 401) from e
+                if e.status in (402, 403):
+                    if (last - d).days > 365:
+                        # Older than the plan window: never retry below this floor.
+                        log.warning("ingest: provider refused %s (%s); history floor set", d, e.status)
+                        st = lake.state()
+                        st["plan_limited_before"] = d.isoformat()
+                        lake.save_state(st)
+                        stopped = "plan_limit"
+                        break
+                    # Recent date refused (e.g. not yet available on the plan): retry on the next run.
+                    log.warning("ingest: provider refused %s (%s); will retry", d, e.status)
+                    refused.append(d)
+                    continue
+                # Transient (rate limit / 5xx / network after retries): keep what we have and publish it.
+                log.warning("ingest: stopping early: %s", e)
+                stopped = "provider_error"
+                break
+            if df is None or df.empty:
+                empty_sessions.append(d)  # will be retried on the next run
+                continue
+            buffer.append(df)
+            fetched.append(d)
+            if len(buffer) >= 20:
+                flush()
+    finally:
+        flush()
+    empty_sessions.extend(refused)
 
     st = lake.state()
     refreshed = st.setdefault("refreshed", {})
@@ -92,15 +106,19 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
 
     # Reference tickers: weekly.
     if _older_than(refreshed.get("tickers"), days=7, now=now) or lake.read_ref("tickers") is None:
-        tk = provider.tickers()
-        lake.write_ref("tickers", tk)
-        refreshed["tickers"] = now.isoformat(timespec="seconds")
-        log.info("ingest: %d reference tickers", len(tk))
+        try:
+            tk = provider.tickers()
+            lake.write_ref("tickers", tk)
+            refreshed["tickers"] = now.isoformat(timespec="seconds")
+            log.info("ingest: %d reference tickers", len(tk))
+        except ProviderError as e:
+            warnings.append(f"Lista de valores no actualizada ({e.status}); se usa la anterior.")
+            log.warning("ingest: tickers refresh failed: %s", e)
 
     # Corporate actions: incremental with a 10-day overlap.
     first = min(wanted) if wanted else last
     for name, fn, cols, keys in (("splits", provider.splits, SPLIT_COLUMNS, ["ticker", "ex_date"]),
-                                 ("dividends", provider.dividends, DIVIDEND_COLUMNS, ["ticker", "ex_date", "cash_amount"])):
+                                 ("dividends", provider.dividends, DIVIDEND_COLUMNS, ["ticker", "ex_date"])):
         since = st.get(f"{name}_through")
         start = (date.fromisoformat(since) - timedelta(days=10)) if since else first
         try:
@@ -122,8 +140,9 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
             lake.write_ref("fundamentals", f)
             refreshed["fundamentals"] = now.isoformat(timespec="seconds")
             log.info("ingest: fundamentals for %d tickers", len(f))
-        except ProviderError as e:
-            warnings.append(f"Fundamentales (SEC) no disponibles: {e}")
+        except Exception as e:  # never let fundamentals stop the daily publish
+            log.exception("ingest: fundamentals failed")
+            warnings.append(f"Fundamentales (SEC) no disponibles: {type(e).__name__}")
     st["refreshed"] = refreshed
     st["last_ingest_warnings"] = warnings
     lake.save_state(st)
