@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+# Local data lake / published artifacts (never commit market data)
+/data/
+# Node
+node_modules/
+.next/
+out/
+web/test-results/
+web/playwright-report/
+web/.data/
+*.tsbuildinfo
+next-env.d.ts
+# Env
+.env
+.env.local
+.env.*.local
+# OS
+.DS_Store
