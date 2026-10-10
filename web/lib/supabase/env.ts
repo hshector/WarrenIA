@@ -13,12 +13,19 @@ export function supabaseBaseUrl(url: string): string {
 export function supabasePublicEnv() {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const url = raw ? supabaseBaseUrl(raw) : undefined;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  return url && key ? { url, key } : null;
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)?.trim();
+  if (!url || !key) return null;
+  try {
+    if (new URL(url).protocol !== "https:" && !url.startsWith("http://127.0.0.1") && !url.startsWith("http://localhost")) return null;
+  } catch {
+    return null; // malformed URL: fail closed into /setup instead of crashing every request
+  }
+  return { url, key };
 }
 
 export function appMode(): AppMode {
-  if (supabasePublicEnv()) return "supabase";
+  // On Vercel an empty allowlist would silently lock everyone out: surface it as a setup problem.
+  if (supabasePublicEnv() && (!process.env.VERCEL || allowedEmails().length)) return "supabase";
   if (!process.env.VERCEL && (process.env.NODE_ENV !== "production" || process.env.WARRENIA_LOCAL_MODE === "1")) return "local";
   return "misconfigured";
 }

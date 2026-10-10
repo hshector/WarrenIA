@@ -48,8 +48,15 @@ export async function requireStore(): Promise<UserStore> {
 
 type Sb = Awaited<ReturnType<typeof supabaseServer>>;
 
-function check<T>(res: { data: T | null; error: { message: string } | null }): T {
-  if (res.error) throw new Error(res.error.message);
+function check<T>(res: { data: T | null; error: { message: string; code?: string } | null }): T {
+  if (res.error) {
+    const c = res.error.code;
+    console.error("db:", c, res.error.message);
+    // Message is shown by app/(app)/error.tsx: say what to do, not the raw Postgres text.
+    if (c === "PGRST205" || c === "42P01") throw new Error("Faltan las tablas de la base de datos: ejecuta supabase/migrations/0001_init.sql en Supabase → SQL Editor.");
+    if (c === "42501") throw new Error("La base de datos no da permisos a tu usuario: vuelve a ejecutar supabase/migrations/0001_init.sql.");
+    throw new Error("Error de la base de datos. Inténtalo de nuevo.");
+  }
   return res.data as T;
 }
 

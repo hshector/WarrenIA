@@ -28,6 +28,12 @@ export function storageHeaders(key: string): Record<string, string> {
   return { apikey: key, Authorization: `Bearer ${key}` };
 }
 
+export class StorageError extends Error {
+  constructor(readonly status: number) {
+    super(`storage ${status}`);
+  }
+}
+
 // Run artifacts are immutable (versioned by run id): memoise them per server instance.
 const memo = new Map<string, unknown>();
 const MEMO_MAX = 80;
@@ -45,9 +51,20 @@ async function readRaw(p: string): Promise<Buffer | null> {
   const res = await fetch(`${src.url}/storage/v1/object/${src.bucket}/published/${p}`, {
     headers: storageHeaders(src.key),
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   });
-  if (res.status === 404 || res.status === 400) return null;
-  if (!res.ok) throw new Error(`storage ${res.status} reading ${p}`);
+  if (res.status === 404) return null;
+  if (res.status === 400) {
+    // Storage answers 400 both for "object not found" and for auth problems: tell them apart.
+    const body = await res.text();
+    if (/not.?found/i.test(body)) return null;
+    console.error("market: storage 400", p, body.slice(0, 200));
+    throw new StorageError(400);
+  }
+  if (!res.ok) {
+    console.error("market: storage", res.status, p);
+    throw new StorageError(res.status);
+  }
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -70,7 +87,11 @@ export async function getLatest(): Promise<Latest | null> {
 
 async function inRun<T>(latest: Latest | null, file: string): Promise<T | null> {
   if (!latest) return null;
-  return readJson<T>(`${latest.path}/${file}`, true);
+  // latest.json already proved storage access: a failure here is transient or a corrupt file, never a crash.
+  return readJson<T>(`${latest.path}/${file}`, true).catch((e) => {
+    console.error("market: read failed", file, e);
+    return null;
+  });
 }
 
 export async function getMeta(latest: Latest | null) {
@@ -109,22 +130,41 @@ export async function getAssets(latest: Latest | null, tickers: string[]): Promi
   return out;
 }
 
+function quiet(e: unknown): null {
+  console.error("market: read failed", e);
+  return null;
+}
+
 export async function getBacktest() {
-  return readJson<Backtest>("backtest/latest.json", false);
+  return readJson<Backtest>("backtest/latest.json", false).catch(quiet);
 }
 
 export async function getFx() {
-  return readJson<FxFile>("fx/ecb.json", false);
+  return readJson<FxFile>("fx/ecb.json", false).catch(quiet);
 }
 
 export async function getPriceFile(symbol: string) {
   if (!/^[A-Z0-9.\-]{1,24}$/i.test(symbol)) return null;
-  return readJson<PriceFile>(`prices/${symbol.toUpperCase()}.json`, false);
+  return readJson<PriceFile>(`prices/${symbol.toUpperCase()}.json`, false).catch(quiet);
 }
 
 /** Everything a typical page needs, in one call. */
+/** Never throws: pages render an empty state, and `error` explains a configuration problem. */
 export async function loadMarket() {
-  const latest = await getLatest().catch(() => null);
-  const meta = await getMeta(latest).catch(() => null);
-  return { latest, meta, source: marketSource().kind };
+  let error: string | null = null;
+  const fail = (e: unknown) => {
+    if (!error) {
+      error =
+        e instanceof StorageError && [400, 401, 403].includes(e.status)
+          ? `Supabase rechaza la clave secreta de Vercel (${e.status}). Revisa /setup/check.`
+          : "No se pudieron leer los datos de mercado. Se reintentará en la próxima carga.";
+      console.error("market: load failed", e);
+    }
+    return null;
+  };
+  const latest = await getLatest().catch(fail);
+  const meta = await getMeta(latest).catch(fail);
+  const src = marketSource().kind;
+  if (src === "none" && process.env.VERCEL) error = "Falta SUPABASE_SECRET_KEY en Vercel. Revisa /setup/check.";
+  return { latest, meta, source: src, error };
 }

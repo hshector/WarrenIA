@@ -34,14 +34,20 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
+  // Redirects must carry any auth cookies Supabase just set or cleared.
+  const redirect = (to: URL) => {
+    const r = NextResponse.redirect(to);
+    response.cookies.getAll().forEach((c) => r.cookies.set(c));
+    return r;
+  };
   if (!user && !isPublic) {
     const url = new URL("/login", request.url);
     if (pathname !== "/") url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return redirect(url);
   }
   if (user && !isAllowedEmail(user.email) && !isPublic) {
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/login?error=not_allowed", request.url));
+    return redirect(new URL("/login?error=not_allowed", request.url));
   }
   return response;
 }
