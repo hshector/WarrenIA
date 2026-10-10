@@ -32,6 +32,7 @@ class Panels:
     close_ff: np.ndarray       # adjusted close forward-filled (max 5 sessions)
     logret: np.ndarray         # log returns of close_ff (NaN where no data)
     adjustment_notes: list[str] = field(default_factory=list)
+    events: dict[str, list] = field(default_factory=dict)  # ticker -> [(ex_date, price_factor, kind, detail)]
 
     def col(self, ticker: str) -> int:
         idx = np.where(self.tickers == ticker)[0]
@@ -67,6 +68,7 @@ def build_panels(
 
     T, N = c.shape
     tix = {t: i for i, t in enumerate(tickers)}
+    events: dict[str, list] = {}
     price_ev = np.ones((T, N))
     split_ev = np.ones((T, N))
 
@@ -84,6 +86,8 @@ def build_panels(
             f = float(row.split_from) / float(row.split_to)
             price_ev[t, i] *= f
             split_ev[t, i] *= f
+            events.setdefault(row.ticker, []).append((dates[t].date().isoformat(), f, "split",
+                                                      f"{row.split_to:g}:{row.split_from:g}"))
 
     if dividends is not None and not dividends.empty:
         c_ff_raw = pd.DataFrame(c).ffill(limit=5).to_numpy(copy=True)
@@ -106,6 +110,8 @@ def build_panels(
                 notes.append(f"{row.ticker}: dividendo {row.cash_amount} ignorado (>{ratio:.0%} del precio)")
                 continue
             price_ev[t, i] *= 1.0 - ratio
+            events.setdefault(row.ticker, []).append((dates[t].date().isoformat(), 1.0 - ratio, "dividend",
+                                                      f"{row.cash_amount:g}"))
 
     def backward_factor(ev: np.ndarray) -> np.ndarray:
         # factor[t] = prod_{s > t} ev[s]
@@ -124,4 +130,4 @@ def build_panels(
     with np.errstate(divide="ignore", invalid="ignore"):
         logret = np.full_like(close_ff, np.nan)
         logret[1:] = np.log(close_ff[1:] / close_ff[:-1])
-    return Panels(dates, tickers, adj_o, adj_h, adj_l, adj_c, c, adj_v, dollar, present, close_ff, logret, notes)
+    return Panels(dates, tickers, adj_o, adj_h, adj_l, adj_c, c, adj_v, dollar, present, close_ff, logret, notes, events)

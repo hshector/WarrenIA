@@ -39,8 +39,15 @@ def main(argv: list[str] | None = None) -> int:
         from .pipeline import compute_and_publish, ingest
         from .providers.synthetic import SyntheticProvider
 
+        from .calendar import previous_sessions, session_close_utc
+        from datetime import timedelta
+
         prov = SyntheticProvider(end=last_closed_session(now).session)
         summary = ingest(prov, Lake(storage), cfg, now=now, fundamentals_provider=prov)
+        # Publish the previous session first so the demo shows state changes between runs.
+        prev = previous_sessions(last_closed_session(now).session, 2)[0]
+        compute_and_publish(storage, cfg, now=session_close_utc(prev) + timedelta(hours=5), demo=True,
+                            provider_name="synthetic (DEMO)")
         out = compute_and_publish(storage, cfg, now=now, demo=True, provider_name="synthetic (DEMO)")
         print(json.dumps({"ingest": summary, "publish": out}, indent=2, ensure_ascii=False))
         return 0

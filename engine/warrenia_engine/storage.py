@@ -72,7 +72,10 @@ class SupabaseStorage:
         self.base = url.rstrip("/") + "/storage/v1"
         self.bucket = bucket
         self.http = http or HttpClient(name="supabase", min_interval=0.0, max_retries=4)
-        self.headers = {"Authorization": f"Bearer {service_key}", "apikey": service_key}
+        # New-style secret keys (sb_secret_...) go in `apikey` only; legacy JWT keys also as Bearer.
+        self.headers = {"apikey": service_key}
+        if service_key.startswith("eyJ"):
+            self.headers["Authorization"] = f"Bearer {service_key}"
 
     def read_bytes(self, path: str) -> bytes | None:
         r = self.http.request("GET", f"{self.base}/object/{self.bucket}/{path}", headers=self.headers, allow_status={400, 404})

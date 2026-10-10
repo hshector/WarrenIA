@@ -10,14 +10,14 @@ from datetime import date, datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 
-from .calendar import last_closed_session, previous_sessions, session_close_utc, sessions_between
+from .calendar import last_closed_session, previous_sessions, session_close_utc, sessions_between, get_calendar
 from .compute import build_context, evaluate, rank_history
 from .config import Config
 from .http import ProviderError
 from .lake import Lake
 from .panels import build_panels
 from .providers.base import DIVIDEND_COLUMNS, SPLIT_COLUMNS, empty
-from .publish import build_artifacts, new_run_id, previous_meta, publish
+from .publish import build_artifacts, new_run_id, previous_meta, previous_states, publish
 from .storage import Storage, write_parquet
 from .universe import classify_assets
 
@@ -217,7 +217,14 @@ def compute_and_publish(storage: Storage, cfg: Config, now: datetime | None = No
         "lake": {"refreshed": st.get("refreshed", {}), "ingested_sessions": len(sessions)},
         "data_type": "EOD (cierre diario). Sin datos intradía.",
     }
-    art = build_artifacts(ctx, t, res, hist, meta_extra)
+    prev_st, prev_asof = previous_states(storage)
+    if prev_asof == asof.isoformat():
+        # Recompute of the same session: compare with the state before that session instead.
+        prev_st = {k: v for k, v in (previous_meta(storage) or {}).get("prev_states", {}).items()} or prev_st
+    meta_extra["prev_states_asof"] = prev_asof
+    meta_extra["calendar"] = upcoming_calendar(asof)
+    art = build_artifacts(ctx, t, res, hist, meta_extra, prev_states=prev_st)
+    art["meta"]["prev_states"] = prev_st
     art["meta"]["compute_seconds"] = round(time.monotonic() - t0, 1)
     publish(storage, art, run_id)
     snap = pd.DataFrame([{"ticker": r["t"], "cls": r["cls"], "rank": r["rank"], "overall": r["ov"], "momentum": r["m"],
@@ -228,3 +235,15 @@ def compute_and_publish(storage: Storage, cfg: Config, now: datetime | None = No
              time.monotonic() - t0, len(res["stock"].scores), len(res["etf"].scores))
     return {"run_id": run_id, "asof": asof.isoformat(), "status": status, "warnings": warnings,
             "eligible": {c: len(res[c].scores) for c in res}}
+
+
+def upcoming_calendar(asof: date, days: int = 400) -> dict:
+    """NYSE sessions (with UTC close) around asof, so the web can judge freshness
+    at view time without its own holiday table."""
+    cal = get_calendar("XNYS")
+    start = pd.Timestamp(asof) - pd.Timedelta(days=10)
+    end = min(pd.Timestamp(asof) + pd.Timedelta(days=days), cal.last_session)
+    sess = cal.sessions_in_range(start, end)
+    closes = cal.closes[sess]
+    return {"exchange": "XNYS", "sessions": [[d.date().isoformat(), c.tz_convert("UTC").isoformat() if c.tzinfo else c.tz_localize("UTC").isoformat()]
+                                             for d, c in zip(sess, closes)]}

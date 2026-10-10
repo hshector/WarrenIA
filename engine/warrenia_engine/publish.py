@@ -74,7 +74,8 @@ def shard_of(ticker: str) -> str:
     return c if "A" <= c <= "Z" else "_"
 
 
-def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dict, meta_extra: dict) -> dict[str, Any]:
+def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dict, meta_extra: dict,
+                    prev_states: dict[str, str] | None = None) -> dict[str, Any]:
     cfg = ctx.cfg
     P = ctx.P
     asof = P.dates[t].date()
@@ -177,7 +178,8 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
                 "ov": clean(round(s["overall"], 1)), "rank": int(s["rank"]),
                 "dr": clean(rank_change(c, tk)), "dm": clean(s["mom_pct_change"]),
                 "lead": clean(i["residual_mom"]), "secrel": clean(sec_rel),
-                "st": st["state"], "tags": st["tags"], "why": short_reasons(i, s), "flags": flags,
+                "st": st["state"], "pst": (prev_states or {}).get(tk), "tags": st["tags"],
+                "why": short_reasons(i, s), "flags": flags,
                 "bo": bool(i["breakout"]), "h52": bool(i["new_52w_high"]),
             }
             rows.append(row)
@@ -227,6 +229,8 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
         vser = P.volume[t - n_ser + 1 : t + 1, col]
         d = details.setdefault(tk, {"row": {"t": tk, "n": str(ctx.ref["name"].get(tk, tk)), "cls": "etf"}, "eligible": False})
         d["series"] = {"c": clean(cser.tolist(), 6), "v": [None if not np.isfinite(x) else int(x) for x in vser]}
+        # Adjustment events inside the window: raw(t) = adj(t) / prod(factors with ex_date > t)
+        d["events"] = [list(e) for e in P.events.get(tk, []) if e[0] >= sessions[0]]
 
     shards: dict[str, dict] = {}
     for tk, d in details.items():
@@ -317,6 +321,15 @@ def _retention(storage: Storage, prefix: str, keep: int) -> None:
 def new_run_id(asof: date, now: datetime | None = None) -> str:
     now = now or datetime.now(timezone.utc)
     return f"{asof:%Y%m%d}-{now:%H%M%S}"
+
+
+def previous_states(storage: Storage, prefix: str = "published") -> tuple[dict[str, str], str | None]:
+    """Ticker -> state of the latest published run (to show state changes)."""
+    latest = read_json(storage, f"{prefix}/latest.json")
+    if not latest:
+        return {}, None
+    radar = read_json(storage, f"{prefix}/{latest['path']}/radar.json.gz") or {"rows": []}
+    return {r["t"]: r["st"] for r in radar["rows"]}, latest.get("data_asof")
 
 
 def previous_meta(storage: Storage, prefix: str = "published") -> dict | None:

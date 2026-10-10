@@ -56,8 +56,11 @@ def list_instruments() -> list[dict]:
     if not (url and key):
         return []
     http = HttpClient("supabase-rest")
+    headers = {"apikey": key}
+    if key.startswith("eyJ"):
+        headers["Authorization"] = f"Bearer {key}"
     rows = http.get_json(f"{url.rstrip('/')}/rest/v1/instruments?select=eodhd_symbol,currency&eodhd_symbol=not.is.null",
-                         headers={"apikey": key, "Authorization": f"Bearer {key}"})
+                         headers=headers)
     seen, out = set(), []
     for r in rows:
         s = (r.get("eodhd_symbol") or "").strip().upper()
@@ -84,8 +87,9 @@ def update_prices(storage: Storage, instruments: list[dict], now: datetime, api_
             continue
         merged = {d: c for d, c in old["series"]}
         for row in data:
-            # adjusted_close accounts for splits (and distributions for distributing ETFs)
-            px = row.get("adjusted_close") or row.get("close")
+            # RAW close: dividends/distributions are recorded as portfolio transactions,
+            # so using adjusted prices would double count them.
+            px = row.get("close")
             if px and px > 0:
                 merged[row["date"]] = float(px)
         series = sorted([d, c] for d, c in merged.items())

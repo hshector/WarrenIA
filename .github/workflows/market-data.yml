@@ -1,0 +1,64 @@
+# Daily market data job: incremental ingest (Massive EOD) + SEC fundamentals +
+# scoring + publish to Supabase Storage, then EUR prices (EODHD) and ECB FX.
+# Runs without the web being open. Also triggered by the web "Actualizar" button
+# (workflow_dispatch) and manually from the Actions tab.
+name: market-data
+
+on:
+  schedule:
+    # Tue-Sat 01:35 UTC (after the US close + provider settle time) and a 06:05 UTC retry.
+    - cron: "35 1 * * 2-6"
+    - cron: "5 6 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "update = ingest + compute; compute = recompute only"
+        required: false
+        default: update
+        type: choice
+        options: [update, compute]
+
+concurrency:
+  group: market-data
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_BUCKET: ${{ vars.SUPABASE_BUCKET || 'market' }}
+      MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+      MASSIVE_MIN_INTERVAL: ${{ vars.MASSIVE_MIN_INTERVAL || '12.5' }}
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+      INGEST_MAX_MINUTES: "300"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check configuration
+        run: |
+          missing=""
+          for v in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY MASSIVE_API_KEY; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secrets del repositorio:$missing (ver docs/DEPLOY.md)"; exit 1
+          fi
+          [ -z "$SEC_USER_AGENT" ] && echo "::warning::SEC_USER_AGENT no configurado: sin capitalización ni sectores" || true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+      - name: Install engine
+        run: pip install ./engine
+      - name: Ingest + compute + publish
+        run: python -m warrenia_engine ${{ github.event.inputs.mode || 'update' }}
+      - name: EUR prices + ECB FX (portfolio)
+        if: always()
+        run: python -m warrenia_engine eu-prices
