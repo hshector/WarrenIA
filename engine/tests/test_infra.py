@@ -121,3 +121,10 @@ def test_local_storage_relative_root(tmp_path, monkeypatch):
     s = LocalStorage("rel-data")
     write_json(s, "a/b.json", {"x": 1})
     assert s.list("a") == ["a/b.json"]
+
+
+def test_supabase_url_normalisation():
+    from warrenia_engine.storage import supabase_base_url
+
+    for u in ["https://x.supabase.co", "https://x.supabase.co/", "https://x.supabase.co/rest/v1/", " https://x.supabase.co/rest/v1 "]:
+        assert supabase_base_url(u) == "https://x.supabase.co"

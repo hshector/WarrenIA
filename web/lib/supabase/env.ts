@@ -5,8 +5,14 @@
 
 export type AppMode = "supabase" | "local" | "misconfigured";
 
+/** Project URL without trailing slash or a pasted API path (/rest/v1, …). */
+export function supabaseBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "").replace(/\/(rest|storage|auth)\/v1$/, "");
+}
+
 export function supabasePublicEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = raw ? supabaseBaseUrl(raw) : undefined;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   return url && key ? { url, key } : null;
 }

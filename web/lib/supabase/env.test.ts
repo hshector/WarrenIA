@@ -43,3 +43,12 @@ describe("allowlist", () => {
     expect(isAllowedEmail(null)).toBe(false);
   });
 });
+
+describe("supabaseBaseUrl", () => {
+  it("strips trailing slashes and pasted API paths", async () => {
+    const { supabaseBaseUrl } = await import("./env");
+    for (const u of ["https://x.supabase.co", "https://x.supabase.co/", "https://x.supabase.co/rest/v1/", " https://x.supabase.co/rest/v1 "]) {
+      expect(supabaseBaseUrl(u)).toBe("https://x.supabase.co");
+    }
+  });
+});

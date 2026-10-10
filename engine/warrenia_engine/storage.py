@@ -11,6 +11,7 @@ import io
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -65,11 +66,17 @@ class LocalStorage:
                 p.unlink()
 
 
+def supabase_base_url(url: str) -> str:
+    """Project URL without trailing slash or a pasted API path (/rest/v1, /storage/v1)."""
+    u = url.strip().rstrip("/")
+    return re.sub(r"/(rest|storage|auth)/v1$", "", u)
+
+
 class SupabaseStorage:
     """Minimal Supabase Storage REST client (private bucket, service-role key)."""
 
     def __init__(self, url: str, service_key: str, bucket: str, http: HttpClient | None = None):
-        self.base = url.rstrip("/") + "/storage/v1"
+        self.base = supabase_base_url(url) + "/storage/v1"
         self.bucket = bucket
         self.http = http or HttpClient(name="supabase", min_interval=0.0, max_retries=4)
         # New-style secret keys (sb_secret_...) go in `apikey` only; legacy JWT keys also as Bearer.

@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
 
+import { supabaseBaseUrl } from "@/lib/supabase/env";
+
 import type { AssetDetail, Backtest, Excluded, FxFile, Latest, Market, Meta, PriceFile, Radar } from "./types";
 
 // Market artifacts are read server-side only, from Supabase Storage (production,
@@ -15,7 +17,7 @@ type Source = { kind: "supabase"; url: string; key: string; bucket: string } | {
 export function marketSource(): Source {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (url && key) return { kind: "supabase", url: url.replace(/\/$/, ""), key, bucket: process.env.SUPABASE_BUCKET || "market" };
+  if (url && key) return { kind: "supabase", url: supabaseBaseUrl(url), key, bucket: process.env.SUPABASE_BUCKET || "market" };
   const dir = process.env.WARRENIA_DATA_DIR || (process.env.VERCEL ? "" : path.resolve(process.cwd(), "..", "data"));
   if (dir) return { kind: "local", dir };
   return { kind: "none" };
