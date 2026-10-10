@@ -47,7 +47,7 @@ class MarketProvider(Protocol):
 class FundamentalsProvider(Protocol):
     name: str
 
-    def fundamentals(self, tickers: pd.DataFrame) -> pd.DataFrame:
+    def fundamentals(self, tickers: pd.DataFrame, previous: pd.DataFrame | None = None) -> pd.DataFrame:
         """Sector code and shares outstanding per ticker (FUNDAMENTAL_COLUMNS)."""
 
 

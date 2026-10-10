@@ -62,6 +62,6 @@ def is_stale(data_asof: date, now: datetime | None = None, code: str = "XNYS") -
 def previous_sessions(session: date, n: int, code: str = "XNYS") -> list[date]:
     cal = get_calendar(code)
     end = pd.Timestamp(session)
-    start = end - pd.Timedelta(days=int(n * 1.6) + 10)
+    start = max(end - pd.Timedelta(days=int(n * 1.6) + 10), cal.first_session)
     sess = [d.date() for d in cal.sessions_in_range(start, end)]
     return sess[-n:]

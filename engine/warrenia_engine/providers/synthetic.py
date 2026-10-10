@@ -200,5 +200,5 @@ class SyntheticProvider:
         d = self._divs
         return d[(d.ex_date >= start) & (d.ex_date <= end)].copy()
 
-    def fundamentals(self, tickers: pd.DataFrame) -> pd.DataFrame:
+    def fundamentals(self, tickers: pd.DataFrame, previous: pd.DataFrame | None = None) -> pd.DataFrame:
         return self._fund.copy()

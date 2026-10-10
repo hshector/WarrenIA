@@ -118,7 +118,7 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
                                               or lake.read_ref("fundamentals") is None):
         try:
             tickers = lake.read_ref("tickers")
-            f = fundamentals_provider.fundamentals(tickers)
+            f = fundamentals_provider.fundamentals(tickers, previous=lake.read_ref("fundamentals"))
             lake.write_ref("fundamentals", f)
             refreshed["fundamentals"] = now.isoformat(timespec="seconds")
             log.info("ingest: fundamentals for %d tickers", len(f))
