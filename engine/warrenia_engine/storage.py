@@ -72,6 +72,12 @@ def supabase_base_url(url: str) -> str:
     return re.sub(r"/(rest|storage|auth)/v1$", "", u)
 
 
+def supabase_headers(key: str) -> dict[str, str]:
+    """Same as supabase-js: the key in `apikey` and as Bearer (sb_secret_ and legacy JWT keys alike)."""
+    key = key.strip()
+    return {"apikey": key, "Authorization": f"Bearer {key}"}
+
+
 class SupabaseStorage:
     """Minimal Supabase Storage REST client (private bucket, service-role key)."""
 
@@ -79,10 +85,7 @@ class SupabaseStorage:
         self.base = supabase_base_url(url) + "/storage/v1"
         self.bucket = bucket
         self.http = http or HttpClient(name="supabase", min_interval=0.0, max_retries=4)
-        # New-style secret keys (sb_secret_...) go in `apikey` only; legacy JWT keys also as Bearer.
-        self.headers = {"apikey": service_key}
-        if service_key.startswith("eyJ"):
-            self.headers["Authorization"] = f"Bearer {service_key}"
+        self.headers = supabase_headers(service_key)
 
     def read_bytes(self, path: str) -> bytes | None:
         r = self.http.request("GET", f"{self.base}/object/{self.bucket}/{path}", headers=self.headers, allow_status={400, 404})

@@ -128,3 +128,40 @@ def test_supabase_url_normalisation():
 
     for u in ["https://x.supabase.co", "https://x.supabase.co/", "https://x.supabase.co/rest/v1/", " https://x.supabase.co/rest/v1 "]:
         assert supabase_base_url(u) == "https://x.supabase.co"
+
+
+def test_doctor_key_kind_and_headers():
+    import base64
+    import json as _json
+
+    from warrenia_engine.doctor import key_kind
+    from warrenia_engine.storage import supabase_headers
+
+    def jwt(role):
+        body = base64.urlsafe_b64encode(_json.dumps({"role": role}).encode()).decode().rstrip("=")
+        return f"eyJhbGciOiJIUzI1NiJ9.{body}.sig"
+
+    assert key_kind("sb_secret_abc") == "secret"
+    assert key_kind("sb_publishable_abc") == "publishable"
+    assert key_kind(jwt("service_role")) == "service_role"
+    assert key_kind(jwt("anon")) == "anon"
+    assert key_kind("nonsense") == "unknown"
+    assert supabase_headers(" sb_secret_x ") == {"apikey": "sb_secret_x", "Authorization": "Bearer sb_secret_x"}
+
+
+def test_doctor_reports_wrong_key_without_network(monkeypatch):
+    from warrenia_engine.doctor import run_doctor
+
+    monkeypatch.setenv("SUPABASE_URL", "https://abcdefghijklmnopqrst.supabase.co/rest/v1/")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_publishable_xyz")
+    monkeypatch.delenv("MASSIVE_API_KEY", raising=False)
+    monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    import warrenia_engine.doctor as d
+
+    monkeypatch.setattr(d, "_check_storage", lambda *a: [])
+    monkeypatch.setattr(d, "_check_db", lambda *a: d.Check("Base de datos", True, "ok"))
+    ok, checks = run_doctor(require_massive=False)
+    assert not ok
+    by = {c.name: c for c in checks}
+    assert by["SUPABASE_URL"].ok
+    assert not by["SUPABASE_SERVICE_ROLE_KEY"].ok and "PUBLISHABLE" in by["SUPABASE_SERVICE_ROLE_KEY"].detail

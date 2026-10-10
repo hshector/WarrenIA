@@ -17,6 +17,16 @@ async function origin() {
   return `${proto}://${host}`;
 }
 
+function otpError(code: string | undefined, status: number | undefined): string {
+  if (code === "over_email_send_rate_limit" || code === "over_request_rate_limit" || status === 429)
+    return "Supabase limita los correos seguidos. Espera 1 minuto y pide el enlace una sola vez.";
+  if (code === "email_provider_disabled" || code === "signup_disabled")
+    return "El acceso por correo está desactivado en Supabase (Authentication → Sign In / Providers → Email).";
+  if (status === 401 || status === 403 || code === "invalid_api_key" || code === "no_api_key")
+    return "Supabase rechaza la clave pública de Vercel. Revisa la configuración en /setup/check.";
+  return `No se pudo enviar el enlace (${code ?? status ?? "error"}). Revisa la configuración en /setup/check.`;
+}
+
 export async function sendMagicLink(_: LoginState, form: FormData): Promise<LoginState> {
   if (appMode() !== "supabase") return { ok: false, message: "El inicio de sesión requiere Supabase configurado." };
   const parsed = z.string().trim().toLowerCase().email().safeParse(form.get("email"));
@@ -32,8 +42,8 @@ export async function sendMagicLink(_: LoginState, form: FormData): Promise<Logi
     options: { emailRedirectTo: `${await origin()}/auth/callback?next=${encodeURIComponent(next.startsWith("/") ? next : "/")}` },
   });
   if (error) {
-    console.error("auth: signInWithOtp failed", error.status);
-    return { ok: false, message: "No se pudo enviar el enlace. Inténtalo de nuevo en un minuto." };
+    console.error("auth: signInWithOtp failed", error.status, error.code);
+    return { ok: false, message: otpError(error.code, error.status) };
   }
   return generic;
 }

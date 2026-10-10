@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta, timezone
 import pandas as pd
 
 from .http import HttpClient, ProviderError
-from .storage import Storage, read_json, supabase_base_url, write_json
+from .storage import Storage, read_json, supabase_base_url, supabase_headers, write_json
 
 log = logging.getLogger(__name__)
 
@@ -57,9 +57,7 @@ def list_instruments() -> list[dict]:
     if not (url and key):
         return []
     http = HttpClient("supabase-rest")
-    headers = {"apikey": key}
-    if key.startswith("eyJ"):
-        headers["Authorization"] = f"Bearer {key}"
+    headers = supabase_headers(key)
     rows = http.get_json(f"{supabase_base_url(url)}/rest/v1/instruments?select=eodhd_symbol,currency&eodhd_symbol=not.is.null",
                          headers=headers)
     seen, out = set(), []

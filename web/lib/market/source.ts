@@ -24,9 +24,8 @@ export function marketSource(): Source {
 }
 
 export function storageHeaders(key: string): Record<string, string> {
-  const h: Record<string, string> = { apikey: key };
-  if (key.startsWith("eyJ")) h.Authorization = `Bearer ${key}`; // legacy JWT keys
-  return h;
+  // Same as supabase-js: the key in `apikey` and as Bearer (sb_secret_ and legacy JWT keys alike).
+  return { apikey: key, Authorization: `Bearer ${key}` };
 }
 
 // Run artifacts are immutable (versioned by run id): memoise them per server instance.
