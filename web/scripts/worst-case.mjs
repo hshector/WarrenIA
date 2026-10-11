@@ -15,7 +15,7 @@
 
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { deflateSync, gunzipSync, gzipSync } from "node:zlib";
 
 const src = path.resolve(process.argv[2] ?? "../data");
 const out = path.resolve(process.argv[3] ?? "../data-worst");
@@ -27,6 +27,42 @@ if (!existsSync(path.join(src, "published", "latest.json"))) {
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync(path.join(src, "published"), path.join(out, "published"), { recursive: true });
+
+/** Minimal valid PNG (RGB, no filter) with a centred disc, so the test sees a real image. */
+function samplePng(n) {
+  const crcTable = Array.from({ length: 256 }, (_, k) => {
+    let c = k;
+    for (let i = 0; i < 8; i++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (buf) => {
+    let c = 0xffffffff;
+    for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]);
+    const c = Buffer.alloc(4);
+    c.writeUInt32BE(crc(td));
+    return Buffer.concat([len, td, c]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(n, 0);
+  ihdr.writeUInt32BE(n, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // RGB
+  const raw = Buffer.alloc((n * 3 + 1) * n);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const inside = (x - n / 2) ** 2 + (y - n / 2) ** 2 < (n / 3) ** 2;
+      const o = y * (n * 3 + 1) + 1 + x * 3;
+      [raw[o], raw[o + 1], raw[o + 2]] = inside ? [82, 127, 98] : [255, 255, 255];
+    }
+  }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
 
 const readGz = (f) => JSON.parse(gunzipSync(readFileSync(f)).toString("utf8"));
 const writeGz = (f, d) => writeFileSync(f, gzipSync(JSON.stringify(d)));
@@ -76,6 +112,15 @@ for (const run of readdirSync(path.join(out, "published", "runs"))) {
     }
     writeGz(path.join(assets, f), shard);
   }
+}
+
+// Cached logo for the first rewritten stock (the web must show it), none for the rest
+// (they must fall back to initials). A real PNG: a sage disc on white, 64x64.
+const logoTicker = [...patched.values()].find((r) => r.cls === "stock")?.t;
+if (logoTicker) {
+  mkdirSync(path.join(out, "published", "logos"), { recursive: true });
+  writeFileSync(path.join(out, "published", "logos", `${logoTicker}.png`), samplePng(64));
+  writeFileSync(path.join(out, "published", "logos", "index.json"), JSON.stringify({ source: "worst-case", have: [logoTicker], missing: {} }));
 }
 
 // ------------------------------------------------------------------ user store

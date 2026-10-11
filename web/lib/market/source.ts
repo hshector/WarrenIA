@@ -150,6 +150,12 @@ export async function getPriceFile(symbol: string) {
 
 /** Everything a typical page needs, in one call. */
 /** Never throws: pages render an empty state, and `error` explains a configuration problem. */
+/** Company logo cached by the engine (published/logos/<TICKER>.png, from Logo.dev). */
+export async function getLogo(ticker: string): Promise<Buffer | null> {
+  if (!/^[A-Z0-9.\-]{1,12}$/.test(ticker)) return null;
+  return readRaw(`logos/${ticker}.png`);
+}
+
 export async function loadMarket() {
   let error: string | null = null;
   const fail = (e: unknown) => {

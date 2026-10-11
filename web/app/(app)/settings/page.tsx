@@ -80,6 +80,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
           ))}
           <p className="px-5 text-[12.5px] text-ink-3">WarrenIA es una herramienta de análisis: no ejecuta operaciones ni da recomendaciones.</p>
+          <p className="-mt-4 px-5 text-[12.5px] text-ink-3">
+            Logos de empresas proporcionados por{" "}
+            <a href="https://logo.dev" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+              Logo.dev
+            </a>
+            .
+          </p>
         </div>
       </div>
     );

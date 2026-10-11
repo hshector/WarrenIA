@@ -1,0 +1,31 @@
+# Fill or refresh the company-logo cache on demand (the daily market-data job also
+# runs this step). Takes a couple of minutes; never touches market data.
+name: logos
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_BUCKET: ${{ vars.SUPABASE_BUCKET || 'market' }}
+      WARRENIA_CONFIG_DIR: ${{ github.workspace }}/config
+      LOGO_DEV_TOKEN: ${{ secrets.LOGO_DEV_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+      - name: Install engine
+        run: pip install -e ./engine
+      - name: Company logos
+        run: python -m warrenia_engine logos
