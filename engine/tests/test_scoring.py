@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from warrenia_engine.scoring import classify, composite, overall, pct_rank, rank_order
+from warrenia_engine.scoring import classify, composite, decide, overall, pct_rank, rank_order
 
 
 def test_pct_rank_symmetric_and_nan_safe():
@@ -37,13 +37,15 @@ def test_overall_requires_momentum():
 
 def _ind(**kw):
     base = dict(vol_63=0.25, atr_above_sma50=1.0, dist200=0.1, dist200_own_q=0.3, sma50_cross_down=False,
-                breakout=False, price=100.0, px_vs_sma50=0.05, sma50=95.0, sma200=85.0, dist_52w_high=0.02)
+                breakout=False, price=100.0, px_vs_sma50=0.05, px_vs_sma200=0.18, sma50=95.0, sma200=85.0,
+                dist_52w_high=0.02, r1m=0.04, profitable=1.0)
     base.update(kw)
     return pd.Series(base)
 
 
 def _sc(**kw):
-    base = dict(momentum=85.0, trend_quality=80.0, acceleration=50.0, risk=40.0, mom_pct_change=0.0)
+    base = dict(momentum=85.0, trend_quality=80.0, acceleration=50.0, risk=40.0, mom_pct_change=0.0, overall=92.0,
+                r1m_pct=60.0)
     base.update(kw)
     return pd.Series(base)
 
@@ -82,3 +84,56 @@ def test_classification_trace_is_explicit(cfg):
     for rule, conds in r["trace"].items():
         for c in conds:
             assert {"text", "value", "op", "threshold", "pass"} <= set(c)
+
+
+def test_classify_extended_by_short_term_spike(cfg):
+    """A leader that rose >= 15% in a month and sits in the universe's top 5% for 1m return is overheated."""
+    r = classify(_ind(r1m=0.22), _sc(r1m_pct=97.0), cfg.momentum)
+    assert r["state"] == "extended"
+    # Both conditions are needed: a big 1m move that is common in the universe is not a spike.
+    assert classify(_ind(r1m=0.22), _sc(r1m_pct=80.0), cfg.momentum)["state"] == "strong"
+    assert classify(_ind(r1m=0.10), _sc(r1m_pct=99.0), cfg.momentum)["state"] == "strong"
+
+
+def _decide(cfg, ind=None, sc=None, cls="stock"):
+    ind = _ind() if ind is None else ind
+    sc = _sc() if sc is None else sc
+    return decide(ind, sc, classify(ind, sc, cfg.momentum), cfg.momentum, cls)
+
+
+def test_action_candidate_requires_top_quintile_uptrend_and_no_overheating(cfg):
+    d = _decide(cfg)
+    assert d["action"] == "candidate" and d["hold"]
+    assert _decide(cfg, sc=_sc(overall=75.0))["action"] == "watch"         # rank 60-80
+    assert _decide(cfg, ind=_ind(px_vs_sma50=-0.01))["action"] == "watch"   # no orderly uptrend
+
+
+def test_action_wait_when_overheated_never_candidate(cfg):
+    d = _decide(cfg, ind=_ind(atr_above_sma50=4.5))
+    assert d["action"] == "wait" and d["entry"] and any("ATR" in w for w in d["why"])
+    d = _decide(cfg, ind=_ind(r1m=0.25), sc=_sc(r1m_pct=98.0))
+    assert d["action"] == "wait" and any("en un mes" in w for w in d["why"])
+    assert d["hold"]  # overheated is not a reason to sell what you already own
+
+
+def test_action_avoid_and_sell_signal(cfg):
+    assert _decide(cfg, ind=_ind(vol_63=0.8))["action"] == "avoid"                      # speculative
+    d = _decide(cfg, sc=_sc(momentum=40.0, overall=45.0))
+    assert d["action"] == "avoid" and not d["hold"]
+    assert _decide(cfg, ind=_ind(px_vs_sma200=-0.02))["action"] == "avoid"              # below SMA200
+    d = _decide(cfg, ind=_ind(sma50_cross_down=True), sc=_sc(mom_pct_change=-20.0))     # weakening
+    assert d["action"] == "avoid" and not d["hold"]
+
+
+def test_action_loss_making_company_is_watch_not_candidate(cfg):
+    assert _decide(cfg, ind=_ind(profitable=0.0))["action"] == "watch"
+    unknown = _decide(cfg, ind=_ind(profitable=np.nan))
+    assert unknown["action"] == "candidate" and any("Beneficios" in w for w in unknown["why"])
+    etf = _decide(cfg, ind=_ind(profitable=np.nan), cls="etf")
+    assert etf["action"] == "candidate" and not any("Beneficios" in w for w in etf["why"])
+
+
+def test_hold_buffer_keeps_top_half(cfg):
+    d = _decide(cfg, sc=_sc(overall=55.0, momentum=60.0))
+    assert d["action"] != "candidate" and d["hold"]
+    assert not _decide(cfg, sc=_sc(overall=45.0, momentum=60.0))["hold"]

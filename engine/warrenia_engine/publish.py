@@ -20,7 +20,7 @@ import pandas as pd
 
 from .compute import CLASSES, ClassResult, Context, component_correlation, sensitivity
 from .explain import LABELS, report, short_reasons
-from .scoring import STATES, pct_rank
+from .scoring import ACTIONS, STATES, pct_rank
 from .storage import Storage, read_json, write_json
 from .universe import REASONS
 
@@ -44,7 +44,7 @@ DETAIL_INDICATORS = [
     "rs_slope_change", "atr_pct", "maxdd_252", "dd_now", "beta_252", "residual_mom", "gap_freq",
     "concentration", "adv_63", "rel_volume", "atr_above_sma50", "dist200", "dist200_own_q",
     "breakout", "breakout_vol_mult", "breakout_days_ago", "new_52w_high", "history_sessions",
-    "missing_frac", "bad_ticks", "extreme_moves",
+    "missing_frac", "bad_ticks", "extreme_moves", "mcap", "net_income", "pe", "profitable",
 ]
 
 
@@ -153,6 +153,7 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
         for tk in sc.index:
             i, s = ind.loc[tk], sc.loc[tk]
             st = r.states[tk]
+            act = r.actions[tk]
             sector = ctx.sector.get(tk) if c == "stock" else None
             sector = sector if isinstance(sector, str) else None
             shares = ctx.shares.get(tk, np.nan)
@@ -181,6 +182,9 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
                 "st": st["state"], "pst": (prev_states or {}).get(tk), "tags": st["tags"],
                 "why": short_reasons(i, s), "flags": flags,
                 "bo": bool(i["breakout"]), "h52": bool(i["new_52w_high"]),
+                "act": act["action"], "hold": act["hold"],
+                "pe": clean(i.get("pe")) if c == "stock" else None,
+                "prof": None if c != "stock" or not np.isfinite(i.get("profitable", np.nan)) else bool(i["profitable"]),
             }
             rows.append(row)
             quality = {
@@ -193,7 +197,7 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
                 + (["Sector aproximado a partir del código SIC de la SEC (no GICS)."] if sector else [])
                 + (["Movimiento diario > 50% en el último año (verificado como no reversible)."] if i["extreme_moves"] > 0 else []),
             }
-            rep = report(tk, row["n"], c, i, s, st, bench, bench_ret.get(bench, {}),
+            rep = report(tk, row["n"], c, i, s, st, act, bench, bench_ret.get(bench, {}),
                          {h: hp[h].get(tk) for h in hp}, universe_label, quality)
             comps = {}
             for score, cw in cfg.momentum["scores"].items():
@@ -202,8 +206,8 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
                                  "pct": clean(s.get(f"pct_{k}" if k != "mom_pct_change" else "pct_mom_pct_change_pct"))}
                                 for k, wt in cw.items()]
             details[tk] = {
-                "row": row, "indicators": clean({k: i[k] for k in DETAIL_INDICATORS}),
-                "components": comps, "state": clean(st), "report": rep, "hist": hist_for(c, tk),
+                "row": row, "indicators": clean({k: i.get(k) for k in DETAIL_INDICATORS}),
+                "components": comps, "state": clean(st), "action": clean(act), "report": rep, "hist": hist_for(c, tk),
                 "eligible": True,
             }
         top_n = cfg.momentum["reports"]["top_stocks" if c == "stock" else "top_etfs"]
@@ -217,7 +221,7 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
             i = ind.loc[tk]
             details[tk] = {"row": {"t": tk, "n": str(ctx.ref["name"].get(tk, tk)), "cls": c,
                                    **{short: clean(i[k]) for k, short in ROW_FIELDS.items()}},
-                           "indicators": clean({k: i[k] for k in DETAIL_INDICATORS}), "eligible": False,
+                           "indicators": clean({k: i.get(k) for k in DETAIL_INDICATORS}), "eligible": False,
                            "excluded": [REASONS[x] for x in e["reasons"]]}
 
     # Price series (last ~2y) for every asset with details + benchmarks/sector ETFs.
@@ -278,10 +282,11 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
     meta = {
         "schema": SCHEMA_VERSION, "data_asof": asof.isoformat(),
         "coverage": coverage, "benchmarks": cfg.benchmarks["options"], "primary_benchmark": bench,
-        "sector_etfs": sector_etf, "states": STATES, "sessions": sessions,
+        "sector_etfs": sector_etf, "states": STATES, "actions": ACTIONS, "sessions": sessions,
         "methodology": {"version": cfg.momentum["methodology_version"], "config_hash": cfg.hash,
                         "scores": cfg.momentum["scores"], "overall": cfg.momentum["overall"],
-                        "classification": cfg.momentum["classification"], "windows": cfg.windows,
+                        "classification": cfg.momentum["classification"], "action": cfg.momentum["action"],
+                        "windows": cfg.windows,
                         "labels": LABELS, "universe": cfg.universe["coverage_statement"].strip(),
                         "universe_rules": {k: cfg.universe[k] for k in ("stocks", "etfs")}},
         "sensitivity": sens, "correlation": corr,

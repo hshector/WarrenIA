@@ -346,6 +346,17 @@ async function BacktestTab() {
       <Callout tone={bt.conclusive ? "info" : "warn"} title={bt.conclusive ? "Backtest" : "Resultados exploratorios, NO concluyentes"}>
         {bt.limitations?.[0]} {bt.demo && "Además, estos resultados usan datos sintéticos de demostración."}
       </Callout>
+      {bt.results.overall && bt.results.candidates_buffer && (
+        <Panel title="¿Compensa esperar a que se moderen las subidas?">
+          <p className="text-[14px] leading-relaxed text-ink-2">
+            Ranking completo (comprar las más fuertes aunque se hayan disparado): <b className="text-ink">{pct(bt.results.overall.cagr as number | null)}</b> anual · Solo «Candidatas» con
+            regla de mantener (el uso que propone la app): <b className="text-ink">{pct(bt.results.candidates_buffer.cagr as number | null)}</b> anual, con una rotación de{" "}
+            {num(bt.results.candidates_buffer.annual_turnover as number | null, 1)}x frente a {num(bt.results.overall.annual_turnover as number | null, 1)}x. «Esperar retroceso» es una regla
+            de prudencia (evitar comprar el pico de una subida explosiva), no una promesa de más rentabilidad: esta comparación dirá con datos reales, y con más historia, cuánto cuesta o
+            aporta. {bt.demo && "Con datos sintéticos no significa nada: el mercado de demostración no tiene reversiones a corto plazo por construcción."}
+          </p>
+        </Panel>
+      )}
       <Panel title="Curvas de capital" meta={`${bt.period?.first_signal} → ${bt.period?.end} · ${bt.period?.rebalances} rebalanceos mensuales · ejecución en la apertura siguiente · ${bt.settings?.cost_bps_per_side} pb por lado`}>
         {bt.curves && <BacktestChart dates={bt.curves.dates} series={bt.curves.series} labels={labels} />}
       </Panel>

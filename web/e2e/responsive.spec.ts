@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const p of ["/", "/radar", "/research/X412", "/portfolio", "/portfolio/transactions", "/settings", "/settings?tab=data", "/settings?tab=method", "/settings?tab=backtest"]) {
+for (const p of ["/", "/plan", "/radar", "/research/X412", "/portfolio", "/portfolio/transactions", "/settings", "/settings?tab=data", "/settings?tab=method", "/settings?tab=backtest"]) {
   test(`no horizontal page scroll on ${p}`, async ({ page }) => {
     await page.goto(p);
     await page.waitForLoadState("networkidle");
@@ -13,7 +13,7 @@ test("mobile: bottom tab bar and tappable radar rows", async ({ page }) => {
   await page.goto("/radar");
   const tabs = page.getByRole("navigation", { name: "Principal" }).last();
   await expect(tabs).toBeVisible();
-  await expect(tabs.getByRole("link")).toHaveCount(4);
+  await expect(tabs.getByRole("link")).toHaveCount(5);
   await page.locator("main ul li a").first().click();
   await expect(page).toHaveURL(/\/research\//);
 });

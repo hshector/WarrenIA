@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AssetAvatar, Delta, Meter, StatePill } from "@/components/fin/fin";
+import { ActionPill, AssetAvatar, Delta, Meter, StatePill } from "@/components/fin/fin";
 import { AssetCharts, RankChart } from "@/components/research/asset-charts";
 import { RuleTrace } from "@/components/research/report";
 import { WatchButton } from "@/components/research/watch-button";
 import { IconChevronDown } from "@/components/ui/icons";
 import { Callout, Card, EmptyState } from "@/components/ui/primitives";
 import { compactUsd, dateLabel, num, pct } from "@/lib/format";
-import { riskLabel } from "@/lib/market/radar";
+import { holdLabel, riskLabel } from "@/lib/market/radar";
 import { getAsset, getRadar, loadMarket } from "@/lib/market/source";
-import { STATE_EXPLAIN, type Component } from "@/lib/market/types";
+import { ACTION_EXPLAIN, STATE_EXPLAIN, type Component } from "@/lib/market/types";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { portfolioRelevance } from "@/lib/portfolio/relevance";
 import { requireStore } from "@/lib/user/store";
@@ -87,6 +87,9 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   const total = radar?.rows.filter((x) => x.cls === r.cls).length ?? 0;
   const rep = asset.report;
   const risk = riskLabel(r.rk);
+  const act = asset.action;
+  const owned = pf.result?.positions.some((p) => p.instrument.market_ticker === ticker && p.qty > 0) ?? false;
+  const hold = act ? holdLabel(act) : null;
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
@@ -113,6 +116,44 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
           <Delta v={r.d1} className="font-semibold" /> hoy · cierre del {dateLabel(latest?.data_asof)}
         </p>
       </div>
+
+      {asset.eligible && act && (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[14px] text-ink-2">Qué hacer ahora</p>
+            <ActionPill action={act.action} className="h-8 px-3.5 text-[14px]" />
+          </div>
+          <p className="mt-3 text-[15px] leading-relaxed">{ACTION_EXPLAIN[act.action]}</p>
+          {act.why.length > 0 && (
+            <div className="mt-3">
+              <Bullets items={act.why} />
+            </div>
+          )}
+          {act.entry && <p className="mt-3 rounded-[14px] bg-warn-soft px-4 py-3 text-[14.5px]">{act.entry}</p>}
+          {hold && (
+            <p className="mt-3 text-[14.5px] text-ink-2">
+              {owned ? "La tienes en cartera: " : "Si la tuvieras: "}
+              <span className={`font-semibold ${hold.cls}`}>{hold.text}</span>
+              {act.hold
+                ? " (sigue en la mitad más fuerte del universo y sin señal de evitar)."
+                : " (ha salido de la mitad más fuerte del universo o tiene señal de evitar)."}
+            </p>
+          )}
+          {r.cls === "stock" && (
+            <p className="mt-3 text-[14px] text-ink-2">
+              Valoración:{" "}
+              {r.prof === false ? (
+                <span className="font-semibold text-neg">pérdidas en el último ejercicio</span>
+              ) : r.pe !== null && r.pe !== undefined ? (
+                <span className={`font-semibold ${r.pe >= 60 ? "text-warn" : "text-ink"}`}>PER {num(r.pe, 1)}</span>
+              ) : (
+                <span className="font-semibold">beneficio no disponible</span>
+              )}
+              <span className="text-ink-3"> · informativo, no entra en la puntuación</span>
+            </p>
+          )}
+        </Card>
+      )}
 
       <Card>
         {asset.series ? <AssetCharts sessions={meta.sessions} close={asset.series.c} bench={bench?.series?.c} benchName={meta.primary_benchmark} /> : <p className="text-ink-3">Sin serie de precios.</p>}

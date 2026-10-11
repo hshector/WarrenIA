@@ -1,6 +1,6 @@
 import { cx } from "@/components/ui/primitives";
 import { isNum, pct } from "@/lib/format";
-import { STATE_SIMPLE, type StateKey } from "@/lib/market/types";
+import { ACTION_LABELS, STATE_SIMPLE, type ActionKey, type StateKey } from "@/lib/market/types";
 
 export function Delta({ v, digits = 1, className }: { v: number | null | undefined; digits?: number; className?: string }) {
   const tone = !isNum(v) || v === 0 ? "text-ink-2" : v > 0 ? "text-pos" : "text-neg";
@@ -49,6 +49,20 @@ export function StatePill({ state, className }: { state: StateKey; short?: boole
       {STATE_SIMPLE[state]}
     </span>
   );
+}
+
+const ACTION_STYLE: Record<ActionKey, string> = {
+  candidate: "bg-pos-soft text-pos",
+  wait: "bg-warn-soft text-warn",
+  watch: "bg-info-soft text-info",
+  avoid: "bg-neg-soft text-neg",
+  none: "bg-surface-2 text-ink-2",
+};
+
+/** What to do with the asset now: the primary signal of the radar. */
+export function ActionPill({ action, className }: { action: ActionKey | undefined; className?: string }) {
+  const a = action ?? "none";
+  return <span className={cx("inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-semibold whitespace-nowrap", ACTION_STYLE[a], className)}>{ACTION_LABELS[a]}</span>;
 }
 
 export function Ticker({ t, className }: { t: string; className?: string }) {

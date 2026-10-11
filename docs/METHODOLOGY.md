@@ -1,4 +1,4 @@
-# Metodología de momentum (v1.0)
+# Metodología de momentum (v1.1)
 
 Toda la configuración vive en [`config/momentum.yaml`](../config/momentum.yaml),
 [`config/universe.yaml`](../config/universe.yaml) y [`config/benchmarks.yaml`](../config/benchmarks.yaml).
@@ -46,7 +46,7 @@ riesgo y no por tendencia.
 
 | Componente | Definición | Peso | Base |
 |---|---|---|---|
-| `consistency` | signo(R12‑1) × (% días alcistas − % días bajistas) entre t−252 y t−21 | 25 % | *Frog in the pan*: Da, Gurun & Warachka (2014); Gray & Vogel |
+| `consistency` | % días alcistas − % días bajistas entre t−252 y t−21 | 25 % | *Frog in the pan*: Da, Gurun & Warachka (2014); Gray & Vogel. Para las ganadoras equivale a −ID. **v1.1:** ya no se multiplica por signo(R12‑1), que daba la máxima consistencia a una acción que baja de forma constante. |
 | `signed_r2` | R² de la regresión log‑precio/tiempo (126d) × signo de la pendiente | 25 % | Linealidad de la tendencia |
 | `ma_structure` | Número de condiciones cumplidas (0‑5): P > SMA50, P > SMA200, SMA50 > SMA200, SMA200 sube en 21d, SMA50 sube en 10d | 25 % | Filtros de tendencia (Faber 2007) |
 | `high52_proximity` | P / máximo de 52 semanas | 25 % | George & Hwang (2004) |
@@ -90,8 +90,9 @@ Overall = percentil( 0,50·Momentum + 0,25·TrendQuality + 0,10·Acceleration + 
 - **Riesgo (15 %)** actúa como ajuste de calidad. Su peso es moderado porque el Momentum ya divide por la
   volatilidad.
 
-El Overall requiere el Momentum. Si falta un componente, su peso se reparte entre los disponibles siempre que haya al
-menos el 50 % del peso; si no, el activo se excluye con el motivo «Métricas incompletas».
+Dentro de cada score, si falta un componente su peso se reparte entre los disponibles siempre que haya al menos el
+50 % del peso. El Overall exige además el Momentum y al menos el 75 % de su peso total; si no, el activo se excluye con
+el motivo «Métricas incompletas».
 
 ### Contexto (se muestra, pero no puntúa)
 
@@ -111,11 +112,42 @@ condición con su valor y su umbral.
 | Estado | Regla (umbrales en `classification`) |
 |---|---|
 | **High Volatility / Speculative** | vol63 ≥ 60 %, **o** (Risk ≥ p90 **y** vol63 ≥ 40 %). Anclas absolutas para que no sea «siempre el 10 % superior». |
-| **Extended / Overheated** | Momentum ≥ 70 **y** (precio > SMA50 + 3 × ATR14 **o** distancia a la SMA200 por encima de su propio percentil 95 histórico, con ≥ 252 observaciones) |
-| **Weakening Momentum** | Momentum ≥ 60 **y** al menos 2 de estas 3 señales: el percentil de Momentum cae ≥ 10 en 21 sesiones; cruce bajo la SMA50 tras ≥ 40 sesiones por encima; Acceleration ≤ 25 |
+| **Extended / Overheated** | Momentum ≥ 70 **y** (precio > SMA50 + 3 × ATR14 **o** distancia a la SMA200 por encima de su propio percentil 95 histórico, con ≥ 252 observaciones **o** subida de 1 mes en el 5 % superior del universo y ≥ +15 %, v1.1: reversión a corto plazo, Jegadeesh 1990) |
+| **Weakening Momentum** | Momentum ≥ 60 **y** al menos 2 de estas 3 señales: el percentil de Momentum cae ≥ 10 en 21 sesiones; cruce bajo la SMA50 en las últimas 5 sesiones (sigue por debajo) tras ≥ 40 sesiones por encima (v1.1: antes solo contaba el día exacto del cruce); Acceleration ≤ 25 |
 | **Early Breakout** | En las últimas 10 sesiones, cierre por encima del máximo de los 126 cierres previos, con volumen ≥ 1,5 × la media de 50d y una consolidación previa (rango de 40d ≤ 8 ATR). La interfaz indica «necesita confirmación». |
 | **Strong Uptrend** | Momentum ≥ 80, Trend Quality ≥ 70, P > SMA50 > SMA200 y a ≤ 10 % del máximo de 52 semanas |
 | **Improving Momentum** | El percentil de Momentum sube ≥ 15 en 21 sesiones **y** Acceleration ≥ 70 |
+
+## 3 bis. Qué hacer: la capa de acción (v1.1)
+
+La puntuación dice «tendencia fuerte»; no dice si **comprar ahora** es sensato. Comprar lo que ha subido es la esencia
+del momentum y, de media, funciona (las líderes de 6‑12 meses siguen batiendo al mercado unos meses). Lo que no está
+respaldado es comprar el **pico de una subida explosiva**: el mes siguiente a una gran subida tiende a devolver parte
+(reversión a corto plazo). Por eso cada activo recibe una acción con reglas fijas (`action` en `momentum.yaml`,
+`scoring.decide`):
+
+| Acción | Regla |
+|---|---|
+| **Evitar** | Speculative, Weakening, Momentum < 50 o precio por debajo de la SMA200 |
+| **Esperar retroceso** | Estado Extended (y Overall ≥ 60). Se indica la referencia de entrada (la SMA50) |
+| **Candidata** | Overall ≥ 80 (20 % superior), Momentum ≥ 70, precio > SMA50 > SMA200, sin Extended/Speculative/Weakening y sin pérdidas en el último ejercicio (si se conoce) |
+| **Vigilar** | Overall ≥ 60 sin cumplir lo anterior: ruptura sin confirmar, mejorando, empresa con pérdidas, Momentum < 70 o sin estructura alcista |
+| **Sin señal** | El resto |
+
+**Regla de mantener (buffer).** Para lo que ya tienes: *Mantener* mientras no sea «Evitar» y siga en la mitad superior
+(Overall ≥ 50); si no, *Revisar venta*. Comprar en el 20 % superior y vender solo al salir del 50 % superior reduce la
+rotación (y los impuestos) sin cambiar la idea de la estrategia; es la misma lógica de los *buffers* de los índices
+MSCI Momentum.
+
+**Valoración (informativa).** Para las acciones se publica el PER sobre el último beneficio neto anual (SEC XBRL,
+`us-gaap:NetIncomeLoss`, o `ProfitLoss` si no existe; se ignora si el ejercicio terminó hace más de 550 días). No entra
+en la puntuación. Solo se usa para no proponer como *Candidata* una empresa con pérdidas. Los emisores que reportan en
+IFRS (muchos ADR) quedan como «no disponible», nunca como pérdidas.
+
+**Validación.** El backtest compara «ranking completo» con «solo Candidatas» y «Candidatas con regla de mantener». La
+regla de esperar es de **prudencia** y no promete más rentabilidad. En el mercado sintético de demostración resta
+rentabilidad, porque ese mercado no tiene reversión a corto plazo por construcción. Con datos reales se medirá a medida
+que se acumule historia.
 
 ## 4. Universo y calidad de datos
 

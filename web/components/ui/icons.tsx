@@ -20,6 +20,12 @@ export const IconOverview = (p: P) => (
     <rect x="3.5" y="15.5" width="7" height="5" rx="1.5" />
   </Base>
 );
+export const IconPlan = (p: P) => (
+  <Base {...p}>
+    <rect x="4.5" y="3.5" width="15" height="17" rx="2" />
+    <path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" />
+  </Base>
+);
 export const IconRadar = (p: P) => (
   <Base {...p}>
     <circle cx="12" cy="12" r="8.5" />

@@ -4,7 +4,27 @@ test("home shows portfolio hero, data date and demo notice", async ({ page }) =>
   await page.goto("/");
   await expect(page.getByText(/Demo · Cierre \d{1,2} \w+/).first()).toBeVisible();
   await expect(page.getByText("Tu cartera", { exact: true })).toBeVisible();
-  await expect(page.getByText("Lo más fuerte hoy")).toBeVisible();
+  await expect(page.getByText("Candidatas de momentum")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Por qué estos productos y cómo comprarlos" })).toBeVisible();
+});
+
+test("radar opens on «Para comprar»: only candidates, overheated leaders apart", async ({ page }) => {
+  await page.goto("/radar");
+  await expect(page.getByText(/sin haberse disparado a corto plazo/)).toBeVisible();
+  const pills = page.locator("main ul li a").getByText(/^(Candidata|Esperar retroceso|Vigilar|Evitar|Sin señal)$/);
+  await expect(pills.first()).toBeVisible();
+  expect(new Set(await pills.allTextContents())).toEqual(new Set(["Candidata"]));
+  await page.getByRole("button", { name: "Esperar retroceso" }).click();
+  expect(new Set(await pills.allTextContents())).toEqual(new Set(["Esperar retroceso"]));
+});
+
+test("plan page: concrete products with ISIN and Spanish tax notes", async ({ page }) => {
+  await page.goto("/plan");
+  await expect(page.getByText("ISIN IE00BK5BQT80")).toBeVisible();
+  await expect(page.getByText("ISIN IE00B4ND3602")).toBeVisible();
+  await expect(page.getByText("ISIN IE00BP3QZ825").first()).toBeVisible();
+  await expect(page.getByText(/V0267‑25/).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Fiscalidad en España/ })).toBeVisible();
 });
 
 test("radar: presets, search and open an asset", async ({ page }) => {
@@ -13,7 +33,7 @@ test("radar: presets, search and open an asset", async ({ page }) => {
   await expect(items.first()).toBeVisible();
   await page.getByRole("button", { name: "Acelerando" }).click();
   await expect(page.getByText(/acelerando más durante las últimas semanas/)).toBeVisible();
-  await page.getByRole("button", { name: "Top" }).click();
+  await page.getByRole("button", { name: "Ranking completo" }).click();
   await page.getByLabel("Buscar").fill("X412");
   await expect(items).toHaveCount(1);
   await items.first().click();
@@ -39,6 +59,7 @@ test("ETF list is separate and excludes leveraged products", async ({ page }) =>
 test("asset page: verdict first, technical detail folded", async ({ page }) => {
   await page.goto("/research/X412");
   await expect(page.getByText("Puntuación de momentum")).toBeVisible();
+  await expect(page.getByText("Qué hacer ahora")).toBeVisible();
   for (const h of ["Por qué destaca", "Riesgos", "Qué vigilar", "En tu cartera", "Detalle técnico"]) {
     await expect(page.getByRole("heading", { name: h, exact: true })).toBeVisible();
   }

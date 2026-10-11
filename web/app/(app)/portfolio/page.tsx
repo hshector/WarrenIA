@@ -8,6 +8,7 @@ import { IconChevronDown } from "@/components/ui/icons";
 import { ButtonLink, Callout, Card, EmptyState } from "@/components/ui/primitives";
 import { dateLabel, money, moneyHeadline, pct, units } from "@/lib/format";
 import { getRadar, loadMarket } from "@/lib/market/source";
+import { hasActions, holdLabel } from "@/lib/market/radar";
 import { STATE_SIMPLE } from "@/lib/market/types";
 import { targetDeviation } from "@/lib/portfolio/engine";
 import { loadPortfolio } from "@/lib/portfolio/load";
@@ -25,6 +26,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const [pf, radar] = await Promise.all([loadPortfolio(store, latest, meta), getRadar(latest)]);
   const res = pf.result;
   const rowsBy = new Map((radar?.rows ?? []).map((r) => [r.t, r]));
+  const withActions = hasActions(radar?.rows ?? []);
   const actions = (
     <>
       <TransactionForm instruments={pf.instruments} defaultOpen={sp.add === "1" && pf.instruments.length > 0} />
@@ -120,7 +122,8 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
                     <span className="num shrink-0 whitespace-nowrap">{units(p.qty)} uds</span>
                     <span className="truncate">
                       &nbsp;· {BUCKET_LABELS[p.instrument.bucket]}
-                      {mr && <span className={mr.st === "weakening" ? "text-neg" : ""}> · {STATE_SIMPLE[mr.st]}</span>}
+                      {mr && withActions && <span className={holdLabel(mr).cls}> · {holdLabel(mr).text}</span>}
+                      {mr && !withActions && <span className={mr.st === "weakening" ? "text-neg" : ""}> · {STATE_SIMPLE[mr.st]}</span>}
                     </span>
                   </span>
                 </span>
@@ -174,6 +177,35 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
           ))}
         </ul>
       </Card>
+
+      {res.taxByYear.length > 0 && (
+        <Card title="Impuestos de tus ventas (estimación)" sub="Lo que declararías en la Renta por lo que has vendido. Informativo: revísalo con tu borrador o un asesor.">
+          <table className="w-full text-[14.5px]">
+            <thead>
+              <tr className="text-left text-[12.5px] text-ink-3">
+                <th className="pb-2 font-medium">Año</th>
+                <th className="pb-2 text-right font-medium">Ganancias patrimoniales</th>
+                <th className="pb-2 text-right font-medium">Capital mobiliario (ETC)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {res.taxByYear.map((y) => (
+                <tr key={y.year} className="border-t border-line">
+                  <td className="py-2">{y.year}</td>
+                  <td className="num py-2 text-right">{money(y.gp)}</td>
+                  <td className="num py-2 text-right">{money(y.rcm)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {res.taxByYear.some((y) => y.deferred > 0) && (
+            <p className="mt-2 text-[13px] text-warn">Incluye pérdidas que no puedes computar todavía por haber recomprado los mismos títulos (ver avisos de arriba).</p>
+          )}
+          <p className="mt-2 text-[12.5px] text-ink-3">
+            Coste y venta con comisiones, método FIFO y tipo de cambio de cada fecha. Los ETC de oro tributan como capital mobiliario (DGT V0267‑25); ambos van a la base del ahorro.
+          </p>
+        </Card>
+      )}
 
       <section className="card overflow-hidden">
         <details className="group">

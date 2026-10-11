@@ -90,3 +90,32 @@ def test_bad_tick_detection(dates, cfg):
     ind = _ind(P, cfg, len(dates) - 1)
     assert ind.loc["X", "bad_ticks"] >= 1
     assert ind.loc["SPY", "bad_ticks"] == 0
+
+
+def test_consistency_rewards_smooth_winners_not_smooth_losers(dates, cfg):
+    """Regression: sign(R12-1) x (%up - %down) gave a steadily falling stock a top consistency."""
+    n = len(dates)
+    rng = np.random.default_rng(3)
+    spy = 100 * np.exp(np.cumsum(rng.normal(0.0003, 0.01, n)))
+    up = 50 * np.exp(np.cumsum(np.where(np.arange(n) % 5 == 0, -0.004, 0.003)))     # 80% up days
+    down = 50 * np.exp(np.cumsum(np.where(np.arange(n) % 5 == 0, 0.004, -0.003)))   # 80% down days
+    P = build_panels(make_bars({"SPY": spy, "UP": up, "DOWN": down}, dates), None, None)
+    ind = _ind(P, cfg, n - 1)
+    assert ind.loc["UP", "consistency"] > 0.5
+    assert ind.loc["DOWN", "consistency"] < -0.5
+
+
+def test_sma50_cross_down_detected_within_recent_window(dates, cfg):
+    n = len(dates)
+    spy = 100 * np.exp(np.cumsum(np.full(n, 0.0005)))
+    x = 100 * np.exp(np.cumsum(np.full(n, 0.002)))
+    x[n - 3 :] = x[n - 4] * 0.85  # drops below its SMA50 three sessions ago and stays there
+    P = build_panels(make_bars({"SPY": spy, "X": x}, dates), None, None)
+    ind = _ind(P, cfg, n - 1)
+    assert bool(ind.loc["X", "sma50_cross_down"])
+    assert not bool(ind.loc["SPY", "sma50_cross_down"])
+    # Outside the configured window (5 sessions) it no longer counts as a fresh cross.
+    y = x.copy()
+    y[n - 12 :] = x[n - 13] * 0.85
+    P2 = build_panels(make_bars({"SPY": spy, "X": y}, dates), None, None)
+    assert not bool(_ind(P2, cfg, n - 1).loc["X", "sma50_cross_down"])

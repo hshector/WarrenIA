@@ -166,7 +166,10 @@ def _indicators_at(P: Panels, pre: Precomputed, t: int, w: dict[str, int], bench
         pos = np.where(ok, win_c > 0, False).sum(0) / n_ok
         neg = np.where(ok, win_c < 0, False).sum(0) / n_ok
     out["pct_up_days"] = pos
-    out["consistency"] = np.sign(out["r12_1"]) * (pos - neg)
+    # Long-only path quality: share of up days minus share of down days over the 12-1 window.
+    # For winners this equals -ID of Da, Gurun & Warachka (2014). It is NOT multiplied by
+    # sign(R12-1): that would give a smooth, steady LOSER the same high score as a smooth winner.
+    out["consistency"] = pos - neg
     slope, r2 = ols_trend(np.log(_win(C, t, w["r2"])))
     out["trend_slope_126"] = slope * 252
     out["r2_126"] = r2
@@ -287,18 +290,22 @@ def _indicators_at(P: Panels, pre: Precomputed, t: int, w: dict[str, int], bench
     out["breakout_days_ago"] = breakout_days_ago
     out["new_52w_high"] = np.where(np.isfinite(hi52), C[t] >= np.nanmax(_win(C, t, 252), axis=0) * 0.999, False)
 
-    # --- SMA50 regime change: days above SMA50 before a recent cross below
-    ab = pre.above50[: t + 1, cols]
-    below_now = ~ab[t]
-    run = np.zeros(len(cols))
-    if t >= 1:
-        # consecutive sessions above SMA50 ending at t-1 (capped at 60)
-        for k in range(1, 61):
-            if t - k < 0:
-                break
-            still = ab[t - k] & (run == k - 1)
-            run = np.where(still, k, run)
-    out["sma50_cross_down"] = below_now & (run >= cls_cfg["weakening"]["sma50_days_above"])
+    # --- SMA50 regime change: a recent cross below the SMA50 (within the last `cross_recent`
+    # sessions, still below today) after >= `sma50_days_above` consecutive sessions above it.
+    wk = cls_cfg["weakening"]
+    ab = pre.above50[:, cols]
+    n_above = wk["sma50_days_above"]
+    recent = wk.get("cross_recent", 1)
+    cross = np.zeros(len(cols), dtype=bool)
+    still_below = np.ones(len(cols), dtype=bool)
+    for k in range(recent):
+        s = t - k
+        if s - n_above < 0:
+            break
+        still_below &= ~ab[s]
+        above_before = ab[s - n_above : s].all(axis=0)
+        cross |= still_below & above_before
+    out["sma50_cross_down"] = cross
 
     # --- Data quality on the history window
     hw = 273

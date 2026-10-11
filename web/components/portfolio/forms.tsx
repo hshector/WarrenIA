@@ -8,6 +8,7 @@ import { IconPlus, IconTrash } from "@/components/ui/icons";
 import { Button, Field, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Sheet } from "@/components/ui/sheet";
 import { contributionPlan } from "@/lib/portfolio/engine";
+import { PRODUCTS } from "@/lib/plan/catalog";
 import { BUCKET_LABELS, TX_LABELS, type Instrument, type Settings, type TxType } from "@/lib/portfolio/types";
 import { money } from "@/lib/format";
 
@@ -136,6 +137,9 @@ export function TransactionForm({ instruments, defaultOpen = false }: { instrume
 
 export function InstrumentForm({ instrument, trigger }: { instrument?: Instrument; trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [preset, setPreset] = useState<string>("");
+  const fromPlan = PRODUCTS.find((p) => p.isin === preset);
+  const d: Partial<Instrument> = instrument ?? (fromPlan ? { name: fromPlan.name, isin: fromPlan.isin, kind: fromPlan.kind, bucket: fromPlan.bucket, currency: "EUR" } : {});
   const [source, setSource] = useState(instrument?.price_source ?? "eodhd");
   const [state, action, pending] = useActionState<ActionResult, FormData>(saveInstrument, null);
   useSuccessToast(state, () => setOpen(false));
@@ -152,16 +156,29 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
         )
       }
     >
-      <form action={action} className="grid grid-cols-2 gap-3.5">
+      {!instrument && (
+        <Field label="Elegir de tu plan" hint="Rellena nombre, ISIN, tipo y bloque" className="mb-3.5">
+          <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Elegir de tu plan">
+            <option value="">Otro instrumento…</option>
+            {PRODUCTS.map((p) => (
+              <option key={p.isin} value={p.isin}>
+                {BUCKET_LABELS[p.bucket]} · {p.name}
+                {p.recommended ? " (recomendado)" : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+      <form key={preset} action={action} className="grid grid-cols-2 gap-3.5">
         {instrument && <input type="hidden" name="id" value={instrument.id} />}
         <Field label="Nombre" className="col-span-2">
-          <Input name="name" required defaultValue={instrument?.name} placeholder="p. ej. iShares Core MSCI World UCITS ETF" />
+          <Input name="name" required defaultValue={d.name} placeholder="p. ej. iShares Core MSCI World UCITS ETF" />
         </Field>
         <Field label="ISIN">
-          <Input name="isin" defaultValue={instrument?.isin ?? ""} placeholder="IE00B4L5Y983" className="font-mono uppercase" />
+          <Input name="isin" defaultValue={d.isin ?? ""} placeholder="IE00B4L5Y983" className="font-mono uppercase" />
         </Field>
         <Field label="Tipo">
-          <Select name="kind" defaultValue={instrument?.kind ?? "etf"}>
+          <Select name="kind" defaultValue={d.kind ?? "etf"}>
             <option value="etf">ETF</option>
             <option value="etc">ETC (p. ej. oro)</option>
             <option value="stock">Acción</option>
@@ -170,7 +187,7 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
           </Select>
         </Field>
         <Field label="Bloque de la estrategia">
-          <Select name="bucket" defaultValue={instrument?.bucket ?? "core"}>
+          <Select name="bucket" defaultValue={d.bucket ?? "core"}>
             {(["core", "gold", "momentum", "other"] as const).map((b) => (
               <option key={b} value={b}>
                 {BUCKET_LABELS[b]}
@@ -197,7 +214,7 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
         )}
         {source !== "us_market" && (
           <Field label="Divisa de cotización">
-            <Select name="currency" defaultValue={instrument?.currency ?? "EUR"}>
+            <Select name="currency" defaultValue={d.currency ?? "EUR"}>
               {["EUR", "USD", "GBP", "CHF"].map((c) => (
                 <option key={c}>{c}</option>
               ))}
@@ -308,7 +325,18 @@ export function SettingsForm({ settings }: { settings: Settings }) {
 
 const PLAN_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
-export function ContributionPlanner({ values, other, settings }: { values: Record<"core" | "gold" | "momentum", number>; other: number; settings: Settings }) {
+export function ContributionPlanner({
+  values,
+  other,
+  settings,
+  products,
+}: {
+  values: Record<"core" | "gold" | "momentum", number>;
+  other: number;
+  settings: Settings;
+  /** Optional "what to buy" line under each bucket (product name / ISIN). */
+  products?: Partial<Record<"core" | "gold" | "momentum", string>>;
+}) {
   const [amount, setAmount] = useState(String(settings.monthly_contribution));
   const a = Number(amount.replace(",", ".")) || 0;
   const plan = contributionPlan(values, other, settings.targets, a);
@@ -329,10 +357,13 @@ export function ContributionPlanner({ values, other, settings }: { values: Recor
       </label>
       <ul className="flex flex-col gap-3">
         {(["core", "gold", "momentum"] as const).map((k) => (
-          <li key={k} className="flex items-center justify-between gap-3 text-[15px]">
-            <span className="flex items-center gap-2.5">
-              <span className={`h-2.5 w-2.5 rounded-full ${PLAN_DOT[k]}`} />
-              {BUCKET_LABELS[k]}
+          <li key={k} className="flex items-start justify-between gap-3 text-[15px]">
+            <span className="flex min-w-0 items-start gap-2.5">
+              <span className={`mt-[7px] h-2.5 w-2.5 shrink-0 rounded-full ${PLAN_DOT[k]}`} />
+              <span className="min-w-0">
+                {BUCKET_LABELS[k]}
+                {products?.[k] && <span className="block break-words text-[13px] text-ink-2">{products[k]}</span>}
+              </span>
             </span>
             <span className="num shrink-0 whitespace-nowrap font-semibold">{money(plan[k], "EUR", 0)}</span>
           </li>

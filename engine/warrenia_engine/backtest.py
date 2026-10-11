@@ -29,8 +29,14 @@ STRATEGIES = {
     "risk_adjusted": "Top N por Momentum Score (12-1 y 6-1 ajustados por volatilidad)",
     "overall": "Top N por Overall Momentum Rank (metodología completa)",
     "overall_filtered": "Overall Rank excluyendo Risk > p80 y volatilidad > 60%",
+    "candidates": "Top N solo entre «Candidatas» (lo que la app propone comprar: sin sobreextensión)",
+    "candidates_buffer": "Candidatas con regla de mantener: compra en el 20 % superior, vende al salir del 50 % "
+                         "superior o pasar a «Evitar» (el uso recomendado)",
     "ew_universe": "Equiponderado de todo el universo elegible (referencia pasiva)",
 }
+
+# Strategies that need the per-asset action (states + decide), computed only when used.
+NEEDS_ACTIONS = {"candidates", "candidates_buffer"}
 
 
 @dataclass
@@ -52,9 +58,20 @@ def rebalance_indices(P_dates: pd.DatetimeIndex, start_t: int, end_t: int) -> li
     return out
 
 
-def select(strategy: str, sc: pd.DataFrame, ind: pd.DataFrame, n: int) -> list[str]:
+def select(strategy: str, sc: pd.DataFrame, ind: pd.DataFrame, n: int, actions: dict | None = None,
+           prev: list[str] | None = None) -> list[str]:
     if sc.empty:
         return []
+    if strategy in NEEDS_ACTIONS:
+        actions = actions or {}
+        ranked = list(sc.sort_values("rank").index)
+        cands = [tk for tk in ranked if actions.get(tk, {}).get("action") == "candidate"]
+        if strategy == "candidates":
+            return cands[:n]
+        keep = [tk for tk in ranked if tk in set(prev or []) and actions.get(tk, {}).get("hold")]
+        out = keep[:n]
+        out += [tk for tk in cands if tk not in out][: n - len(out)]
+        return out
     if strategy == "pure_12_1":
         order = ind.loc[sc.index, "r12_1"].dropna().sort_values(ascending=False)
         return list(order.index[:n])
@@ -72,10 +89,13 @@ def select(strategy: str, sc: pd.DataFrame, ind: pd.DataFrame, n: int) -> list[s
 
 def signals(ctx: Context, rebal: list[int], strategies: list[str], n: int) -> dict[str, dict[int, list[str]]]:
     out: dict[str, dict[int, list[str]]] = {s: {} for s in strategies}
+    prev: dict[str, list[str]] = {s: [] for s in strategies}
+    need_actions = bool(NEEDS_ACTIONS & set(strategies))
     for t in rebal:
-        res = evaluate(ctx, t, with_states=False)["stock"]
+        res = evaluate(ctx, t, with_states=need_actions)["stock"]
         for s in strategies:
-            out[s][t] = select(s, res.scores, res.ind, n)
+            out[s][t] = select(s, res.scores, res.ind, n, res.actions, prev[s])
+            prev[s] = out[s][t]
         ctx._cache.clear()
     return out
 
@@ -144,7 +164,8 @@ def metrics(r: pd.Series, turnover: list[float] | None = None, costs: list[float
     years = len(r) / 252
     cagr = eq.iloc[-1] ** (1 / years) - 1 if years > 0 else np.nan
     vol = r.std(ddof=1) * np.sqrt(252)
-    down = r[r < 0].std(ddof=1) * np.sqrt(252)
+    # Downside deviation over ALL observations (target 0): sqrt(mean(min(r, 0)^2)).
+    down = float(np.sqrt(np.mean(np.minimum(r.to_numpy(), 0.0) ** 2)) * np.sqrt(252))
     dd = 1 - eq / eq.cummax()
     mdd = dd.max()
     out = {"total_return": eq.iloc[-1] - 1, "cagr": cagr, "vol": vol,
@@ -237,6 +258,7 @@ def run_backtest(ctx: Context, bt: BacktestConfig | None = None, start_t: int | 
             "exploratorios y NO concluyentes." if not conclusive else
             "Periodo largo: aun así, resultados pasados no garantizan resultados futuros.",
             "La capitalización usa las acciones en circulación actuales (pequeño sesgo de anticipación en el filtro de tamaño).",
+            "El filtro de rentabilidad de las «Candidatas» usa el último beneficio anual publicado, no el conocido en cada fecha.",
             "Valores que dejan de cotizar se valoran a su último precio disponible.",
             "Sin impuestos ni tipo de cambio (rentabilidades en USD). Coste fijo por operación; sin impacto de mercado.",
             "Rentabilidad sin riesgo = 0 en el Sharpe.",

@@ -29,7 +29,7 @@ scores:
     mom_12_1_riskadj: 0.5     # (P[t-21]/P[t-252]-1) / vol252
     mom_6_1_riskadj: 0.5      # (P[t-21]/P[t-126]-1) / vol252
   trend_quality:
-    consistency: 0.25         # sign(R12-1) * (%up days - %down days), t-252..t-21
+    consistency: 0.25         # %up days - %down days, t-252..t-21 (long-only frog-in-the-pan)
     signed_r2: 0.25           # R^2 of log-price trend over 126d * sign(slope)
     ma_structure: 0.25        # 0..5 checks on SMA50/SMA200 alignment and slopes
     high52_proximity: 0.25    # close / 52-week high
@@ -62,10 +62,16 @@ classification:
     atr_above_sma50: 3.0
     dist200_own_percentile: 0.95
     min_own_history: 252
+    # Short-term spike: 1-month return in the top 5% of the universe AND >= +15%. Last month's
+    # biggest winners tend to give part of it back (short-term reversal: Jegadeesh 1990,
+    # Lehmann 1990), which is also why momentum skips the last month.
+    spike_r1m_pct: 95
+    spike_r1m_min: 0.15
   weakening:                  # a leader (Momentum >= 60) with >= 2 deterioration signals
     min_momentum: 60
     mom_pct_drop: 10
     sma50_days_above: 40
+    cross_recent: 5           # the cross below SMA50 happened in the last 5 sessions (still below)
     max_acceleration: 25
     min_signals: 2
   breakout:
@@ -82,6 +88,20 @@ classification:
   improving:
     mom_pct_rise: 15
     min_acceleration: 70
+
+# Action layer: turns scores + states into what to DO with an asset. Pure rules, no new
+# factor. A high rank says "strong trend"; the action says whether buying NOW is sensible.
+action:
+  candidate:
+    min_overall: 80           # top quintile of the eligible universe
+    min_momentum: 70
+  watch:
+    min_overall: 60
+  avoid:
+    max_momentum: 50          # momentum below the median: not a momentum asset
+  hold:
+    min_overall: 50           # buffer: keep a holding while it stays in the top half and is not "avoid"
+  fundamentals_max_age_days: 550  # older annual net income is ignored (profitability unknown)
 
 rank_history:
   daily_sessions: 25          # daily points for the most recent sessions
