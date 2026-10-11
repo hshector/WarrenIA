@@ -72,6 +72,22 @@ def test_budget_limits_requests(tmp_path):
     assert len(fake.calls) == 1 and out["pending"] == 3
 
 
+def test_time_budget_stops_and_keeps_progress(tmp_path):
+    st, fake = market(tmp_path), Logos()
+    ticks = iter([0, 0, 1000, 1000, 1000])  # start, first check, then over budget
+    out = update_logos(st, "pk_test", now=NOW, max_seconds=10, http=client(fake), clock=lambda: next(ticks))
+    assert out["stopped"] == "time budget" and out["fetched"] == 1
+    assert read_json(st, INDEX)["have"] == ["BBB"]
+
+
+def test_files_without_index_are_not_refetched(tmp_path):
+    st, fake = market(tmp_path), Logos()
+    st.write_bytes("published/logos/AAA.png", PNG, "image/png")  # left by a cut-off run, no index
+    update_logos(st, "pk_test", now=NOW, http=client(fake))
+    assert "AAA" not in [t for t, _ in fake.calls]
+    assert "AAA" in read_json(st, INDEX)["have"]
+
+
 def test_bad_token_fails_loudly(tmp_path):
     with pytest.raises(ProviderError):
         update_logos(market(tmp_path), "pk_wrong", now=NOW, http=client(Logos(status_for_all=401)))

@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
 
 from .http import HttpClient, ProviderError, RateLimited
@@ -41,12 +42,17 @@ def universe_tickers(storage: Storage, prefix: str = "published") -> list[str]:
 
 
 def update_logos(storage: Storage, token: str, now: datetime | None = None, budget: int = 800,
-                 http: HttpClient | None = None) -> dict:
+                 max_seconds: float = 600, http: HttpClient | None = None, clock=time.monotonic) -> dict:
     now = now or datetime.now(timezone.utc)
     today = now.date()
-    http = http or HttpClient("logo.dev", min_interval=0.2, max_retries=2)
+    # ~60 requests/min: the pace Logo.dev's free plan sustains without 429s (faster
+    # runs got "retry in 60 s" every ~100 requests). Short timeout, one retry.
+    http = http or HttpClient("logo.dev", min_interval=1.0, max_retries=1, timeout=10)
+    start = clock()
     idx = read_json(storage, INDEX) or {}
     have: set[str] = set(idx.get("have", []))
+    # Files written by a run that was cut off before saving the index still count.
+    have |= {f.rsplit("/", 1)[1][:-4] for f in storage.list("published/logos") if f.endswith(".png")}
     missing: dict[str, str] = dict(idx.get("missing", {}))
 
     def due(t: str) -> bool:
@@ -55,10 +61,19 @@ def update_logos(storage: Storage, token: str, now: datetime | None = None, budg
         checked = missing.get(t)
         return not checked or date.fromisoformat(checked) <= today - timedelta(days=RETRY_MISSING_DAYS)
 
+    def save() -> None:
+        write_json(storage, INDEX, {"source": "Logo.dev", "have": sorted(have), "missing": dict(sorted(missing.items())),
+                                    "updated_at": now.isoformat(timespec="seconds")})
+
     todo = [t for t in universe_tickers(storage) if due(t)]
     fetched = absent = 0
     stopped = None
-    for t in todo[:budget]:
+    for i, t in enumerate(todo[:budget]):
+        if clock() - start > max_seconds:
+            stopped = "time budget"
+            break
+        if i and i % 50 == 0:
+            save()  # progress survives a cancelled or timed-out job
         try:
             r = http.request("GET", LOGO_URL.format(ticker=t), allow_status={404},
                              params={"token": token, "size": 128, "format": "png", "fallback": "404"})
@@ -79,8 +94,7 @@ def update_logos(storage: Storage, token: str, now: datetime | None = None, budg
         missing.pop(t, None)
         fetched += 1
 
-    write_json(storage, INDEX, {"source": "Logo.dev", "have": sorted(have), "missing": dict(sorted(missing.items())),
-                                "updated_at": now.isoformat(timespec="seconds")})
+    save()
     out = {"fetched": fetched, "without_logo": absent, "pending": max(0, len(todo) - fetched - absent),
            "total_with_logo": len(have), "stopped": stopped}
     log.info("logos: %s", out)
@@ -94,4 +108,4 @@ def run_from_env(storage: Storage) -> dict:
     if token.startswith("sk_"):
         # The secret key must never be sent as an image-URL token.
         raise SystemExit("LOGO_DEV_TOKEN es la clave secreta (sk_…): usa la publicable (pk_…)")
-    return update_logos(storage, token)
+    return update_logos(storage, token, max_seconds=float(os.environ.get("LOGO_MAX_MINUTES", "10")) * 60)
