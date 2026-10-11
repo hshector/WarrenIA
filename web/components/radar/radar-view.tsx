@@ -86,7 +86,7 @@ export function RadarView({
             title={p.question}
             className={cx(
               "tap h-9 shrink-0 rounded-full px-4 text-[14px] font-medium",
-              presetKey === p.key ? "bg-ink text-white" : "bg-surface text-ink-2 shadow-[var(--shadow-card)] hover:text-ink",
+              presetKey === p.key ? "bg-ink text-surface" : "bg-surface text-ink-2 shadow-[var(--shadow-card)] hover:text-ink",
             )}
           >
             {p.label}
@@ -194,7 +194,7 @@ function FiltersSheet({
       trigger={
         <button
           aria-label="Filtros"
-          className={cx("tap inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-[14px] font-medium shadow-[var(--shadow-card)]", count ? "bg-ink text-white" : "bg-surface text-ink")}
+          className={cx("tap inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-[14px] font-medium shadow-[var(--shadow-card)]", count ? "bg-ink text-surface" : "bg-surface text-ink")}
         >
           <IconFilter size={17} /> Filtros{count ? ` · ${count}` : ""}
         </button>
@@ -251,7 +251,7 @@ function FiltersSheet({
                 <button
                   key={s}
                   onClick={() => set("sectors", toggle(filters.sectors, s))}
-                  className={cx("tap h-8 rounded-full px-3 text-[13px] font-medium", filters.sectors.includes(s) ? "bg-ink text-white" : "bg-surface-2 text-ink-2")}
+                  className={cx("tap h-8 rounded-full px-3 text-[13px] font-medium", filters.sectors.includes(s) ? "bg-ink text-surface" : "bg-surface-2 text-ink-2")}
                 >
                   {s}
                 </button>

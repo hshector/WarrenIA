@@ -62,3 +62,32 @@ test("delete asks in an in-app dialog and confirms with a toast", async ({ page 
   await expect(page.getByRole("button", { name: `Borrar ${name}` })).toHaveCount(0);
   expect(nativeDialog).toBe(false);
 });
+
+test("Ajustes → Apariencia switches to dark, persists and recolours the status bar", async ({ page }) => {
+  await page.goto("/settings");
+  const html = page.locator("html");
+  const picker = page.getByRole("tablist", { name: "Apariencia" });
+  await expect(picker.getByRole("tab", { name: "Automático" })).toHaveAttribute("aria-selected", "true");
+
+  await picker.getByRole("tab", { name: "Oscuro" }).click();
+  await expect(html).toHaveClass(/\bdark\b/);
+  await expect(page.locator('meta[name="theme-color"]').first()).toHaveAttribute("content", "#000000");
+  const canvas = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(canvas).toBe("rgb(0, 0, 0)");
+
+  await page.reload();
+  await expect(html).toHaveClass(/\bdark\b/); // remembered on this device
+  await expect(page.getByRole("tablist", { name: "Apariencia" }).getByRole("tab", { name: "Oscuro" })).toHaveAttribute("aria-selected", "true");
+
+  await page.getByRole("tablist", { name: "Apariencia" }).getByRole("tab", { name: "Claro" }).click();
+  await expect(html).not.toHaveClass(/\bdark\b/);
+  await expect(page.locator('meta[name="theme-color"]').first()).toHaveAttribute("content", "#f4f3f1");
+});
+
+test("Automático follows the phone's dark mode", async ({ browser }) => {
+  const ctx = await browser.newContext({ colorScheme: "dark", viewport: { width: 412, height: 839 } });
+  const page = await ctx.newPage();
+  await page.goto("/radar");
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  await ctx.close();
+});

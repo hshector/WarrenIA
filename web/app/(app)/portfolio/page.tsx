@@ -16,7 +16,7 @@ import { requireStore } from "@/lib/user/store";
 
 export const metadata = { title: "Cartera" };
 
-const BUCKET_DOT = { core: "bg-accent", gold: "bg-[#e3a008]", momentum: "bg-[#7048e8]" } as const;
+const BUCKET_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
   const sp = await searchParams;

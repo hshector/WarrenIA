@@ -30,7 +30,7 @@ export function TopNav() {
             key={href}
             href={href}
             aria-current={on ? "page" : undefined}
-            className={cx("tap rounded-full px-4 py-1.5 text-[14px] font-medium", on ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.08)]" : "text-ink-2 hover:text-ink")}
+            className={cx("tap rounded-full px-4 py-1.5 text-[14px] font-medium", on ? "bg-thumb text-ink shadow-[0_1px_3px_rgb(0_0_0/0.08)]" : "text-ink-2 hover:text-ink")}
           >
             {label}
           </Link>

@@ -5,6 +5,7 @@ import { SettingsForm } from "@/components/portfolio/forms";
 import { BacktestChart } from "@/components/settings/backtest-chart";
 import { PageHeader } from "@/components/shell/page-header";
 import { RefreshButton } from "@/components/shell/refresh-button";
+import { ThemePicker } from "@/components/shell/theme";
 import { IconChevronRight, IconLogout } from "@/components/ui/icons";
 import { Badge, Button, Callout, EmptyState, Panel } from "@/components/ui/primitives";
 import { dateLabel, dateTimeLabel, int, num, pct } from "@/lib/format";
@@ -55,6 +56,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <div className="mx-auto max-w-[760px]">
         <PageHeader title="Ajustes" />
         <div className="flex flex-col gap-6">
+          <div>
+            <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">Apariencia</p>
+            <div className="card px-4 py-4">
+              <ThemePicker />
+              <p className="mt-2.5 px-1 text-[13px] text-ink-3">Automático sigue el modo claro u oscuro de tu móvil.</p>
+            </div>
+          </div>
           {MENU.map((g) => (
             <div key={g.group}>
               <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">{g.group}</p>

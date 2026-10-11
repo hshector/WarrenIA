@@ -160,7 +160,7 @@ export function Segmented<T extends string>({
           className={cx(
             "tap flex-1 whitespace-nowrap rounded-full px-3.5 font-medium",
             size === "sm" ? "h-7 text-[13px]" : "h-8 text-[14px]",
-            value === o.value ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.1)]" : "text-ink-2 hover:text-ink",
+            value === o.value ? "bg-thumb text-ink shadow-[0_1px_3px_rgb(0_0_0/0.1)]" : "text-ink-2 hover:text-ink",
           )}
         >
           {o.label}

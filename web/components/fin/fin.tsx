@@ -37,7 +37,7 @@ const STATE_STYLE: Record<StateKey, string> = {
   breakout: "bg-info-soft text-info",
   extended: "bg-warn-soft text-warn",
   weakening: "bg-neg-soft text-neg",
-  speculative: "bg-[#f3edff] text-[#7048e8]",
+  speculative: "bg-violet-soft text-violet",
   neutral: "bg-surface-2 text-ink-2",
 };
 
@@ -49,7 +49,7 @@ export function Ticker({ t, className }: { t: string; className?: string }) {
   return <span className={cx("font-semibold tracking-[-0.01em]", className)}>{t}</span>;
 }
 
-const AVATAR = ["#ffe3d1", "#e3ecff", "#e2f5ec", "#f3e8ff", "#fff3cc", "#ffe0e6"];
+const AVATAR = ["var(--av-1)", "var(--av-2)", "var(--av-3)", "var(--av-4)", "var(--av-5)", "var(--av-6)"];
 
 /** Round avatar with the ticker initials (no logos: no licensed asset is assumed). */
 export function AssetAvatar({ t, size = 40 }: { t: string; size?: number }) {

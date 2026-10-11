@@ -306,7 +306,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   );
 }
 
-const PLAN_DOT = { core: "bg-accent", gold: "bg-[#e3a008]", momentum: "bg-[#7048e8]" } as const;
+const PLAN_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
 export function ContributionPlanner({ values, other, settings }: { values: Record<"core" | "gold" | "momentum", number>; other: number; settings: Settings }) {
   const [amount, setAmount] = useState(String(settings.monthly_contribution));

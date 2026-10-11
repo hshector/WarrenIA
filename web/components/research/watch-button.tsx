@@ -26,7 +26,7 @@ export function WatchButton({ ticker, initial }: { ticker: string; initial: bool
           ),
         );
       }}
-      className={cx("tap h-9 shrink-0 rounded-full px-4 text-[14px] font-semibold", on ? "bg-surface-3 text-ink" : "bg-accent text-white hover:bg-accent-2")}
+      className={cx("tap h-9 shrink-0 rounded-full px-4 text-[14px] font-semibold", on ? "bg-surface-3 text-ink" : "bg-accent text-accent-ink hover:bg-accent-2")}
     >
       {on ? "Siguiendo" : "Seguir"}
     </button>

@@ -23,6 +23,7 @@ export default defineConfig({
     // Worst-case data on the smallest common phone (320 px) and on desktop.
     { name: "worst-phone", use: { ...devices["iPhone SE"], defaultBrowserType: "chromium", baseURL: "http://localhost:3101" }, testMatch: /worst-case\.spec\.ts/ },
     { name: "worst-desktop", use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:3101" }, testMatch: /worst-case\.spec\.ts/ },
+    { name: "worst-phone-dark", use: { ...devices["iPhone SE"], defaultBrowserType: "chromium", colorScheme: "dark", baseURL: "http://localhost:3101" }, testMatch: /worst-case\.spec\.ts/ },
   ],
   webServer: [
     {

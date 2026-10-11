@@ -13,7 +13,7 @@ const FLICK = 0.11;
 
 const SURFACE =
   "sheet fixed inset-x-0 bottom-0 z-50 overflow-y-auto rounded-t-[28px] bg-surface px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2 shadow-2xl focus:outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-[8vh] sm:-translate-x-1/2 sm:rounded-[28px] sm:pt-6";
-const OVERLAY = "sheet-overlay fixed inset-0 z-50 bg-black/25 backdrop-blur-[2px]";
+const OVERLAY = "sheet-overlay fixed inset-0 z-50 bg-[var(--overlay)] backdrop-blur-[2px]";
 
 /** Drag-to-dismiss on the sheet's header. Moves the element's transform directly
  *  (no state, no re-render per frame); upward drags meet increasing friction. */

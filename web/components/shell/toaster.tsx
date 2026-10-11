@@ -1,12 +1,15 @@
 "use client";
 
+import { useTheme } from "next-themes";
 import { Toaster as Sonner } from "sonner";
 
 /** App-wide toasts. Top-centre: at the bottom they would fight the tab bar on phones,
  *  and on a phone they slide in where iOS banners do (swipe up to dismiss). */
 export function Toaster() {
+  const { resolvedTheme } = useTheme();
   return (
     <Sonner
+      theme={resolvedTheme === "dark" ? "dark" : "light"}
       position="top-center"
       offset={{ top: 76 }}
       mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
@@ -19,6 +22,7 @@ export function Toaster() {
           fontFamily: "var(--font-sans)",
           fontSize: 14.5,
           color: "var(--ink)",
+          background: "var(--surface)",
         },
       }}
     />
