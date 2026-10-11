@@ -11,13 +11,14 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_BUCKET: ${{ vars.SUPABASE_BUCKET || 'market' }}
       WARRENIA_CONFIG_DIR: ${{ github.workspace }}/config
       LOGO_DEV_TOKEN: ${{ secrets.LOGO_DEV_TOKEN }}
+      LOGO_MAX_MINUTES: "25"  # ~1.500 logos per manual run; the daily job keeps the default 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
