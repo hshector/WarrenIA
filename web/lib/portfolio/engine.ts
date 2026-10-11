@@ -18,6 +18,8 @@
 // - Valuation prices: last available price <= date (forward-filled); if an
 //   instrument has no price yet, its last trade price is used and flagged.
 
+import { money } from "../format";
+
 import { xirr } from "./xirr";
 import type { Bucket, Instrument, Settings, Transaction } from "./types";
 
@@ -359,7 +361,7 @@ export function computePortfolio(
   const withdrawals = -L.flows.filter((f) => f.amount < 0).reduce((s, f) => s + f.amount, 0);
   const inferred = L.flows.filter((f) => f.inferred).reduce((s, f) => s + f.amount, 0);
   if (inferred > 0) {
-    warnings.push(`Se han inferido aportaciones por ${inferred.toFixed(2).replace(".", ",")} € porque las compras superaban el efectivo registrado. Registra tus aportaciones para un cálculo exacto.`);
+    warnings.push(`Se han inferido aportaciones por ${money(inferred)} porque las compras superaban el efectivo registrado. Registra tus aportaciones para un cálculo exacto.`);
   }
 
   // ---- Returns

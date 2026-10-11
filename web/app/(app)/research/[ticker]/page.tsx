@@ -98,7 +98,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
         <div className="flex min-w-0 items-center gap-3.5">
           <AssetAvatar t={ticker} size={52} />
           <div className="min-w-0">
-            <h1 className="truncate text-[24px] font-bold tracking-[-0.02em]">{r.n}</h1>
+            <h1 className="line-clamp-3 text-[22px] font-bold leading-tight tracking-[-0.02em] sm:text-[24px]">{r.n}</h1>
             <p className="text-[14px] text-ink-2">
               {ticker} · {r.cls === "etf" ? "ETF" : (r.sec ?? "Acción")}
             </p>

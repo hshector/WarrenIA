@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "dev:worst": "node scripts/worst-case.mjs && WARRENIA_LOCAL_MODE=1 WARRENIA_DATA_DIR=../data-worst WARRENIA_LOCAL_STORE=../data-worst/user.json next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

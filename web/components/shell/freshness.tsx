@@ -9,9 +9,9 @@ export function FreshnessStamp({ latest, fresh }: { latest: Latest | null; fresh
   const stale = !latest.demo && fresh?.status === "stale";
   const title = `Datos del cierre del ${dateLabel(latest.data_asof)} (NYSE) · calculado ${dateTimeLabel(latest.computed_at)}${fresh ? ` · ${fresh.label}` : ""}`;
   return (
-    <span title={title} className={cx("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium", stale ? "bg-warn-soft text-warn" : "bg-surface-3/70 text-ink-2")}>
+    <span title={title} className={cx("inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium", stale ? "bg-warn-soft text-warn" : "bg-surface-3/70 text-ink-2")}>
       <span className={cx("h-1.5 w-1.5 rounded-full", stale ? "bg-warn" : latest.demo ? "bg-accent" : "bg-pos")} />
-      {latest.demo ? "Demo · " : ""}Cierre {dateLabel(latest.data_asof, false)}
+      {latest.demo && <span className="hidden sm:inline">Demo · </span>}Cierre {dateLabel(latest.data_asof, false)}
     </span>
   );
 }

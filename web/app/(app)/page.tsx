@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AssetAvatar, DeltaPill } from "@/components/fin/fin";
 import { ContributionPlanner } from "@/components/portfolio/forms";
 import { Card } from "@/components/ui/primitives";
-import { money, pct } from "@/lib/format";
+import { money, moneyHeadline, pct } from "@/lib/format";
 import { getMarket, getRadar, loadMarket } from "@/lib/market/source";
 import { STATE_SIMPLE } from "@/lib/market/types";
 import { targetDeviation } from "@/lib/portfolio/engine";
@@ -44,16 +44,16 @@ export default async function Home() {
         <p className="text-[15px] font-medium text-white/85">Tu cartera</p>
         {res ? (
           <>
-            <p className="num mt-1 text-[44px] font-bold leading-tight tracking-[-0.03em]">{money(res.totals.value)}</p>
+            <p className="num mt-1 whitespace-nowrap text-[clamp(32px,10vw,44px)] font-bold leading-tight tracking-[-0.03em]">{moneyHeadline(res.totals.value)}</p>
             <p className="num mt-1 text-[15px] font-medium text-white/90">
               {res.totals.gain >= 0 ? "+" : ""}
               {money(res.totals.gain)} ({pct(gainPct)}) desde que empezaste
             </p>
-            <div className="mt-6 flex gap-2">
-              <Link href="/portfolio" className="tap rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
+            <div className="mt-6 flex flex-wrap gap-2">
+              <Link href="/portfolio" className="tap whitespace-nowrap rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
                 Ver cartera
               </Link>
-              <Link href="/portfolio?add=1" className="tap rounded-full bg-white/20 px-5 py-2.5 text-[15px] font-semibold text-white backdrop-blur">
+              <Link href="/portfolio?add=1" className="tap whitespace-nowrap rounded-full bg-white/20 px-5 py-2.5 text-[15px] font-semibold text-white backdrop-blur">
                 Añadir operación
               </Link>
             </div>
@@ -78,12 +78,12 @@ export default async function Home() {
           <ul className="flex flex-col gap-4">
             {dev.map((d) => (
               <li key={d.bucket}>
-                <div className="mb-1.5 flex items-center justify-between text-[15px]">
+                <div className="mb-1.5 flex items-center justify-between gap-3 text-[15px]">
                   <span className="flex items-center gap-2.5">
                     <span className={`h-2.5 w-2.5 rounded-full ${BUCKET_DOT[d.bucket]}`} />
                     {BUCKET_LABELS[d.bucket]}
                   </span>
-                  <span className="num">
+                  <span className="num shrink-0 whitespace-nowrap">
                     <span className="font-semibold">{pct(d.weight, 0, false)}</span>
                     <span className="text-ink-3"> / {pct(d.target, 0, false)}</span>
                   </span>

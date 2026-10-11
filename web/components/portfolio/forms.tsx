@@ -329,12 +329,12 @@ export function ContributionPlanner({ values, other, settings }: { values: Recor
       </label>
       <ul className="flex flex-col gap-3">
         {(["core", "gold", "momentum"] as const).map((k) => (
-          <li key={k} className="flex items-center justify-between text-[15px]">
+          <li key={k} className="flex items-center justify-between gap-3 text-[15px]">
             <span className="flex items-center gap-2.5">
               <span className={`h-2.5 w-2.5 rounded-full ${PLAN_DOT[k]}`} />
               {BUCKET_LABELS[k]}
             </span>
-            <span className="num font-semibold">{money(plan[k], "EUR", 0)}</span>
+            <span className="num shrink-0 whitespace-nowrap font-semibold">{money(plan[k], "EUR", 0)}</span>
           </li>
         ))}
       </ul>

@@ -6,6 +6,7 @@ __pycache__/
 *.egg-info/
 # Local data lake / published artifacts (never commit market data)
 /data/
+/data-worst/
 # Node
 node_modules/
 .next/
