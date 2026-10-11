@@ -280,7 +280,7 @@ function MethodTab({ meta }: { meta: Meta }) {
                       {corr.matrix[i].map((v, j) => {
                         const x = v ?? 0;
                         return (
-                          <td key={j} title={`${a} · ${corr.labels[j]}: ${v === null ? "n/d" : v.toFixed(2)}`} className="num h-5 w-7 text-center" style={{ background: x >= 0 ? `rgb(240 136 58 / ${Math.abs(x) * 0.55})` : `rgb(138 164 232 / ${Math.abs(x) * 0.55})` }}>
+                          <td key={j} title={`${a} · ${corr.labels[j]}: ${v === null ? "n/d" : v.toFixed(2)}`} className="num h-5 w-7 text-center" style={{ background: x >= 0 ? `rgb(82 127 98 / ${Math.abs(x) * 0.55})` : `rgb(90 110 148 / ${Math.abs(x) * 0.55})` }}>
                             {i === j ? "" : v === null ? "·" : Math.round(x * 10)}
                           </td>
                         );
@@ -289,7 +289,7 @@ function MethodTab({ meta }: { meta: Meta }) {
                   ))}
                 </tbody>
               </table>
-              <p className="t-meta mt-2">Valores × 10. Naranja = correlación positiva, azul = negativa.</p>
+              <p className="t-meta mt-2">Valores × 10. Verde = correlación positiva, azul = negativa.</p>
             </div>
           </>
         ) : (

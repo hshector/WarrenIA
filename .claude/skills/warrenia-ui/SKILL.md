@@ -6,7 +6,7 @@ description: Convenciones de interfaz de WarrenIA (web/ y la PWA en el móvil). 
 # Interfaz de WarrenIA
 
 WarrenIA es una herramienta financiera personal que se usa sobre todo **en el móvil como PWA instalada**.
-Estilo: claro, tranquilo, tipo iOS; un solo acento naranja; verde y rojo solo para ganancias y pérdidas.
+Estilo: tranquilo, tipo iOS, en claro y en oscuro. Un solo acento verde salvia («Salvia») y una tarjeta pastel por pantalla. Los colores secundarios son apagados y elegantes, nunca saturados. Las ganancias usan un verde más nítido que el acento y las pérdidas un rojo teja apagado.
 Es un panel profesional: el movimiento es rápido y funcional, nunca decorativo.
 
 ## Ya resuelto: úsalo, no lo reinventes
@@ -24,7 +24,7 @@ Es un panel profesional: el movimiento es rápido y funcional, nunca decorativo.
 | Unidades de una posición | `units()`: nunca redondear 0,000123 a 0,0001 | `lib/format.ts` |
 | Cifras | Clase `num` (tabular) y `whitespace-nowrap`; una cifra nunca se trunca | — |
 | Modo oscuro | Tokens redefinidos en `:root.dark`; elección en Ajustes → Apariencia (`next-themes`) | `globals.css`, `components/shell/theme.tsx` |
-| Colores secundarios | `bg-gold`, `bg-violet`, `bg-violet-soft`, `var(--lilac)`, `var(--peach)`, `var(--av-1…6)`, `bg-thumb` | `globals.css` |
+| Colores secundarios | `bg-gold`, `bg-violet`, `bg-violet-soft`, `var(--lilac)`, `var(--sand)`, `var(--av-1…6)`, `bg-thumb` | `globals.css` |
 
 ## Reglas
 
@@ -33,9 +33,10 @@ Es un panel profesional: el movimiento es rápido y funcional, nunca decorativo.
 3. **No animes lo que se ve decenas de veces al día**: cifras de la cartera al cargar, gráficos, cambio de pestaña, navegación.
 4. **Reducir movimiento significa más suave, no ninguno**: se mantienen los fundidos y se quitan los desplazamientos (ver el final de `globals.css`).
 5. **Los textos de datos se ajustan, no se recortan**: nombres con `line-clamp-2` o `truncate` y elipsis, nunca recortados en silencio. Valida con `npm run dev:worst` y con los E2E `worst-phone`, `worst-phone-dark` y `worst-desktop`.
-6. **Nunca pongas colores a mano** (`#hex`, `text-white`, `bg-black`): usa un token, o crea uno en `:root` **y** en `:root.dark`. Excepción: el texto blanco sobre la tarjeta naranja (`nebula`), que es igual en los dos modos. Sobre `bg-ink` el texto es `text-surface`, y sobre `bg-accent` es `text-accent-ink`.
-7. Si un componente lee los tokens una sola vez (como los gráficos), recréalo cuando cambie el tema con `useThemeClass()`.
-8. Las hojas y diálogos nuevos pasan por `Sheet` o `ConfirmDialog`, para que hereden la animación, el arrastre, las zonas seguras y el `overscroll-behavior`.
+6. **Nunca pongas colores a mano** (`#hex`, `text-white`, `bg-black`): usa un token, o crea uno en `:root` **y** en `:root.dark`. En la tarjeta pastel (`nebula`) usa `text-hero-ink`, `bg-hero-btn` y `text-hero-btn-ink`. Sobre `bg-ink` el texto es `text-surface`, y sobre `bg-accent` es `text-accent-ink`.
+7. **Etiquetas de estado**: fondo neutro (`bg-surface-2 text-ink-2`) con un punto de 6 px del color del estado (`StatePill`). No uses píldoras de colores saturados.
+8. Si un componente lee los tokens una sola vez (como los gráficos), recréalo cuando cambie el tema con `useThemeClass()`.
+9. Las hojas y diálogos nuevos pasan por `Sheet` o `ConfirmDialog`, para que hereden la animación, el arrastre, las zonas seguras y el `overscroll-behavior`.
 
 ## Qué skill usar
 

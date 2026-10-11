@@ -81,7 +81,7 @@ test("Ajustes → Apariencia switches to dark, persists and recolours the status
 
   await page.getByRole("tablist", { name: "Apariencia" }).getByRole("tab", { name: "Claro" }).click();
   await expect(html).not.toHaveClass(/\bdark\b/);
-  await expect(page.locator('meta[name="theme-color"]').first()).toHaveAttribute("content", "#f4f3f1");
+  await expect(page.locator('meta[name="theme-color"]').first()).toHaveAttribute("content", "#f3f4f1");
 });
 
 test("Automático follows the phone's dark mode", async ({ browser }) => {

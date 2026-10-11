@@ -8,7 +8,7 @@ import { Segmented } from "@/components/ui/primitives";
 type Choice = "system" | "light" | "dark";
 
 // Status bar / browser chrome colour: the canvas of each theme.
-const BAR = { light: "#f4f3f1", dark: "#000000" } as const;
+const BAR = { light: "#f3f4f1", dark: "#000000" } as const;
 
 /** Light / dark / follow the phone. The class is set before first paint (no flash). */
 export function ThemeProvider({ children }: { children: ReactNode }) {

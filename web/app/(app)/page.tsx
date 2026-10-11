@@ -40,20 +40,20 @@ export default async function Home() {
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
-      <section className="nebula relative overflow-hidden rounded-[28px] px-6 pb-6 pt-7 shadow-[0_8px_24px_rgb(242_97_29/0.18)]">
-        <p className="text-[15px] font-medium text-white/85">Tu cartera</p>
+      <section className="nebula relative overflow-hidden rounded-[28px] px-6 pb-6 pt-7 shadow-[0_8px_24px_var(--hero-shadow)]">
+        <p className="text-[15px] font-medium text-hero-ink/75">Tu cartera</p>
         {res ? (
           <>
             <p className="num mt-1 whitespace-nowrap text-[clamp(32px,10vw,44px)] font-bold leading-tight tracking-[-0.03em]">{moneyHeadline(res.totals.value)}</p>
-            <p className="num mt-1 text-[15px] font-medium text-white/90">
+            <p className="num mt-1 text-[15px] font-medium text-hero-ink/85">
               {res.totals.gain >= 0 ? "+" : ""}
               {money(res.totals.gain)} ({pct(gainPct)}) desde que empezaste
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              <Link href="/portfolio" className="tap whitespace-nowrap rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
+              <Link href="/portfolio" className="tap whitespace-nowrap rounded-full bg-hero-btn px-5 py-2.5 text-[15px] font-semibold text-hero-btn-ink">
                 Ver cartera
               </Link>
-              <Link href="/portfolio?add=1" className="tap whitespace-nowrap rounded-full bg-white/20 px-5 py-2.5 text-[15px] font-semibold text-white backdrop-blur">
+              <Link href="/portfolio?add=1" className="tap whitespace-nowrap rounded-full bg-hero-ink/10 px-5 py-2.5 text-[15px] font-semibold text-hero-ink">
                 Añadir operación
               </Link>
             </div>
@@ -61,8 +61,8 @@ export default async function Home() {
         ) : (
           <>
             <p className="mt-1 text-[30px] font-bold leading-tight tracking-[-0.02em]">Empieza a registrar tus inversiones</p>
-            <p className="mt-2 max-w-md text-[15px] text-white/90">Apunta tus aportaciones y compras para ver cuánto ganas y si tu reparto sigue el plan.</p>
-            <Link href="/portfolio" className="tap mt-6 inline-block rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
+            <p className="mt-2 max-w-md text-[15px] text-hero-ink/85">Apunta tus aportaciones y compras para ver cuánto ganas y si tu reparto sigue el plan.</p>
+            <Link href="/portfolio" className="tap mt-6 inline-block rounded-full bg-hero-btn px-5 py-2.5 text-[15px] font-semibold text-hero-btn-ink">
               Configurar cartera
             </Link>
           </>

@@ -6,7 +6,7 @@ import { TimeSeriesChart, type SeriesSpec } from "@/components/charts/time-serie
 
 const COLORS: Record<string, string> = {
   overall: "var(--accent)",
-  overall_filtered: "var(--peach)",
+  overall_filtered: "var(--sand)",
   risk_adjusted: "var(--lilac)",
   pure_12_1: "var(--info)",
   ew_universe: "var(--ink-2)",
