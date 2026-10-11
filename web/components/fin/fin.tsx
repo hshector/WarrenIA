@@ -31,25 +31,31 @@ export function ScoreCell({ v, invert = false }: { v: number | null | undefined;
   return <span className={cx("num font-medium", invert && isNum(v) && v >= 75 ? "text-neg" : "text-ink")}>{isNum(v) ? Math.round(v) : "—"}</span>;
 }
 
-const STATE_STYLE: Record<StateKey, string> = {
-  strong: "bg-pos-soft text-pos",
-  improving: "bg-accent-soft text-accent-2",
-  breakout: "bg-info-soft text-info",
-  extended: "bg-warn-soft text-warn",
-  weakening: "bg-neg-soft text-neg",
-  speculative: "bg-[#f3edff] text-[#7048e8]",
-  neutral: "bg-surface-2 text-ink-2",
+// State pills are neutral; only a small dot carries the (dusty) state colour.
+const STATE_DOT: Record<StateKey, string> = {
+  strong: "bg-pos",
+  improving: "bg-accent",
+  breakout: "bg-info",
+  extended: "bg-warn",
+  weakening: "bg-neg",
+  speculative: "bg-violet",
+  neutral: "bg-ink-3",
 };
 
 export function StatePill({ state, className }: { state: StateKey; short?: boolean; className?: string }) {
-  return <span className={cx("inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-medium whitespace-nowrap", STATE_STYLE[state], className)}>{STATE_SIMPLE[state]}</span>;
+  return (
+    <span className={cx("inline-flex h-6 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[12px] font-medium whitespace-nowrap text-ink-2", className)}>
+      <span aria-hidden className={cx("h-1.5 w-1.5 shrink-0 rounded-full", STATE_DOT[state])} />
+      {STATE_SIMPLE[state]}
+    </span>
+  );
 }
 
 export function Ticker({ t, className }: { t: string; className?: string }) {
   return <span className={cx("font-semibold tracking-[-0.01em]", className)}>{t}</span>;
 }
 
-const AVATAR = ["#ffe3d1", "#e3ecff", "#e2f5ec", "#f3e8ff", "#fff3cc", "#ffe0e6"];
+const AVATAR = ["var(--av-1)", "var(--av-2)", "var(--av-3)", "var(--av-4)", "var(--av-5)", "var(--av-6)"];
 
 /** Round avatar with the ticker initials (no logos: no licensed asset is assumed). */
 export function AssetAvatar({ t, size = 40 }: { t: string; size?: number }) {

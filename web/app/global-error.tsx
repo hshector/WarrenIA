@@ -8,10 +8,10 @@ export default function GlobalError({ reset }: { error: Error; reset: () => void
           <h1 style={{ fontSize: 22 }}>Algo no ha ido bien</h1>
           <p style={{ color: "#6b6966" }}>No se pudo cargar WarrenIA.</p>
           <p>
-            <button onClick={reset} style={{ padding: "10px 20px", borderRadius: 999, border: 0, background: "#f2611d", color: "#fff", fontWeight: 600 }}>
+            <button onClick={reset} style={{ padding: "10px 20px", borderRadius: 999, border: 0, background: "#527f62", color: "#fff", fontWeight: 600 }}>
               Reintentar
             </button>{" "}
-            <a href="/setup/check" style={{ color: "#d9500f" }}>Comprobar configuración</a>
+            <a href="/setup/check" style={{ color: "#44705a" }}>Comprobar configuración</a>
           </p>
         </div>
       </body>

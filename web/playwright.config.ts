@@ -4,6 +4,8 @@ import path from "node:path";
 // E2E runs against the production build in local mode (no login) with the
 // engine's synthetic DEMO data in ../data and a throw-away user store.
 const store = path.resolve(process.cwd(), "test-results", "e2e-user.json");
+const dataDir = process.env.E2E_DATA_DIR || path.resolve(process.cwd(), "..", "data");
+const worstDir = path.resolve(process.cwd(), ".data", "e2e-worst");
 
 export default defineConfig({
   testDir: "e2e",
@@ -16,13 +18,26 @@ export default defineConfig({
     launchOptions: process.env.CI ? {} : { executablePath: process.env.PW_CHROMIUM || "/opt/pw-browsers/chromium" },
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /responsive\.spec\.ts/ },
-    { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /responsive\.spec\.ts/ },
+    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /(responsive|mobile-native|worst-case)\.spec\.ts/ },
+    { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /(responsive|mobile-native)\.spec\.ts/ },
+    // Worst-case data on the smallest common phone (320 px) and on desktop.
+    { name: "worst-phone", use: { ...devices["iPhone SE"], defaultBrowserType: "chromium", baseURL: "http://localhost:3101" }, testMatch: /worst-case\.spec\.ts/ },
+    { name: "worst-desktop", use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:3101" }, testMatch: /worst-case\.spec\.ts/ },
+    { name: "worst-phone-dark", use: { ...devices["iPhone SE"], defaultBrowserType: "chromium", colorScheme: "dark", baseURL: "http://localhost:3101" }, testMatch: /worst-case\.spec\.ts/ },
   ],
-  webServer: {
-    command: `node node_modules/next/dist/bin/next start -p 3100`,
-    port: 3100,
-    reuseExistingServer: false,
-    env: { WARRENIA_LOCAL_MODE: "1", WARRENIA_LOCAL_STORE: store, WARRENIA_DATA_DIR: process.env.E2E_DATA_DIR || path.resolve(process.cwd(), "..", "data") },
-  },
+  webServer: [
+    {
+      command: `node node_modules/next/dist/bin/next start -p 3100`,
+      port: 3100,
+      reuseExistingServer: false,
+      env: { WARRENIA_LOCAL_MODE: "1", WARRENIA_LOCAL_STORE: store, WARRENIA_DATA_DIR: dataDir },
+    },
+    {
+      // Same build, worst-case data generated from the DEMO data (scripts/worst-case.mjs).
+      command: `node scripts/worst-case.mjs "${dataDir}" "${worstDir}" && node node_modules/next/dist/bin/next start -p 3101`,
+      port: 3101,
+      reuseExistingServer: false,
+      env: { WARRENIA_LOCAL_MODE: "1", WARRENIA_LOCAL_STORE: path.join(worstDir, "user.json"), WARRENIA_DATA_DIR: worstDir },
+    },
+  ],
 });

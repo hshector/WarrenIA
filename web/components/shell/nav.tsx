@@ -30,7 +30,7 @@ export function TopNav() {
             key={href}
             href={href}
             aria-current={on ? "page" : undefined}
-            className={cx("rounded-full px-4 py-1.5 text-[14px] font-medium transition-colors", on ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.08)]" : "text-ink-2 hover:text-ink")}
+            className={cx("tap rounded-full px-4 py-1.5 text-[14px] font-medium", on ? "bg-thumb text-ink shadow-[0_1px_3px_rgb(0_0_0/0.08)]" : "text-ink-2 hover:text-ink")}
           >
             {label}
           </Link>
@@ -47,7 +47,7 @@ export function TabBar() {
       {NAV.map(({ href, label, icon: Icon }) => {
         const on = active(path, href);
         return (
-          <Link key={href} href={href} aria-current={on ? "page" : undefined} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px] font-medium", on ? "text-accent" : "text-ink-3")}>
+          <Link key={href} href={href} aria-current={on ? "page" : undefined} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px] font-medium active:opacity-60", on ? "text-accent" : "text-ink-3")}>
             <Icon size={23} strokeWidth={on ? 2 : 1.6} />
             {label}
           </Link>
