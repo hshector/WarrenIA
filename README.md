@@ -1,6 +1,6 @@
 # WarrenIA
 
-Sistema personal de inteligencia financiera: **Momentum Radar** (screener cuantitativo de momentum, explicable y
+Sistema personal de inteligencia financiera: **Plan** (qué comprar cada mes: ETF global, oro y momentum, con fiscalidad española), **Momentum Radar** (screener cuantitativo de momentum, explicable y
 reproducible) y **Portfolio** (cartera con FIFO, TWR, TIR y desviación frente a objetivos). Es una web Next.js
 desplegable en Vercel e instalable como PWA.
 
@@ -13,7 +13,7 @@ desplegable en Vercel e instalable como PWA.
 | Web | `web/` (Next.js 16 + TypeScript + Tailwind 4) · Vercel |
 | Persistencia | Supabase: Postgres con RLS, Auth por enlace mágico y Storage privado |
 | Configuración de la metodología | `config/*.yaml` |
-| Documentación | [Metodología](docs/METHODOLOGY.md) · [Fuentes de datos](docs/DATA_SOURCES.md) · [Validación](docs/BACKTEST.md) · [Arquitectura](docs/ARCHITECTURE.md) · [**Puesta en marcha**](docs/DEPLOY.md) · [Plan](docs/PLAN.md) |
+| Documentación | [Metodología](docs/METHODOLOGY.md) · [Auditoría](docs/AUDITORIA.md) · [Fuentes de datos](docs/DATA_SOURCES.md) · [Validación](docs/BACKTEST.md) · [Arquitectura](docs/ARCHITECTURE.md) · [**Puesta en marcha**](docs/DEPLOY.md) · [Plan](docs/PLAN.md) |
 
 ## Prueba rápida en local (datos de demostración)
 
@@ -26,9 +26,9 @@ cd web && npm ci && WARRENIA_LOCAL_MODE=1 npm run dev                   # http:/
 ## Tests
 
 ```bash
-cd engine && pytest -q                         # 48 tests: ajustes, indicadores, scores, reglas, proveedores, look-ahead, backtest
-cd web && npm test                             # 39 tests: FIFO, TWR, XIRR, CSV, frescura, radar, modo de seguridad
-cd web && npm run build && npx playwright test # 21 E2E: radar, ficha, cartera, importación, responsive, PWA
+cd engine && pytest -q                         # 69 tests: ajustes, indicadores, scores, reglas, señal de acción, proveedores, look-ahead, backtest
+cd web && npm test                             # 54 tests: FIFO, TWR, XIRR, fiscalidad, CSV, frescura, radar, catálogo, seguridad
+cd web && npm run build && npx playwright test # 25 E2E: plan, radar, ficha, cartera, importación, responsive, PWA
 ```
 
 Coste mensual con la configuración actual: **0 €**. Las limitaciones están documentadas en

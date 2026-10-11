@@ -1,11 +1,13 @@
 import Link from "next/link";
 
-import { AssetAvatar, DeltaPill } from "@/components/fin/fin";
+import { ActionPill, AssetAvatar, DeltaPill } from "@/components/fin/fin";
 import { ContributionPlanner } from "@/components/portfolio/forms";
 import { Card } from "@/components/ui/primitives";
 import { money, pct } from "@/lib/format";
+import { hasActions } from "@/lib/market/radar";
 import { getMarket, getRadar, loadMarket } from "@/lib/market/source";
 import { STATE_SIMPLE } from "@/lib/market/types";
+import { momentumRoute, recommended, STOCK_POSITIONS } from "@/lib/plan/catalog";
 import { targetDeviation } from "@/lib/portfolio/engine";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { BUCKET_LABELS } from "@/lib/portfolio/types";
@@ -20,7 +22,12 @@ export default async function Home() {
   const store = await requireStore();
   const [radar, market, pf, watch] = await Promise.all([getRadar(latest), getMarket(latest), loadPortfolio(store, latest, meta), store.watchlist()]);
   const res = pf.result;
-  const top = (radar?.rows ?? []).filter((r) => r.cls === "stock").sort((a, b) => a.rank - b.rank).slice(0, 5);
+  const rows = radar?.rows ?? [];
+  const withActions = hasActions(rows);
+  const top = rows
+    .filter((r) => r.cls === "stock" && (!withActions || r.act === "candidate"))
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 5);
   const byT = new Map((radar?.rows ?? []).map((r) => [r.t, r]));
   const dev = res ? targetDeviation(res, pf.settings) : null;
   const values = dev ? (Object.fromEntries(dev.map((d) => [d.bucket, d.value])) as Record<"core" | "gold" | "momentum", number>) : { core: 0, gold: 0, momentum: 0 };
@@ -29,7 +36,9 @@ export default async function Home() {
   const news: { t: string; text: string }[] = [];
   for (const p of res?.positions ?? []) {
     const r = p.instrument.market_ticker ? byT.get(p.instrument.market_ticker) : undefined;
-    if (r && p.qty > 0 && r.st === "weakening") news.push({ t: r.t, text: `${r.n} está perdiendo fuerza` });
+    if (!r || p.qty <= 0) continue;
+    if (withActions && !r.hold) news.push({ t: r.t, text: `${r.n}: revisar venta (ha perdido el momentum)` });
+    else if (r.st === "weakening") news.push({ t: r.t, text: `${r.n} está perdiendo fuerza` });
   }
   for (const w of watch) {
     const r = byT.get(w.ticker);
@@ -70,7 +79,19 @@ export default async function Home() {
       </section>
 
       <Card title="Tu próxima aportación" action={<Link href="/settings?tab=portfolio" className="text-accent">Ajustar plan</Link>}>
-        <ContributionPlanner values={values} other={res?.allocation.find((a) => a.bucket === "other")?.value ?? 0} settings={pf.settings} />
+        <ContributionPlanner
+          values={values}
+          other={res?.allocation.find((a) => a.bucket === "other")?.value ?? 0}
+          settings={pf.settings}
+          products={{
+            core: recommended("core").name.replace(" UCITS ETF", ""),
+            gold: recommended("gold").name,
+            momentum: momentumRoute(values.momentum) === "etf" ? recommended("momentum").name.replace(" UCITS ETF", "") : `Candidatas del radar (hasta ${STOCK_POSITIONS})`,
+          }}
+        />
+        <Link href="/plan" className="mt-3 inline-block text-[14px] font-medium text-accent">
+          Por qué estos productos y cómo comprarlos
+        </Link>
       </Card>
 
       {dev && (
@@ -113,7 +134,16 @@ export default async function Home() {
         </Card>
       )}
 
-      <Card title="Lo más fuerte hoy" action={<Link href="/radar" className="text-accent">Ver radar</Link>} pad={false}>
+      <Card
+        title={withActions ? "Candidatas de momentum" : "Lo más fuerte hoy"}
+        sub={withActions ? "Fuertes, ordenadas y sin haberse disparado: las que se pueden comprar ahora" : undefined}
+        action={
+          <Link href="/radar" className="text-accent">
+            Ver radar
+          </Link>
+        }
+        pad={false}
+      >
         <ul className="mt-2 divide-y divide-line">
           {top.map((r) => (
             <li key={r.t}>
@@ -122,14 +152,15 @@ export default async function Home() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15.5px] font-semibold">{r.n}</span>
                   <span className="block truncate text-[13px] text-ink-2">
-                    {r.t} · {STATE_SIMPLE[r.st]}
+                    {r.t} · {withActions ? `puntuación ${Math.round(r.ov)}` : STATE_SIMPLE[r.st]}
                   </span>
                 </span>
+                {withActions ? <ActionPill action={r.act} className="hidden sm:inline-flex" /> : null}
                 <DeltaPill v={r.r6m} />
               </Link>
             </li>
           ))}
-          {!top.length && <li className="px-5 py-6 text-[15px] text-ink-2">Aún no hay ranking publicado.</li>}
+          {!top.length && <li className="px-5 py-6 text-[15px] text-ink-2">{rows.length ? "Hoy no hay ninguna candidata: ninguna líder cumple todas las condiciones." : "Aún no hay ranking publicado."}</li>}
         </ul>
       </Card>
 

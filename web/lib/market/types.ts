@@ -3,6 +3,7 @@
 
 export type AssetClass = "stock" | "etf";
 export type StateKey = "speculative" | "extended" | "weakening" | "breakout" | "strong" | "improving" | "neutral";
+export type ActionKey = "candidate" | "wait" | "watch" | "avoid" | "none";
 
 export interface Latest {
   schema: number;
@@ -58,6 +59,10 @@ export interface RadarRow {
   flags: string[];
   bo: boolean;
   h52: boolean;
+  act: ActionKey; // what to do now (engine rules: scoring.decide)
+  hold: boolean; // if already owned: keep (true) or review a sale (false)
+  pe: number | null; // P/E on last annual net income (stocks; null if loss-making or unknown)
+  prof: boolean | null; // profitable in the last fiscal year (null = unknown)
 }
 
 export type BenchReturns = Record<string, { d1?: number | null; r1m: number | null; r3m: number | null; r6m: number | null; r12m: number | null; ytd?: number | null }>;
@@ -97,6 +102,18 @@ export interface Report {
   data_quality: { source: string; asof: string; history_sessions: number; missing_frac: number | null; total_return: boolean; notes: string[] };
   disclaimer: string;
   rank?: number;
+  action?: ActionKey;
+  action_label?: string;
+  action_why?: string[];
+  entry?: string | null;
+}
+
+export interface ActionDecision {
+  action: ActionKey;
+  label: string;
+  why: string[];
+  entry: string | null;
+  hold: boolean;
 }
 
 export interface AssetDetail {
@@ -106,6 +123,7 @@ export interface AssetDetail {
   indicators?: Record<string, number | boolean | null>;
   components?: Record<"momentum" | "trend_quality" | "acceleration" | "risk", Component[]>;
   state?: { state: StateKey; tags: StateKey[]; trace: Record<string, RuleCondition[]> };
+  action?: ActionDecision;
   report?: Report;
   hist?: { d: string[]; r: (number | null)[]; o: (number | null)[] };
   series?: { c: (number | null)[]; v: (number | null)[] };
@@ -139,6 +157,7 @@ export interface Meta {
   primary_benchmark: string;
   sector_etfs: Record<string, string>;
   states: Record<StateKey, string>;
+  actions?: Record<ActionKey, string>;
   sessions: string[];
   calendar?: { exchange: string; sessions: [string, string][] };
   methodology: {
@@ -256,4 +275,21 @@ export const STATE_EXPLAIN: Record<StateKey, string> = {
   weakening: "Era una líder y está perdiendo impulso.",
   speculative: "Movimientos muy bruscos: riesgo elevado.",
   neutral: "No cumple las reglas de ninguna categoría concreta.",
+};
+
+/** What to do with an asset now (engine: scoring.decide). */
+export const ACTION_LABELS: Record<ActionKey, string> = {
+  candidate: "Candidata",
+  wait: "Esperar retroceso",
+  watch: "Vigilar",
+  avoid: "Evitar",
+  none: "Sin señal",
+};
+
+export const ACTION_EXPLAIN: Record<ActionKey, string> = {
+  candidate: "Entre el 20 % más fuerte, con tendencia ordenada y sin haberse disparado: se puede comprar ahora.",
+  wait: "Tendencia fuerte, pero se ha disparado a corto plazo. Comprar ahora es comprar el pico: mejor esperar a que se modere.",
+  watch: "Interesante, pero todavía no es una compra: falta confirmación, fuerza o beneficios.",
+  avoid: "Sin momentum, demasiado volátil o perdiendo fuerza. No es para comprar; si la tienes, revisa la venta.",
+  none: "No tiene una señal de momentum clara.",
 };

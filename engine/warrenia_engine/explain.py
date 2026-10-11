@@ -11,7 +11,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from .scoring import STATES
+from .scoring import ACTIONS, STATES
 
 LABELS = {
     "mom_12_1_riskadj": "Retorno 12-1m ajustado por volatilidad",
@@ -97,7 +97,7 @@ def horizon_profile(row_pcts: dict[str, float]) -> tuple[list[str], list[str]]:
     return strong, weak
 
 
-def report(tk: str, name: str, cls: str, ind: pd.Series, sc: pd.Series, state: dict,
+def report(tk: str, name: str, cls: str, ind: pd.Series, sc: pd.Series, state: dict, act: dict,
            bench: str, bench_ret: dict[str, float], horizon_pcts: dict[str, float],
            universe_label: str, quality: dict) -> dict:
     """Structured opportunity card (Thesis / Evidence / Risks / Invalidation / Data quality)."""
@@ -142,6 +142,15 @@ def report(tk: str, name: str, cls: str, ind: pd.Series, sc: pd.Series, state: d
         {"label": "Drawdown máx. 12m / actual", "value": f"{pct(ind['maxdd_252'], 1, False)} / {pct(ind['dd_now'], 1, False)}",
          "context": ""},
     ]
+    if cls == "stock":
+        ni, pe = ind.get("net_income"), ind.get("pe")
+        if _ok(ni):
+            evidence.append({"label": "Valoración (PER, último ejercicio)",
+                             "value": num(pe, 1) if _ok(pe) else "pérdidas",
+                             "context": f"beneficio neto {usd_compact(ni)} · capitalización {usd_compact(ind.get('mcap'))}"})
+        else:
+            evidence.append({"label": "Valoración (PER, último ejercicio)", "value": "n/d",
+                             "context": "sin beneficio publicado en formato US GAAP (p. ej. emisores extranjeros)"})
     strong_h, weak_h = horizon_profile(horizon_pcts)
     if strong_h:
         evidence.append({"label": "Horizontes donde destaca (≥ p70)", "value": ", ".join(strong_h), "context": ""})
@@ -168,6 +177,12 @@ def report(tk: str, name: str, cls: str, ind: pd.Series, sc: pd.Series, state: d
             c["text"] for c in state["trace"]["weakening"][1:] if c["pass"]) + ".")
     if _ok(sc.get("mom_pct_change")) and sc["mom_pct_change"] <= -10 and "weakening" not in state["tags"]:
         risks.append(f"El percentil de Momentum ha caído {num(-sc['mom_pct_change'], 0)} puntos en 21 sesiones.")
+    if cls == "stock" and _ok(ind.get("net_income")) and ind["net_income"] <= 0:
+        risks.append(f"La empresa perdió dinero en su último ejercicio ({usd_compact(ind['net_income'])}): "
+                     "el precio descuenta beneficios futuros que aún no existen.")
+    elif cls == "stock" and _ok(ind.get("pe")) and ind["pe"] >= 60:
+        risks.append(f"Valoración exigente: PER {num(ind['pe'], 0)} sobre el beneficio del último ejercicio. "
+                     "El momentum funciona también en valores caros, pero las caídas suelen ser más bruscas.")
     if not risks:
         risks.append("Sin alertas de riesgo específicas según las reglas actuales; el riesgo general del momentum "
                      "(reversiones bruscas tras caídas del mercado) sigue aplicando.")
@@ -183,6 +198,8 @@ def report(tk: str, name: str, cls: str, ind: pd.Series, sc: pd.Series, state: d
 
     return {
         "ticker": tk, "name": name, "cls": cls, "state": state["state"], "state_label": st_name,
+        "action": act["action"], "action_label": ACTIONS[act["action"]], "action_why": act["why"],
+        "entry": act["entry"],
         "thesis": thesis, "evidence": evidence, "risks": risks, "invalidation": invalidation,
         "data_quality": quality,
         "disclaimer": "Ranking cuantitativo basado solo en precios y volumen. No es análisis fundamental ni "

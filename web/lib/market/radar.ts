@@ -1,7 +1,7 @@
 // Radar query logic (pure, tested). The engine already computed every metric;
 // here we only filter / sort published values — no metric is created in the UI.
 
-import type { BenchReturns, RadarRow, StateKey } from "./types";
+import type { ActionKey, BenchReturns, RadarRow, StateKey } from "./types";
 
 /** Plain-language risk bucket from the Risk percentile. */
 export function riskLabel(rk: number | null | undefined): { text: string; cls: string } {
@@ -13,7 +13,7 @@ export function riskLabel(rk: number | null | undefined): { text: string; cls: s
 
 
 export type Horizon = "r1m" | "r3m" | "r6m" | "r12m";
-export type PresetKey = "all" | "strongest" | "accel" | "lowvol" | "fading" | "breakouts" | "improvers" | "watch";
+export type PresetKey = "buy" | "all" | "wait" | "strongest" | "accel" | "lowvol" | "fading" | "breakouts" | "improvers" | "watch";
 
 export interface Preset {
   key: PresetKey;
@@ -27,7 +27,21 @@ export interface Preset {
 export type SortKey = keyof RadarRow | "ret" | "rel";
 
 export const PRESETS: Preset[] = [
-  { key: "all", label: "Top", question: "Las acciones con mayor fuerza de tendencia, según la puntuación completa", sort: { key: "rank", dir: "asc" } },
+  {
+    key: "buy",
+    label: "Para comprar",
+    question: "Candidatas: entre el 20 % más fuerte, con tendencia ordenada y sin haberse disparado a corto plazo",
+    filter: (r) => r.act === "candidate",
+    sort: { key: "rank", dir: "asc" },
+  },
+  { key: "all", label: "Ranking completo", question: "Todas, ordenadas por puntuación de momentum (incluye las que no conviene comprar ahora)", sort: { key: "rank", dir: "asc" } },
+  {
+    key: "wait",
+    label: "Esperar retroceso",
+    question: "Líderes que se han disparado a corto plazo: comprarlas ahora es comprar el pico",
+    filter: (r) => r.act === "wait",
+    sort: { key: "rank", dir: "asc" },
+  },
   { key: "strongest", label: "Más fuertes", question: "¿Qué acciones tienen el momentum más fuerte ahora?", sort: { key: "m", dir: "desc" } },
   {
     key: "accel",
@@ -73,6 +87,8 @@ export interface Filters {
   search: string;
   sectors: string[];
   states: StateKey[];
+  actions: ActionKey[];
+  onlyProfitable: boolean;
   minMcap: number;
   minAdv: number;
   maxRisk: number;
@@ -87,6 +103,8 @@ export const DEFAULT_FILTERS: Filters = {
   search: "",
   sectors: [],
   states: [],
+  actions: [],
+  onlyProfitable: false,
   minMcap: 0,
   minAdv: 0,
   maxRisk: 100,
@@ -124,6 +142,8 @@ export function applyRadar(
     if (q && !r.t.toLowerCase().includes(q) && !r.n.toLowerCase().includes(q)) return false;
     if (f.sectors.length && !f.sectors.includes(r.sec ?? "—")) return false;
     if (f.states.length && !f.states.includes(r.st)) return false;
+    if (f.actions.length && !f.actions.includes(r.act)) return false;
+    if (f.onlyProfitable && r.prof !== true) return false;
     if (f.minMcap && !(r.mcap !== null && r.mcap >= f.minMcap)) return false;
     if (f.minAdv && !(r.adv !== null && r.adv >= f.minAdv)) return false;
     if (f.maxRisk < 100 && !(r.rk <= f.maxRisk)) return false;
@@ -145,4 +165,15 @@ export function applyRadar(
     return a.rank - b.rank;
   });
   return out;
+}
+
+/** Artifacts published before the action layer existed have no `act`: fall back to the full ranking. */
+export function hasActions(rows: RadarRow[]): boolean {
+  return rows.some((r) => typeof r.act === "string");
+}
+
+/** Plain-language verdict for an asset you already own (buffer rule of the engine). */
+export function holdLabel(r: { hold: boolean }): { text: string; cls: string } {
+  if (r.hold) return { text: "Mantener", cls: "text-pos" };
+  return { text: "Revisar venta", cls: "text-neg" };
 }

@@ -18,6 +18,14 @@ STATES = {
 }
 STATE_ORDER = ["speculative", "extended", "weakening", "breakout", "strong", "improving"]
 
+ACTIONS = {
+    "candidate": "Candidata",
+    "wait": "Esperar retroceso",
+    "watch": "Vigilar",
+    "avoid": "Evitar",
+    "none": "Sin señal",
+}
+
 
 def pct_rank(x: pd.Series) -> pd.Series:
     """Percentile in (0, 100): (rank - 0.5) / n * 100, ties averaged, NaN kept."""
@@ -76,6 +84,7 @@ def score_universe(ind: pd.DataFrame, mom_cfg: dict, prev_ind: pd.DataFrame | No
     risk = composite(comp, sc["risk"], minw)
     out["trend_quality"], out["acceleration"], out["risk"] = tq, acc, risk
     out["mom_pct_change"] = comp["mom_pct_change"]
+    out["r1m_pct"] = pct_rank(ind["r1m"])  # short-term spike check (Extended)
 
     ow = weights_override or mom_cfg["overall"]
     out["overall"] = overall(out, ow)
@@ -136,9 +145,12 @@ def classify(ind: pd.Series, sc: pd.Series, cfg: dict) -> dict:
     ex = c["extended"]
     t_ext = [cond("Momentum Score", mom, ">=", ex["min_momentum"]),
              cond("ATRs sobre la SMA50", ind["atr_above_sma50"], ">", ex["atr_above_sma50"]),
-             cond("Distancia a SMA200 menos su percentil 95 histórico", f(ind["dist200"]) - f(ind["dist200_own_q"]), ">", 0.0)]
+             cond("Distancia a SMA200 menos su percentil 95 histórico", f(ind["dist200"]) - f(ind["dist200_own_q"]), ">", 0.0),
+             cond("Subida de 1 mes: percentil en el universo", sc.get("r1m_pct", np.nan), ">=", ex["spike_r1m_pct"]),
+             cond("Subida de 1 mes", ind.get("r1m", np.nan), ">=", ex["spike_r1m_min"])]
     trace["extended"] = t_ext
-    extended = t_ext[0]["pass"] and (t_ext[1]["pass"] or t_ext[2]["pass"])
+    spike = t_ext[3]["pass"] and t_ext[4]["pass"]
+    extended = t_ext[0]["pass"] and (t_ext[1]["pass"] or t_ext[2]["pass"] or spike)
 
     wk = c["weakening"]
     t_wk = [cond("Momentum Score", mom, ">=", wk["min_momentum"]),
@@ -173,3 +185,98 @@ def classify(ind: pd.Series, sc: pd.Series, cfg: dict) -> dict:
     tags = [k for k in STATE_ORDER if flags[k]]
     state = tags[0] if tags else "neutral"
     return {"state": state, "tags": tags, "trace": trace}
+
+
+# ------------------------------------------------------------------ action
+
+def _fmt_num(v: float, digits: int = 2) -> str:
+    return f"{v:,.{digits}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def _fmt_pct(v: float, digits: int = 0) -> str:
+    return f"{v * 100:+.{digits}f}%".replace(".", ",")
+
+
+def decide(ind: pd.Series, sc: pd.Series, state: dict, cfg: dict, cls: str = "stock") -> dict:
+    """What to do with the asset now (pure rules over published metrics).
+
+    candidate  top quintile, orderly uptrend (P > SMA50 > SMA200), no overheating, not loss-making
+    wait       strong but overheated (Extended): buying now means buying a spike; wait for a pullback
+    watch      interesting but not yet a buy (breakout unconfirmed, improving, loss-making, rank 60-80)
+    avoid      speculative, weakening, momentum below the median or price below its SMA200
+    none       nothing relevant
+
+    `hold` answers the question for an asset you already own (buffer rule): keep it while it is not
+    "avoid" and stays in the top half (overall >= hold.min_overall). Buying in the top 20% but only
+    selling below the top 50% cuts turnover (and taxes) without changing the strategy's intent.
+    """
+    a = cfg["action"]
+    f = lambda v: float(v) if v is not None and np.isfinite(v) else np.nan  # noqa: E731
+    ov, mom = f(sc["overall"]), f(sc["momentum"])
+    tags = set(state["tags"])
+    px_s50, px_s200 = f(ind.get("px_vs_sma50")), f(ind.get("px_vs_sma200"))
+    s50, s200 = f(ind.get("sma50")), f(ind.get("sma200"))
+    profitable = ind.get("profitable")
+    profitable = None if profitable is None or (isinstance(profitable, float) and not np.isfinite(profitable)) \
+        else bool(profitable)
+    uptrend = px_s50 > 0 and s50 > s200
+    why: list[str] = []
+    entry = None
+
+    avoid = []
+    if "speculative" in tags:
+        avoid.append(f"Muy volátil: {_fmt_pct(f(ind['vol_63'])).lstrip('+')} anualizada en 63 sesiones")
+    if "weakening" in tags:
+        avoid.append("Era líder y está perdiendo impulso")
+    if np.isfinite(mom) and mom < a["avoid"]["max_momentum"]:
+        avoid.append(f"Momentum por debajo de la mitad del universo (p{int(round(mom))})")
+    if np.isfinite(px_s200) and px_s200 < 0:
+        avoid.append("Cotiza por debajo de su media de 200 sesiones (tendencia de fondo bajista)")
+
+    if avoid:
+        action, why = "avoid", avoid
+    elif "extended" in tags and np.isfinite(ov) and ov >= a["watch"]["min_overall"]:
+        action = "wait"
+        tr = {c["text"]: c for c in state["trace"].get("extended", [])}
+        atr = tr.get("ATRs sobre la SMA50")
+        if atr and atr["pass"]:
+            why.append(f"Precio a {_fmt_num(atr['value'], 1)} ATR por encima de su media de 50 sesiones "
+                       f"(umbral {_fmt_num(atr['threshold'], 0)})")
+        d200 = tr.get("Distancia a SMA200 menos su percentil 95 histórico")
+        if d200 and d200["pass"]:
+            why.append(f"Distancia a su media de 200 sesiones ({_fmt_pct(f(ind['dist200']))}) en máximos de su propia historia")
+        r1 = tr.get("Subida de 1 mes")
+        r1p = tr.get("Subida de 1 mes: percentil en el universo")
+        if r1 and r1p and r1["pass"] and r1p["pass"]:
+            why.append(f"Ha subido {_fmt_pct(f(ind['r1m']))} en un mes (5 % superior del universo)")
+        if np.isfinite(s50):
+            entry = ("Mejor punto de entrada: cuando el precio se acerque a su media de 50 sesiones "
+                     f"(hoy {_fmt_num(s50)} $) y la subida del último mes se modere.")
+    elif (np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and mom >= a["candidate"]["min_momentum"]
+          and uptrend and profitable is not False):
+        action = "candidate"
+        why.append(f"En el {max(1, int(round(100 - ov)))} % superior del universo, con tendencia ordenada "
+                   "(precio > media 50 > media 200) y sin sobreextensión")
+        if "breakout" in tags:
+            why.append("Además acaba de romper máximos con volumen")
+        if profitable is None and cls == "stock":
+            why.append("Beneficios de la empresa no disponibles: revísalos tú antes de comprar")
+    else:
+        watch = []
+        if np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and profitable is False:
+            watch.append("Puntuación alta, pero la empresa perdió dinero en su último ejercicio")
+        if "breakout" in tags:
+            watch.append("Ruptura reciente con volumen: falta confirmación")
+        if "improving" in tags:
+            watch.append("Su impulso mejora, pero aún no está entre las líderes")
+        if np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and not uptrend:
+            watch.append("Puntuación alta, pero sin estructura alcista completa (precio > media 50 > media 200)")
+        if (np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and np.isfinite(mom)
+                and mom < a["candidate"]["min_momentum"]):
+            watch.append(f"Puntuación alta por calidad y bajo riesgo, pero su impulso aún no es de líder (p{int(round(mom))})")
+        if not watch and np.isfinite(ov) and ov >= a["watch"]["min_overall"]:
+            watch.append(f"Buena puntuación ({int(round(ov))}/100), aún fuera del 20 % superior")
+        action, why = ("watch", watch) if watch else ("none", ["Sin una señal de momentum clara"])
+
+    hold = action != "avoid" and np.isfinite(ov) and ov >= a["hold"]["min_overall"]
+    return {"action": action, "label": ACTIONS[action], "why": why, "entry": entry, "hold": bool(hold)}

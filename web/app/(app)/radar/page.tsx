@@ -24,7 +24,7 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
   }
   return (
     <>
-      <PageHeader title="Radar" sub="Acciones con más fuerza de tendencia ahora mismo." />
+      <PageHeader title="Radar" sub="Qué acciones tienen más fuerza de tendencia y si conviene comprarlas ahora, esperar o evitarlas." />
       <RadarView
         rows={radar.rows}
         bench={radar.bench}

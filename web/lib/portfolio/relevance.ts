@@ -10,6 +10,13 @@ export function portfolioRelevance(row: RadarRow, res: PortfolioResult | null, i
   const pos = res.positions.find((p) => p.instrument.market_ticker === row.t && p.qty > 0);
   if (pos) {
     out.push(`Ya en cartera: ${(100 * (pos.weight ?? 0)).toFixed(1).replace(".", ",")} % del valor total (${pos.instrument.name}).`);
+    if (typeof row.hold === "boolean") {
+      out.push(
+        row.hold
+          ? "Veredicto para tu posición: mantener (sigue en la mitad más fuerte del universo y sin señal de evitar)."
+          : "Veredicto para tu posición: revisar la venta (ha salido de la mitad más fuerte del universo o tiene señal de evitar).",
+      );
+    }
   } else {
     out.push("No está en tu cartera.");
   }

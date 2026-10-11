@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { IconOverview, IconPortfolio, IconRadar, IconSettings } from "@/components/ui/icons";
+import { IconOverview, IconPlan, IconPortfolio, IconRadar, IconSettings } from "@/components/ui/icons";
 import { cx } from "@/components/ui/primitives";
 
 export const NAV = [
   { href: "/", label: "Inicio", icon: IconOverview },
+  { href: "/plan", label: "Plan", icon: IconPlan },
   { href: "/radar", label: "Radar", icon: IconRadar },
   { href: "/portfolio", label: "Cartera", icon: IconPortfolio },
   { href: "/settings", label: "Ajustes", icon: IconSettings },
@@ -43,7 +44,7 @@ export function TopNav() {
 export function TabBar() {
   const path = usePathname();
   return (
-    <nav aria-label="Principal" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+    <nav aria-label="Principal" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
       {NAV.map(({ href, label, icon: Icon }) => {
         const on = active(path, href);
         return (

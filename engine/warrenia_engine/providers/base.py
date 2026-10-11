@@ -16,7 +16,8 @@ BAR_COLUMNS = ["date", "ticker", "open", "high", "low", "close", "volume", "vwap
 TICKER_COLUMNS = ["ticker", "name", "type", "exchange", "active", "cik", "currency"]
 SPLIT_COLUMNS = ["ticker", "ex_date", "split_from", "split_to"]
 DIVIDEND_COLUMNS = ["ticker", "ex_date", "cash_amount", "currency"]
-FUNDAMENTAL_COLUMNS = ["ticker", "cik", "sic", "sic_description", "shares", "shares_asof", "source"]
+FUNDAMENTAL_COLUMNS = ["ticker", "cik", "sic", "sic_description", "shares", "shares_asof", "net_income",
+                       "net_income_end", "source"]
 
 
 def empty(columns: list[str]) -> pd.DataFrame:
@@ -48,7 +49,7 @@ class FundamentalsProvider(Protocol):
     name: str
 
     def fundamentals(self, tickers: pd.DataFrame, previous: pd.DataFrame | None = None) -> pd.DataFrame:
-        """Sector code and shares outstanding per ticker (FUNDAMENTAL_COLUMNS)."""
+        """Sector code, shares outstanding and last annual net income per ticker (FUNDAMENTAL_COLUMNS)."""
 
 
 def normalise_bars(df: pd.DataFrame) -> pd.DataFrame:

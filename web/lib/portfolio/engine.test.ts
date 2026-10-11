@@ -170,3 +170,65 @@ describe("targets and contribution plan", () => {
     expect(plan.momentum).toBeCloseTo(60);
   });
 });
+
+describe("Spanish tax view of sales", () => {
+  it("classifies ETF gains as ganancia patrimonial and ETC gains as capital mobiliario", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 3000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 10, price: 100 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "gold", quantity: 10, price: 100 }),
+      tx({ type: "sell", trade_date: "2026-06-01", instrument_id: "etf", quantity: 10, price: 110 }),
+      tx({ type: "sell", trade_date: "2026-06-01", instrument_id: "gold", quantity: 10, price: 120 }),
+    ];
+    const r = computePortfolio([ETF, GOLD], txs, { ...flat("etf", 110), ...flat("gold", 120) }, {}, "2026-06-30");
+    expect(r.taxByYear).toEqual([{ year: "2026", gp: 100, rcm: 200, deferred: 0 }]);
+    expect(r.sales.every((s) => s.washSale === null)).toBe(true);
+  });
+
+  it("defers a loss when the same EU-listed ETF is bought back within 2 months", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 3000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 10, price: 100 }),
+      tx({ type: "sell", trade_date: "2026-03-10", instrument_id: "etf", quantity: 10, price: 80 }),
+      tx({ type: "buy", trade_date: "2026-04-20", instrument_id: "etf", quantity: 5, price: 85 }),
+    ];
+    const r = computePortfolio([ETF], txs, flat("etf", 85), {}, "2026-06-30");
+    const s = r.sales[0];
+    expect(s.gainEur).toBeCloseTo(-200);
+    expect(s.washSale).toEqual({ windowMonths: 2, repurchasedQty: 5, deferredEur: 100 });
+    expect(r.taxByYear[0]).toEqual({ year: "2026", gp: -100, rcm: 0, deferred: 100 });
+    expect(r.warnings.join(" ")).toMatch(/no deja computar esa pérdida/);
+  });
+
+  it("buying back after the window keeps the loss computable", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 3000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 10, price: 100 }),
+      tx({ type: "sell", trade_date: "2026-03-10", instrument_id: "etf", quantity: 10, price: 80 }),
+      tx({ type: "buy", trade_date: "2026-05-11", instrument_id: "etf", quantity: 5, price: 85 }),
+    ];
+    const r = computePortfolio([ETF], txs, flat("etf", 85), {}, "2026-06-30");
+    expect(r.sales[0].washSale).toBeNull();
+  });
+
+  it("US-only shares use a 1-year window and earlier lots still held count too", () => {
+    const usd = { USD: [["2026-01-01", 1]] as [string, number][] };
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 5000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "nvda", quantity: 10, price: 100, currency: "USD" }),
+      tx({ type: "buy", trade_date: "2026-05-02", instrument_id: "nvda", quantity: 10, price: 90, currency: "USD" }),
+      // FIFO sells the January lot at a loss; the May lot (inside 1 year) is still held.
+      tx({ type: "sell", trade_date: "2026-09-01", instrument_id: "nvda", quantity: 10, price: 70, currency: "USD" }),
+    ];
+    const r = computePortfolio([NVDA], txs, flat("nvda", 70, "2026-01-01", 400, "USD"), usd, "2026-10-01");
+    expect(r.sales[0].washSale?.windowMonths).toBe(12);
+    expect(r.sales[0].washSale?.deferredEur).toBeCloseTo(300);
+  });
+
+  it("addMonths clamps month ends", async () => {
+    const { addMonths } = await import("./engine");
+    expect(addMonths("2026-12-31", 2)).toBe("2027-02-28");
+    expect(addMonths("2026-03-31", -1)).toBe("2026-02-28");
+    expect(addMonths("2026-01-15", -12)).toBe("2025-01-15");
+  });
+});

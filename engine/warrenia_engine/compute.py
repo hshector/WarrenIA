@@ -15,7 +15,7 @@ import pandas as pd
 from .config import Config
 from .indicators import Precomputed, indicators_at
 from .panels import Panels
-from .scoring import classify, overall, pct_rank, score_universe
+from .scoring import classify, decide, overall, pct_rank, score_universe
 from .sectors import sic_to_sector
 from .universe import classify_assets, eligibility
 
@@ -33,6 +33,7 @@ class Context:
     cls: pd.Series                 # ticker -> stock | etf | None
     shares: pd.Series              # ticker -> shares outstanding (may be NaN)
     sector: pd.Series              # ticker -> sector name (stocks; may be None)
+    net_income: pd.Series          # ticker -> last annual net income, USD (NaN = unknown or too old)
     bench_col: int
     cols: dict[str, np.ndarray] = field(default_factory=dict)
     _cache: dict[int, pd.DataFrame] = field(default_factory=dict)
@@ -55,15 +56,27 @@ def build_context(cfg: Config, P: Panels, tickers: pd.DataFrame, fundamentals: p
         f = fundamentals.drop_duplicates("ticker", keep="last").set_index("ticker")
         shares = pd.to_numeric(f["shares"], errors="coerce")
         sector = f["sic"].map(sic_to_sector)
+        net_income = _recent_net_income(f, P.dates[-1], cfg.momentum["action"]["fundamentals_max_age_days"])
     else:
         shares = pd.Series(dtype=float)
         sector = pd.Series(dtype=object)
+        net_income = pd.Series(dtype=float)
     pre = Precomputed(P, cfg.windows)
     bench_col = P.col(cfg.primary_benchmark)
-    ctx = Context(cfg, P, pre, ref, cls, shares, sector, bench_col)
+    ctx = Context(cfg, P, pre, ref, cls, shares, sector, net_income, bench_col)
     for c in CLASSES:
         ctx.cols[c] = np.array([i for i, tk in enumerate(P.tickers) if cls.get(tk) == c], dtype=int)
     return ctx
+
+
+def _recent_net_income(f: pd.DataFrame, asof: pd.Timestamp, max_age_days: int) -> pd.Series:
+    """Annual net income if its fiscal year ended within `max_age_days` of `asof` (else NaN)."""
+    if "net_income" not in f:  # fundamentals written before this field existed
+        return pd.Series(np.nan, index=f.index)
+    ni = pd.to_numeric(f["net_income"], errors="coerce")
+    end = pd.to_datetime(f.get("net_income_end"), errors="coerce")
+    stale = end.isna() | ((asof - end).dt.days > max_age_days)
+    return ni.where(~stale)
 
 
 @dataclass
@@ -73,6 +86,7 @@ class ClassResult:
     elig: pd.DataFrame         # eligibility table (eligible, reasons)
     scores: pd.DataFrame       # scores of eligible assets (index = ticker)
     states: dict[str, dict]
+    actions: dict[str, dict] = field(default_factory=dict)
 
 
 def evaluate(ctx: Context, t: int, with_states: bool = True, weights_override: dict | None = None) -> dict[str, ClassResult]:
@@ -84,8 +98,16 @@ def evaluate(ctx: Context, t: int, with_states: bool = True, weights_override: d
     names = ctx.ref["name"] if "name" in ctx.ref else pd.Series(dtype=object)
     for c in CLASSES:
         tks = ctx.P.tickers[ctx.cols[c]]
-        ind = ind_all.loc[ind_all.index.intersection(tks)]
+        ind = ind_all.loc[ind_all.index.intersection(tks)].copy()
         mcap = ctx.shares.reindex(ind.index) * ind["price"]
+        if c == "stock":
+            # Valuation context (informative; never part of the score): P/E on the last annual net
+            # income; `profitable` is 1/0, NaN when unknown (IFRS filers, missing or stale data).
+            ni = ctx.net_income.reindex(ind.index)
+            ind["mcap"] = mcap
+            ind["net_income"] = ni
+            ind["pe"] = (mcap / ni).where(ni > 0)
+            ind["profitable"] = np.where(ni.notna(), (ni > 0).astype(float), np.nan)
         el = eligibility(ind, ctx.cls, names, mcap, cfg.universe)
         E = el.index[el["eligible"]] if len(el) else pd.Index([])
         sc = score_universe(ind.loc[E], cfg.momentum,
@@ -100,11 +122,12 @@ def evaluate(ctx: Context, t: int, with_states: bool = True, weights_override: d
             sc = score_universe(ind.loc[el.index[el["eligible"]]], cfg.momentum,
                                 prev_all.loc[el.index[el["eligible"]]] if prev_all is not None else None,
                                 weights_override=weights_override)
-        states = {}
+        states, actions = {}, {}
         if with_states:
             for tk in sc.index:
                 states[tk] = classify(ind.loc[tk], sc.loc[tk], cfg.momentum)
-        out[c] = ClassResult(c, ind, el, sc, states)
+                actions[tk] = decide(ind.loc[tk], sc.loc[tk], states[tk], cfg.momentum, c)
+        out[c] = ClassResult(c, ind, el, sc, states, actions)
     return out
 
 

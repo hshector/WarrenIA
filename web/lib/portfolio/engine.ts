@@ -17,6 +17,12 @@
 // - MWR: XIRR on external flows + final value.
 // - Valuation prices: last available price <= date (forward-filled); if an
 //   instrument has no price yet, its last trade price is used and flagged.
+// - Spanish IRPF view of sales (informative, not tax advice): ETFs, funds and shares
+//   produce capital gains ("ganancia patrimonial"); ETCs (debt securities backed by a
+//   commodity) produce "rendimientos del capital mobiliario" (DGT V0267-25). A loss is
+//   not computable while homogeneous securities bought within 2 months before/after
+//   the sale are still held (art. 33.5.f / 25.2 LIRPF); for shares listed outside EU
+//   regulated markets (e.g. US-only) the window is commonly 1 year (art. 33.5.g).
 
 import { xirr } from "./xirr";
 import type { Bucket, Instrument, Settings, Transaction } from "./types";
@@ -58,6 +64,21 @@ export interface Position {
   weight: number | null;
 }
 
+export type TaxCategory = "gp" | "rcm";
+
+export interface SaleRecord {
+  date: string;
+  instrumentId: string;
+  name: string;
+  qty: number;
+  proceedsEur: number;
+  costEur: number;
+  gainEur: number;
+  category: TaxCategory;
+  /** Loss not computable this year because homogeneous securities were (re)bought inside the window. */
+  washSale: { windowMonths: number; repurchasedQty: number; deferredEur: number } | null;
+}
+
 export interface DailyPoint {
   date: string;
   value: number;
@@ -88,6 +109,8 @@ export interface PortfolioResult {
   mwr: { xirr: number | null; note: string | null };
   allocation: { bucket: Bucket | "cash"; value: number; weight: number }[];
   byCurrency: { currency: string; value: number; weight: number }[];
+  sales: SaleRecord[];
+  taxByYear: { year: string; gp: number; rcm: number; deferred: number }[];
   warnings: string[];
 }
 
@@ -154,12 +177,22 @@ interface Ledger {
   flows: { date: string; amount: number; inferred: boolean }[]; // + contribution / - withdrawal (EUR)
   totals: { interest: number; fees: number; taxes: number };
   lastTradePrice: Map<string, PricePoint & { currency: string }>;
+  sales: RawSale[];
+}
+
+interface RawSale {
+  date: string;
+  iid: string;
+  qty: number;
+  proceeds: number;
+  cost: number;
+  remaining: { date: string; qty: number }[]; // lots still held right after the sale
 }
 
 function newLedger(): Ledger {
   return {
     lots: new Map(), realized: new Map(), dividends: new Map(), fees: new Map(), cash: 0, flows: [],
-    totals: { interest: 0, fees: 0, taxes: 0 }, lastTradePrice: new Map(),
+    totals: { interest: 0, fees: 0, taxes: 0 }, lastTradePrice: new Map(), sales: [],
   };
 }
 
@@ -228,6 +261,7 @@ export function applyTx(L: Ledger, t: Transaction): void {
       }
       L.lots.set(iid, lots);
       add(L.realized, iid, proceeds - costSold);
+      L.sales.push({ date: t.trade_date, iid, qty: t.quantity ?? 0, proceeds, cost: costSold, remaining: lots.map((l) => ({ date: l.date, qty: l.qty })) });
       L.cash += proceeds;
       add(L.fees, iid, (t.fees ?? 0) * fx);
       L.totals.fees += (t.fees ?? 0) * fx;
@@ -286,7 +320,7 @@ export function computePortfolio(
     asOf: null, positions: [], cashEur: 0,
     totals: { value: 0, netContributions: 0, deposits: 0, withdrawals: 0, inferredDeposits: 0, realized: 0, unrealized: 0, dividends: 0, interest: 0, fees: 0, taxes: 0, gain: 0 },
     series: [], twr: { cumulative: null, annualized: null, days: 0 }, mwr: { xirr: null, note: null },
-    allocation: [], byCurrency: [], warnings,
+    allocation: [], byCurrency: [], sales: [], taxByYear: [], warnings,
   };
   if (!txs.length) return empty;
 
@@ -362,6 +396,26 @@ export function computePortfolio(
     warnings.push(`Se han inferido aportaciones por ${inferred.toFixed(2).replace(".", ",")} € porque las compras superaban el efectivo registrado. Registra tus aportaciones para un cálculo exacto.`);
   }
 
+  // ---- Spanish tax view of the sales
+  const sales = taxView(L.sales, txs, byId);
+  for (const sr of sales) {
+    if (!sr.washSale) continue;
+    warnings.push(
+      `Venta de ${sr.name} el ${sr.date} con pérdida de ${(-sr.gainEur).toFixed(2).replace(".", ",")} €: compraste títulos iguales en los ${sr.washSale.windowMonths} meses anteriores o posteriores y los conservas. ` +
+        `Hacienda no deja computar esa pérdida (≈ ${sr.washSale.deferredEur.toFixed(2).replace(".", ",")} €) hasta que vendas esos títulos.`,
+    );
+  }
+  const years = new Map<string, { year: string; gp: number; rcm: number; deferred: number }>();
+  for (const sr of sales) {
+    const y = sr.date.slice(0, 4);
+    const row = years.get(y) ?? { year: y, gp: 0, rcm: 0, deferred: 0 };
+    const deferred = sr.washSale?.deferredEur ?? 0;
+    row[sr.category] += sr.gainEur + deferred; // deferred losses are not computable this year
+    row.deferred += deferred;
+    years.set(y, row);
+  }
+  const taxByYear = [...years.values()].sort((a, b) => a.year.localeCompare(b.year));
+
   // ---- Returns
   const days = series.length ? (Date.parse(asOf) - Date.parse(series[0].date)) / DAY : 0;
   const cum = twrDaily.reduce((acc, r) => acc * (1 + r), 1) - 1;
@@ -404,8 +458,54 @@ export function computePortfolio(
     mwr: { xirr: x, note },
     allocation: [...alloc.entries()].map(([bucket, v]) => ({ bucket, value: v, weight: w(v) })).sort((a, b) => b.value - a.value),
     byCurrency: [...cur.entries()].map(([currency, v]) => ({ currency, value: v, weight: w(v) })).sort((a, b) => b.value - a.value),
+    sales,
+    taxByYear,
     warnings,
   };
+}
+
+// ------------------------------------------------------------ Spanish tax view
+
+export function addMonths(d: string, n: number): string {
+  const [y, m, day] = d.split("-").map(Number);
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = total % 12;
+  const last = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate(); // clamp 31 -> 30/28...
+  return `${ny}-${String(nm + 1).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`;
+}
+
+export function taxCategory(ins: Instrument): TaxCategory {
+  return ins.kind === "etc" ? "rcm" : "gp";
+}
+
+/** Anti-loss window in months: 2 for securities on EU regulated markets, 12 for US-only shares. */
+export function washWindowMonths(ins: Instrument): number {
+  return ins.kind === "stock" && (ins.price_source === "us_market" || ins.currency === "USD") ? 12 : 2;
+}
+
+function taxView(raw: RawSale[], txs: Transaction[], byId: Map<string, Instrument>): SaleRecord[] {
+  return raw.map((s) => {
+    const ins = byId.get(s.iid)!;
+    const gain = s.proceeds - s.cost;
+    const months = washWindowMonths(ins);
+    let washSale: SaleRecord["washSale"] = null;
+    if (gain < -0.005 && s.qty > EPS) {
+      const from = addMonths(s.date, -months);
+      const to = addMonths(s.date, months);
+      const before = s.remaining.filter((l) => l.date >= from && l.date <= s.date).reduce((t, l) => t + l.qty, 0);
+      // Buys on the sale day are applied after the sale (same-day ordering), so they count as "after".
+      const after = txs
+        .filter((t) => t.type === "buy" && t.instrument_id === s.iid && t.trade_date >= s.date && t.trade_date <= to)
+        .reduce((t, b) => t + (b.quantity ?? 0), 0);
+      const rq = before + after;
+      if (rq > EPS) washSale = { windowMonths: months, repurchasedQty: rq, deferredEur: -gain * Math.min(1, rq / s.qty) };
+    }
+    return {
+      date: s.date, instrumentId: s.iid, name: ins.name, qty: s.qty, proceedsEur: s.proceeds, costEur: s.cost, gainEur: gain,
+      category: taxCategory(ins), washSale,
+    };
+  });
 }
 
 // ------------------------------------------------------------ targets & plan

@@ -7,7 +7,7 @@ import pandas as pd
 from warrenia_engine.http import HttpClient
 from warrenia_engine.portfolio_prices import fetch_ecb
 from warrenia_engine.providers.massive import MassiveProvider
-from warrenia_engine.providers.sec import SecFundamentals, _recent_frames
+from warrenia_engine.providers.sec import SecFundamentals, _annual_frames, _recent_frames
 
 from .test_infra import FakeResp
 
@@ -116,3 +116,28 @@ def test_ecb_csv_parsing():
     r = Router([("data-api.ecb.europa.eu", resp)])
     df = fetch_ecb(["USD"], date(2026, 10, 1), http=HttpClient("e", session=r, sleep=lambda _: None))
     assert list(df["rate"]) == [1.0912, 1.0950]
+
+
+def test_sec_net_income_prefers_newest_fiscal_year_and_net_income_tag():
+    assert _annual_frames(date(2026, 10, 10)) == ["CY2026", "CY2025", "CY2024"]
+    routes = [
+        ("company_tickers_exchange", FakeResp(200, {"fields": ["cik", "name", "ticker", "exchange"],
+                                                     "data": [[1, "A", "AAA", "NYSE"], [2, "B", "BBB", "NYSE"],
+                                                              [3, "C", "CCC", "NYSE"]]})),
+        ("NetIncomeLoss/USD/CY2025.", FakeResp(200, {"data": [{"cik": 1, "end": "2025-12-31", "val": 5e8},
+                                                               {"cik": 2, "end": "2025-09-30", "val": -2e8}]})),
+        ("NetIncomeLoss/USD/CY2024.", FakeResp(200, {"data": [{"cik": 1, "end": "2024-12-31", "val": 9e8}]})),
+        ("ProfitLoss/USD/CY2025.", FakeResp(200, {"data": [{"cik": 1, "end": "2025-12-31", "val": 7e8},
+                                                            {"cik": 3, "end": "2025-12-31", "val": 1e8}]})),
+        ("ProfitLoss/USD/CY2024.", FakeResp(500, {"error": "boom"})),  # informative: never fatal
+        ("CIK", FakeResp(200, {"sic": "3571", "sicDescription": "x"})),
+    ]
+    r = Router(routes)
+    sec = SecFundamentals("WarrenIA test@example.com",
+                          http=HttpClient("s", session=r, sleep=lambda _: None, max_retries=0),
+                          today=date(2026, 10, 10))
+    tickers = pd.DataFrame([{"ticker": t, "type": "CS", "active": True} for t in ("AAA", "BBB", "CCC")])
+    f = sec.fundamentals(tickers).set_index("ticker")
+    assert f.loc["AAA", "net_income"] == 5e8 and f.loc["AAA", "net_income_end"] == "2025-12-31"
+    assert f.loc["BBB", "net_income"] == -2e8
+    assert f.loc["CCC", "net_income"] == 1e8  # ProfitLoss only when NetIncomeLoss is absent

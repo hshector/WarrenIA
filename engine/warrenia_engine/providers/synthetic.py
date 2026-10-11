@@ -41,6 +41,7 @@ class SyntheticProvider:
         self.end = end
         self.sessions = previous_sessions(end, sessions)
         self.rng = np.random.default_rng(seed)
+        self.rng_fund = np.random.default_rng(seed + 1)  # separate stream: price paths stay unchanged
         self._build(n_stocks, n_etfs)
 
     # ------------------------------------------------------------------ build
@@ -128,9 +129,18 @@ class SyntheticProvider:
             if i == 11:  # unknown shares outstanding (e.g. foreign filer)
                 shares = None
             tickers.append(self._ticker(tk, f"Demo {sname} {i + 1:03d}", kind, "XNAS" if i % 2 else "XNYS"))
+            # Last fiscal-year net income: P/E ~ lognormal around 22; ~12% of companies lose money.
+            rf = self.rng_fund
+            ni = mcap / float(np.exp(rf.normal(np.log(22), 0.6)))
+            if rf.random() < 0.12:
+                ni = -mcap * float(rf.uniform(0.01, 0.08))
+            if i == 11:
+                ni = None  # IFRS / foreign filer: unknown
             fundamentals.append({"ticker": tk, "cik": f"{900000 + i:010d}", "sic": SECTORS[sname][1],
                                  "sic_description": f"Demo SIC {SECTORS[sname][1]}", "shares": shares,
-                                 "shares_asof": dates[-60].date(), "source": "synthetic"})
+                                 "shares_asof": dates[-60].date(), "net_income": ni,
+                                 "net_income_end": dates[-200].date().isoformat() if ni is not None else None,
+                                 "source": "synthetic"})
             if rng.random() < 0.4:  # quarterly dividends
                 for t in range(max(start, 30), stop or T, 63):
                     dividends.append({"ticker": tk, "ex_date": dates[t].date(),
