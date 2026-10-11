@@ -60,7 +60,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">{g.group}</p>
               <div className="card divide-y divide-line overflow-hidden">
                 {g.items.map((it) => (
-                  <Link key={it.href} href={it.href} className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2">
+                  <Link key={it.href} href={it.href} className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2 active:bg-surface-3">
                     <span>
                       <span className="block text-[15.5px]">{it.label}</span>
                       <span className="block text-[13px] text-ink-3">{it.sub}</span>
@@ -180,7 +180,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
       <Panel title={`Activos excluidos (${int(excluded.length)})`} meta="Cada exclusión mantiene su motivo" className="xl:col-span-2" pad={false}>
         <form className="px-4 pb-3 md:px-5">
           <input type="hidden" name="tab" value="data" />
-          <input name="q" defaultValue={q} placeholder="Buscar ticker o nombre" className="h-8 w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none" />
+          <input name="q" defaultValue={q} placeholder="Buscar ticker o nombre" className="h-8 w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none pointer-coarse:text-[16px]" />
         </form>
         <div className="max-h-[420px] overflow-auto">
           <table className="w-full min-w-[640px] text-[12.5px]">

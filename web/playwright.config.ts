@@ -16,8 +16,8 @@ export default defineConfig({
     launchOptions: process.env.CI ? {} : { executablePath: process.env.PW_CHROMIUM || "/opt/pw-browsers/chromium" },
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /responsive\.spec\.ts/ },
-    { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /responsive\.spec\.ts/ },
+    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /(responsive|mobile-native)\.spec\.ts/ },
+    { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /(responsive|mobile-native)\.spec\.ts/ },
   ],
   webServer: {
     command: `node node_modules/next/dist/bin/next start -p 3100`,

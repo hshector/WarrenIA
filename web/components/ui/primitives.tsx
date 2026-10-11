@@ -19,7 +19,7 @@ export function Button({ variant = "secondary", size = "md", className, ...p }: 
     <button
       {...p}
       className={cx(
-        "inline-flex items-center justify-center gap-1.5 rounded-full transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap",
+        "tap inline-flex items-center justify-center gap-1.5 rounded-full disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap",
         size === "sm" ? "h-9 px-4 text-[14px]" : "h-11 px-5 text-[15px]",
         BTN[variant],
         className,
@@ -32,7 +32,7 @@ export function ButtonLink({ href, variant = "secondary", size = "md", className
   return (
     <Link
       href={href}
-      className={cx("inline-flex items-center gap-1.5 rounded-full transition-colors whitespace-nowrap", size === "sm" ? "h-9 px-4 text-[14px]" : "h-11 px-5 text-[15px]", BTN[variant], className)}
+      className={cx("tap inline-flex items-center gap-1.5 rounded-full whitespace-nowrap", size === "sm" ? "h-9 px-4 text-[14px]" : "h-11 px-5 text-[15px]", BTN[variant], className)}
     >
       {children}
     </Link>
@@ -82,13 +82,14 @@ export function Badge({ tone = "neutral", children, className, title }: { tone?:
   );
 }
 
+// Inputs and selects are 16px on touch screens: below that iOS Safari zooms the page on focus.
 export function Input({ className, ...p }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...p}
       className={cx(
         className?.match(/(^|\s)w-/) ? "" : "w-full",
-        "h-11 rounded-[12px] bg-surface-2 px-3.5 text-[15px] text-ink placeholder:text-ink-3 outline-none transition-colors focus:bg-surface focus:ring-2 focus:ring-accent/40",
+        "h-11 rounded-[12px] bg-surface-2 px-3.5 text-[15px] pointer-coarse:text-[16px] text-ink placeholder:text-ink-3 outline-none transition-colors focus:bg-surface focus:ring-2 focus:ring-accent/40",
         className,
       )}
     />
@@ -100,7 +101,7 @@ export function Select({ className, children, ...p }: SelectHTMLAttributes<HTMLS
     <select
       {...p}
       className={cx(
-        "h-11 appearance-none rounded-[12px] bg-surface-2 bg-[length:14px] bg-[right_12px_center] bg-no-repeat pl-3.5 pr-9 text-[15px] text-ink outline-none focus:ring-2 focus:ring-accent/40",
+        "h-11 appearance-none rounded-[12px] bg-surface-2 bg-[length:14px] bg-[right_12px_center] bg-no-repeat pl-3.5 pr-9 text-[15px] pointer-coarse:text-[16px] text-ink outline-none focus:ring-2 focus:ring-accent/40",
         "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6966' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")]",
         className,
       )}
@@ -157,7 +158,7 @@ export function Segmented<T extends string>({
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={cx(
-            "flex-1 whitespace-nowrap rounded-full px-3.5 font-medium transition-all",
+            "tap flex-1 whitespace-nowrap rounded-full px-3.5 font-medium",
             size === "sm" ? "h-7 text-[13px]" : "h-8 text-[14px]",
             value === o.value ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.1)]" : "text-ink-2 hover:text-ink",
           )}

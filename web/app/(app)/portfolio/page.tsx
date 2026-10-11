@@ -130,7 +130,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
             return (
               <li key={p.instrument.id}>
                 {mr ? (
-                  <Link href={`/research/${mr.t}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2">
+                  <Link href={`/research/${mr.t}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2 active:bg-surface-3">
                     {inner}
                   </Link>
                 ) : (

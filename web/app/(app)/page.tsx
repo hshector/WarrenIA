@@ -50,10 +50,10 @@ export default async function Home() {
               {money(res.totals.gain)} ({pct(gainPct)}) desde que empezaste
             </p>
             <div className="mt-6 flex gap-2">
-              <Link href="/portfolio" className="rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
+              <Link href="/portfolio" className="tap rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
                 Ver cartera
               </Link>
-              <Link href="/portfolio?add=1" className="rounded-full bg-white/20 px-5 py-2.5 text-[15px] font-semibold text-white backdrop-blur">
+              <Link href="/portfolio?add=1" className="tap rounded-full bg-white/20 px-5 py-2.5 text-[15px] font-semibold text-white backdrop-blur">
                 Añadir operación
               </Link>
             </div>
@@ -62,7 +62,7 @@ export default async function Home() {
           <>
             <p className="mt-1 text-[30px] font-bold leading-tight tracking-[-0.02em]">Empieza a registrar tus inversiones</p>
             <p className="mt-2 max-w-md text-[15px] text-white/90">Apunta tus aportaciones y compras para ver cuánto ganas y si tu reparto sigue el plan.</p>
-            <Link href="/portfolio" className="mt-6 inline-block rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
+            <Link href="/portfolio" className="tap mt-6 inline-block rounded-full bg-white/95 px-5 py-2.5 text-[15px] font-semibold text-accent-2">
               Configurar cartera
             </Link>
           </>
@@ -117,7 +117,7 @@ export default async function Home() {
         <ul className="mt-2 divide-y divide-line">
           {top.map((r) => (
             <li key={r.t}>
-              <Link href={`/research/${r.t}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2">
+              <Link href={`/research/${r.t}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2 active:bg-surface-3">
                 <AssetAvatar t={r.t} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15.5px] font-semibold">{r.n}</span>
