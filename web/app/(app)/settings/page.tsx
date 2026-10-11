@@ -5,6 +5,7 @@ import { SettingsForm } from "@/components/portfolio/forms";
 import { BacktestChart } from "@/components/settings/backtest-chart";
 import { PageHeader } from "@/components/shell/page-header";
 import { RefreshButton } from "@/components/shell/refresh-button";
+import { ThemePicker } from "@/components/shell/theme";
 import { IconChevronRight, IconLogout } from "@/components/ui/icons";
 import { Badge, Button, Callout, EmptyState, Panel } from "@/components/ui/primitives";
 import { dateLabel, dateTimeLabel, int, num, pct } from "@/lib/format";
@@ -55,12 +56,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <div className="mx-auto max-w-[760px]">
         <PageHeader title="Ajustes" />
         <div className="flex flex-col gap-6">
+          <div>
+            <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">Apariencia</p>
+            <div className="card px-4 py-4">
+              <ThemePicker />
+              <p className="mt-2.5 px-1 text-[13px] text-ink-3">Automático sigue el modo claro u oscuro de tu móvil.</p>
+            </div>
+          </div>
           {MENU.map((g) => (
             <div key={g.group}>
               <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">{g.group}</p>
               <div className="card divide-y divide-line overflow-hidden">
                 {g.items.map((it) => (
-                  <Link key={it.href} href={it.href} className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2">
+                  <Link key={it.href} href={it.href} className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2 active:bg-surface-3">
                     <span>
                       <span className="block text-[15.5px]">{it.label}</span>
                       <span className="block text-[13px] text-ink-3">{it.sub}</span>
@@ -180,7 +188,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
       <Panel title={`Activos excluidos (${int(excluded.length)})`} meta="Cada exclusión mantiene su motivo" className="xl:col-span-2" pad={false}>
         <form className="px-4 pb-3 md:px-5">
           <input type="hidden" name="tab" value="data" />
-          <input name="q" defaultValue={q} placeholder="Buscar ticker o nombre" className="h-8 w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none" />
+          <input name="q" defaultValue={q} placeholder="Buscar ticker o nombre" className="h-8 w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none pointer-coarse:text-[16px]" />
         </form>
         <div className="max-h-[420px] overflow-auto">
           <table className="w-full min-w-[640px] text-[12.5px]">
@@ -272,7 +280,7 @@ function MethodTab({ meta }: { meta: Meta }) {
                       {corr.matrix[i].map((v, j) => {
                         const x = v ?? 0;
                         return (
-                          <td key={j} title={`${a} · ${corr.labels[j]}: ${v === null ? "n/d" : v.toFixed(2)}`} className="num h-5 w-7 text-center" style={{ background: x >= 0 ? `rgb(240 136 58 / ${Math.abs(x) * 0.55})` : `rgb(138 164 232 / ${Math.abs(x) * 0.55})` }}>
+                          <td key={j} title={`${a} · ${corr.labels[j]}: ${v === null ? "n/d" : v.toFixed(2)}`} className="num h-5 w-7 text-center" style={{ background: x >= 0 ? `rgb(82 127 98 / ${Math.abs(x) * 0.55})` : `rgb(90 110 148 / ${Math.abs(x) * 0.55})` }}>
                             {i === j ? "" : v === null ? "·" : Math.round(x * 10)}
                           </td>
                         );
@@ -281,7 +289,7 @@ function MethodTab({ meta }: { meta: Meta }) {
                   ))}
                 </tbody>
               </table>
-              <p className="t-meta mt-2">Valores × 10. Naranja = correlación positiva, azul = negativa.</p>
+              <p className="t-meta mt-2">Valores × 10. Verde = correlación positiva, azul = negativa.</p>
             </div>
           </>
         ) : (

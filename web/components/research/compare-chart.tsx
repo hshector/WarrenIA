@@ -6,7 +6,7 @@ import { TimeSeriesChart, type SeriesSpec } from "@/components/charts/time-serie
 import { Segmented } from "@/components/ui/primitives";
 import { rebase, toPoints } from "@/lib/market/series";
 
-export const COMPARE_COLORS = ["var(--accent)", "var(--info)", "#c9a2f2", "var(--ink-2)"];
+export const COMPARE_COLORS = ["var(--accent)", "var(--info)", "var(--lilac)", "var(--ink-2)"];
 
 export function CompareChart({ sessions, series }: { sessions: string[]; series: { t: string; c: (number | null)[] }[] }) {
   const [range, setRange] = useState<"3m" | "6m" | "1y" | "2y">("1y");

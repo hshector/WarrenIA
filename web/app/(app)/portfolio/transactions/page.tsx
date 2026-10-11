@@ -54,7 +54,7 @@ export default async function TransactionsPage() {
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <span className="inline-flex items-center gap-1">
-                          <InstrumentForm instrument={i} trigger={<button className="rounded px-2 py-1 text-[12.5px] text-ink-3 hover:bg-surface-2 hover:text-ink">Editar</button>} />
+                          <InstrumentForm instrument={i} trigger={<button className="tap rounded px-2 py-1 text-[12.5px] text-ink-3 hover:bg-surface-2 hover:text-ink">Editar</button>} />
                           <DeleteButton id={i.id} kind="instrument" label={`Borrar ${i.name}`} />
                         </span>
                       </td>

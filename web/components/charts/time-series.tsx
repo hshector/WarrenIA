@@ -13,6 +13,8 @@ import {
 } from "lightweight-charts";
 import { useEffect, useRef } from "react";
 
+import { useThemeClass } from "@/components/shell/theme";
+
 export interface SeriesSpec {
   kind: "line" | "area" | "histogram";
   data: { time: string; value: number }[];
@@ -55,6 +57,8 @@ const FORMATS = {
 export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: { series: SeriesSpec[]; height?: number; className?: string; ariaLabel: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  // Colours are read from the tokens once per chart: rebuild it when the theme changes.
+  const themeClass = useThemeClass();
 
   useEffect(() => {
     const el = ref.current;
@@ -112,7 +116,7 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
       chart.remove();
       chartRef.current = null;
     };
-  }, [series, height]);
+  }, [series, height, themeClass]);
 
   return <div ref={ref} role="img" aria-label={ariaLabel} className={className} style={{ height }} />;
 }

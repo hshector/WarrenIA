@@ -6,7 +6,7 @@ import { ValueChart } from "@/components/portfolio/value-chart";
 import { PageHeader } from "@/components/shell/page-header";
 import { IconChevronDown } from "@/components/ui/icons";
 import { ButtonLink, Callout, Card, EmptyState } from "@/components/ui/primitives";
-import { dateLabel, money, num, pct } from "@/lib/format";
+import { dateLabel, money, moneyHeadline, pct, units } from "@/lib/format";
 import { getRadar, loadMarket } from "@/lib/market/source";
 import { hasActions, holdLabel } from "@/lib/market/radar";
 import { STATE_SIMPLE } from "@/lib/market/types";
@@ -17,7 +17,7 @@ import { requireStore } from "@/lib/user/store";
 
 export const metadata = { title: "Cartera" };
 
-const BUCKET_DOT = { core: "bg-accent", gold: "bg-[#e3a008]", momentum: "bg-[#7048e8]" } as const;
+const BUCKET_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
   const sp = await searchParams;
@@ -77,7 +77,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
     <>
       <Card>
         <p className="text-[14px] text-ink-2">Valor total</p>
-        <p className="num mt-0.5 text-[40px] font-bold leading-tight tracking-[-0.03em]">{money(t.value)}</p>
+        <p className="num mt-0.5 whitespace-nowrap text-[clamp(30px,9.5vw,40px)] font-bold leading-tight tracking-[-0.03em]">{moneyHeadline(t.value)}</p>
         <p className="num text-[15px]">
           <span className={t.gain >= 0 ? "font-semibold text-pos" : "font-semibold text-neg"}>
             {t.gain >= 0 ? "+" : ""}
@@ -117,15 +117,18 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
               <>
                 <AssetAvatar t={label} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15.5px] font-semibold">{p.instrument.name}</span>
-                  <span className="block truncate text-[13px] text-ink-2">
-                    {num(p.qty, p.qty % 1 ? 4 : 0)} uds · {BUCKET_LABELS[p.instrument.bucket]}
-                    {mr && withActions && <span className={holdLabel(mr).cls}> · {holdLabel(mr).text}</span>}
-                    {mr && !withActions && <span className={mr.st === "weakening" ? "text-neg" : ""}> · {STATE_SIMPLE[mr.st]}</span>}
+                  <span className="line-clamp-2 text-[15.5px] font-semibold leading-snug">{p.instrument.name}</span>
+                  <span className="flex min-w-0 text-[13px] text-ink-2">
+                    <span className="num shrink-0 whitespace-nowrap">{units(p.qty)} uds</span>
+                    <span className="truncate">
+                      &nbsp;· {BUCKET_LABELS[p.instrument.bucket]}
+                      {mr && withActions && <span className={holdLabel(mr).cls}> · {holdLabel(mr).text}</span>}
+                      {mr && !withActions && <span className={mr.st === "weakening" ? "text-neg" : ""}> · {STATE_SIMPLE[mr.st]}</span>}
+                    </span>
                   </span>
                 </span>
-                <span className="text-right">
-                  <span className="num block text-[15.5px] font-semibold">{money(p.valueEur)}</span>
+                <span className="shrink-0 text-right">
+                  <span className="num block whitespace-nowrap text-[15.5px] font-semibold">{moneyHeadline(p.valueEur)}</span>
                   <Delta v={p.unrealizedPct} className="text-[13px] font-medium" />
                 </span>
               </>
@@ -133,7 +136,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
             return (
               <li key={p.instrument.id}>
                 {mr ? (
-                  <Link href={`/research/${mr.t}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2">
+                  <Link href={`/research/${mr.t}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2 active:bg-surface-3">
                     {inner}
                   </Link>
                 ) : (
@@ -155,12 +158,12 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
         <ul className="flex flex-col gap-4">
           {dev.map((d) => (
             <li key={d.bucket}>
-              <div className="mb-1.5 flex items-center justify-between text-[15px]">
+              <div className="mb-1.5 flex items-center justify-between gap-3 text-[15px]">
                 <span className="flex items-center gap-2.5">
                   <span className={`h-2.5 w-2.5 rounded-full ${BUCKET_DOT[d.bucket]}`} />
                   {BUCKET_LABELS[d.bucket]}
                 </span>
-                <span className="num">
+                <span className="num shrink-0 whitespace-nowrap">
                   <span className="font-semibold">{pct(d.weight, 0, false)}</span>
                   <span className="text-ink-3"> / {pct(d.target, 0, false)}</span>
                 </span>

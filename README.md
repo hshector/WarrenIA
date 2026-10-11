@@ -27,9 +27,13 @@ cd web && npm ci && WARRENIA_LOCAL_MODE=1 npm run dev                   # http:/
 
 ```bash
 cd engine && pytest -q                         # 69 tests: ajustes, indicadores, scores, reglas, señal de acción, proveedores, look-ahead, backtest
-cd web && npm test                             # 54 tests: FIFO, TWR, XIRR, fiscalidad, CSV, frescura, radar, catálogo, seguridad
-cd web && npm run build && npx playwright test # 25 E2E: plan, radar, ficha, cartera, importación, responsive, PWA
+cd web && npm test                             # 56 tests: FIFO, TWR, XIRR, fiscalidad, CSV, frescura, radar, catálogo, formato, seguridad
+cd web && npm run build && npx playwright test # 52 E2E: plan, radar, ficha, cartera, importación, responsive, PWA, móvil, modo oscuro, caso peor
 ```
+
+Para ver la interfaz con datos extremos pero realistas (nombres muy largos, cifras de ocho dígitos, posiciones de
+0,000123 unidades, campos vacíos), genera primero los datos de demostración y ejecuta `cd web && npm run dev:worst`.
+Las mismas condiciones se comprueban en los E2E de los proyectos `worst-phone` (320 px), `worst-phone-dark` y `worst-desktop`.
 
 Coste mensual con la configuración actual: **0 €**. Las limitaciones están documentadas en
 [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) y [docs/BACKTEST.md](docs/BACKTEST.md).

@@ -2,7 +2,7 @@
 // Policy: prices and rankings are NEVER served from cache. Pages and data are
 // network-only; when offline, navigations get an explicit offline page instead of
 // stale numbers. Only immutable build assets (/_next/static, hashed) are cached.
-const VERSION = "v1";
+const VERSION = "v2"; // bump when files under /icons/ change (they are cached by path)
 const STATIC_CACHE = `static-${VERSION}`;
 const OFFLINE_URL = "/offline";
 

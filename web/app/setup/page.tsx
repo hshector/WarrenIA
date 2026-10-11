@@ -6,7 +6,7 @@ export default function SetupPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-6 px-4">
       <Wordmark />
-      <div className="rounded-[var(--radius-panel)] border border-line bg-surface p-6">
+      <div className="card p-6">
         <h1 className="text-[17px] font-semibold">Configuración pendiente</h1>
         <p className="t-body mt-2">
           Falta configuración de Supabase o de ALLOWED_EMAILS. Por seguridad no se muestran datos ni se permite el acceso sin autenticación.

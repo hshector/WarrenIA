@@ -1,40 +1,31 @@
 "use client";
 
-import { Dialog } from "radix-ui";
 import { useActionState, useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { addManualPrice, addTransaction, deleteInstrument, deleteTransaction, saveInstrument, saveSettings, type ActionResult } from "@/app/(app)/portfolio/actions";
-import { IconClose, IconPlus, IconTrash } from "@/components/ui/icons";
+import { IconPlus, IconTrash } from "@/components/ui/icons";
 import { Button, Field, Input, Select } from "@/components/ui/primitives";
+import { ConfirmDialog, Sheet } from "@/components/ui/sheet";
 import { contributionPlan } from "@/lib/portfolio/engine";
 import { PRODUCTS } from "@/lib/plan/catalog";
 import { BUCKET_LABELS, TX_LABELS, type Instrument, type Settings, type TxType } from "@/lib/portfolio/types";
 import { money } from "@/lib/format";
 
-function Sheet({ title, trigger, children, open, setOpen }: { title: string; trigger: React.ReactNode; children: React.ReactNode; open: boolean; setOpen: (o: boolean) => void }) {
-  return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/25 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-y-auto rounded-t-[28px] bg-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl focus:outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-[8vh] sm:w-[540px] sm:-translate-x-1/2 sm:rounded-[28px]">
-          <div className="mb-5 flex items-center justify-between">
-            <Dialog.Title className="text-[20px] font-bold">{title}</Dialog.Title>
-            <Dialog.Close className="rounded-full bg-surface-2 p-2 text-ink-2" aria-label="Cerrar">
-              <IconClose size={16} />
-            </Dialog.Close>
-          </div>
-          <Dialog.Description className="sr-only">{title}</Dialog.Description>
-          {children}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
+/** Errors stay next to the form; success is a toast (the sheet closes). */
+function Result({ state }: { state: ActionResult }) {
+  if (!state || state.ok) return null;
+  return <p className="text-[14px] text-neg">{state.message}</p>;
 }
 
-function Result({ state }: { state: ActionResult }) {
-  if (!state) return null;
-  return <p className={state.ok ? "text-[14px] font-medium text-pos" : "text-[14px] text-neg"}>{state.message}</p>;
+function useSuccessToast(state: ActionResult, then?: () => void) {
+  useEffect(() => {
+    if (!state?.ok) return;
+    toast.success(state.message);
+    then?.();
+    // `then` is a fresh closure each render; the effect must run once per result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 }
 
 const TYPES_WITH_INSTRUMENT: TxType[] = ["buy", "sell", "dividend", "split"];
@@ -44,19 +35,14 @@ export function TransactionForm({ instruments, defaultOpen = false }: { instrume
   const [type, setType] = useState<TxType>("buy");
   const [currency, setCurrency] = useState("EUR");
   const [state, action, pending] = useActionState<ActionResult, FormData>(addTransaction, null);
-  useEffect(() => {
-    if (state?.ok) {
-      const t = setTimeout(() => setOpen(false), 700);
-      return () => clearTimeout(t);
-    }
-  }, [state]);
+  useSuccessToast(state, () => setOpen(false));
   const needsIns = TYPES_WITH_INSTRUMENT.includes(type);
   const trade = type === "buy" || type === "sell";
   return (
     <Sheet
       title="Registrar operación"
       open={open}
-      setOpen={setOpen}
+      onOpenChange={setOpen}
       trigger={
         <Button variant="primary" size="sm">
           <IconPlus size={16} /> Operación
@@ -156,17 +142,12 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
   const d: Partial<Instrument> = instrument ?? (fromPlan ? { name: fromPlan.name, isin: fromPlan.isin, kind: fromPlan.kind, bucket: fromPlan.bucket, currency: "EUR" } : {});
   const [source, setSource] = useState(instrument?.price_source ?? "eodhd");
   const [state, action, pending] = useActionState<ActionResult, FormData>(saveInstrument, null);
-  useEffect(() => {
-    if (state?.ok) {
-      const t = setTimeout(() => setOpen(false), 600);
-      return () => clearTimeout(t);
-    }
-  }, [state]);
+  useSuccessToast(state, () => setOpen(false));
   return (
     <Sheet
       title={instrument ? "Editar instrumento" : "Nuevo instrumento"}
       open={open}
-      setOpen={setOpen}
+      onOpenChange={setOpen}
       trigger={
         trigger ?? (
           <Button size="sm">
@@ -257,29 +238,31 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
 
 export function DeleteButton({ id, kind, label }: { id: string; kind: "tx" | "instrument"; label: string }) {
   const [pending, start] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
   return (
-    <span className="inline-flex items-center gap-2">
-      {err && <span className="text-[12px] text-neg">{err}</span>}
-      <button
-        disabled={pending}
-        aria-label={label}
-        title={label}
-        onClick={() => {
-          if (!confirm(`${label}?`)) return;
-          setErr(null);
-          start(() => (kind === "tx" ? deleteTransaction(id) : deleteInstrument(id)).catch((e: Error) => setErr(e.message)));
-        }}
-        className="rounded-full p-2 text-ink-3 hover:bg-neg-soft hover:text-neg disabled:opacity-40"
-      >
-        <IconTrash size={15} />
-      </button>
-    </span>
+    <ConfirmDialog
+      title={`¿${label}?`}
+      description={kind === "tx" ? "La operación se elimina del registro y la cartera se recalcula." : "Se elimina el instrumento de tu cartera."}
+      confirmLabel="Borrar"
+      onConfirm={() =>
+        start(() =>
+          (kind === "tx" ? deleteTransaction(id) : deleteInstrument(id)).then(
+            () => void toast.success(kind === "tx" ? "Operación borrada" : "Instrumento borrado"),
+            (e: Error) => void toast.error(e.message),
+          ),
+        )
+      }
+      trigger={
+        <button disabled={pending} aria-label={label} title={label} className="tap rounded-full p-2 text-ink-3 hover:bg-neg-soft hover:text-neg disabled:opacity-40">
+          <IconTrash size={15} />
+        </button>
+      }
+    />
   );
 }
 
 export function ManualPriceForm({ instruments }: { instruments: Instrument[] }) {
   const [state, action, pending] = useActionState<ActionResult, FormData>(addManualPrice, null);
+  useSuccessToast(state);
   const manual = instruments.filter((i) => i.price_source === "manual");
   if (!manual.length) return null;
   return (
@@ -309,6 +292,7 @@ export function ManualPriceForm({ instruments }: { instruments: Instrument[] }) 
 
 export function SettingsForm({ settings }: { settings: Settings }) {
   const [state, action, pending] = useActionState<ActionResult, FormData>(saveSettings, null);
+  useSuccessToast(state);
   return (
     <form action={action} className="grid max-w-xl grid-cols-2 gap-3.5 sm:grid-cols-3">
       <Field label="Núcleo global %">
@@ -339,7 +323,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   );
 }
 
-const PLAN_DOT = { core: "bg-accent", gold: "bg-[#e3a008]", momentum: "bg-[#7048e8]" } as const;
+const PLAN_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
 export function ContributionPlanner({
   values,
@@ -378,10 +362,10 @@ export function ContributionPlanner({
               <span className={`mt-[7px] h-2.5 w-2.5 shrink-0 rounded-full ${PLAN_DOT[k]}`} />
               <span className="min-w-0">
                 {BUCKET_LABELS[k]}
-                {products?.[k] && <span className="block text-[13px] text-ink-2">{products[k]}</span>}
+                {products?.[k] && <span className="block break-words text-[13px] text-ink-2">{products[k]}</span>}
               </span>
             </span>
-            <span className="num shrink-0 font-semibold">{money(plan[k], "EUR", 0)}</span>
+            <span className="num shrink-0 whitespace-nowrap font-semibold">{money(plan[k], "EUR", 0)}</span>
           </li>
         ))}
       </ul>

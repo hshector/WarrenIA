@@ -33,6 +33,18 @@ export function money(v: number | null | undefined, currency = "EUR", digits = 2
   return new Intl.NumberFormat("es-ES", { style: "currency", currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v);
 }
 
+/** Headline amounts: no cents from 100.000 so an eight-figure value still fits a phone. */
+export function moneyHeadline(v: number | null | undefined, currency = "EUR"): string {
+  return money(v, currency, isNum(v) && Math.abs(v) >= 100_000 ? 0 : 2);
+}
+
+/** Units held: whole numbers stay whole; fractions keep broker precision (6 decimals below 1 unit), no trailing zeros. */
+export function units(v: number | null | undefined): string {
+  if (!isNum(v)) return DASH;
+  const a = Math.abs(v);
+  return new Intl.NumberFormat("es-ES", { maximumFractionDigits: a < 1 ? 6 : a < 1000 ? 4 : 2 }).format(v);
+}
+
 export function compactUsd(v: number | null | undefined): string {
   if (!isNum(v)) return DASH;
   const a = Math.abs(v);

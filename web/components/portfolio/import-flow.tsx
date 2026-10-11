@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { commitImport, previewImport, type ImportPreview } from "@/app/(app)/portfolio/actions";
 import { Badge, Button, Callout } from "@/components/ui/primitives";
@@ -27,7 +28,7 @@ export function ImportFlow() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex h-9 cursor-pointer items-center rounded-[8px] border border-line-2 bg-surface-2 px-3.5 text-[13.5px] hover:bg-surface-3">
+        <label className="tap inline-flex h-9 cursor-pointer items-center rounded-[8px] border border-line-2 bg-surface-2 px-3.5 text-[13.5px] hover:bg-surface-3">
           Elegir fichero CSV
           <input type="file" accept=".csv,text/csv,text/plain" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
         </label>
@@ -42,19 +43,29 @@ export function ImportFlow() {
         rows={7}
         spellCheck={false}
         placeholder={"fecha;tipo;isin;ticker;nombre;cantidad;precio;importe;comision;divisa;tipo_cambio\n02/01/2026;aportación;;;;;;450;;EUR;"}
-        className="w-full rounded-[8px] border border-line-2 bg-canvas-2 p-3 font-mono text-[12px] text-ink outline-none focus:border-accent-line"
+        className="w-full rounded-[8px] border border-line-2 bg-canvas-2 p-3 font-mono text-[12px] text-ink outline-none pointer-coarse:text-[16px] focus:border-accent-line"
       />
       <div className="flex gap-2">
         <Button disabled={!text.trim() || pending} onClick={() => start(async () => setPreview(await previewImport(text)))}>
           Vista previa y validación
         </Button>
         {preview && preview.valid > 0 && (
-          <Button variant="primary" disabled={pending} onClick={() => start(async () => setResult(await commitImport(text)))}>
+          <Button
+            variant="primary"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const r = await commitImport(text);
+                setResult(r);
+                if (r.ok) toast.success(r.message);
+              })
+            }
+          >
             Importar {preview.valid} filas válidas
           </Button>
         )}
       </div>
-      {result && <Callout tone={result.ok ? "accent" : "neg"}>{result.message}</Callout>}
+      {result && !result.ok && <Callout tone="neg">{result.message}</Callout>}
       {preview && preview.headerErrors.length > 0 && <Callout tone="neg" title="Cabecera no válida">{preview.headerErrors.join(" · ")}</Callout>}
       {preview && preview.rows.length > 0 && (
         <div className="overflow-x-auto rounded-[10px] border border-line">
