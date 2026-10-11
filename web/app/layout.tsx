@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description: "Momentum intelligence y seguimiento de cartera personal. Herramienta de análisis; no ejecuta operaciones.",
   applicationName: "WarrenIA",
   appleWebApp: { capable: true, title: "WarrenIA", statusBarStyle: "default" },
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  icons: { icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }, { url: "/icons/icon-192.png", sizes: "192x192" }], apple: "/icons/apple-touch-icon.png" },
   robots: { index: false, follow: false },
 };
 
