@@ -48,6 +48,7 @@ En el repositorio: *Settings → Secrets and variables → Actions → New repos
 | `MASSIVE_API_KEY` | API key de Massive |
 | `SEC_USER_AGENT` | `WarrenIA tu-email@dominio.com`: la SEC exige identificarse con un e-mail de contacto |
 | `EODHD_API_KEY` | *(opcional)* clave gratuita de <https://eodhd.com> para los precios en EUR de tus ETF/ETC |
+| `LOGO_DEV_TOKEN` | *(opcional)* clave **publicable** (`pk_…`) de <https://logo.dev> para los logos de las empresas. Nunca la secreta (`sk_…`). Primer llenado: pestaña *Actions → logos → Run workflow* |
 
 Después:
 

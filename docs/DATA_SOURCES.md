@@ -13,6 +13,7 @@ cambian con frecuencia.
 | Tipos de cambio | **BCE**, tipos de referencia del euro (oficiales) | Gratuito | Diario, ~16:00 CET | Para valorar en EUR. |
 | Precios en EUR de ETF/ETC (Xetra) | **EODHD**, plan gratuito | API key gratuita | ~20 llamadas/día, ~1 año de historia | 1 llamada por instrumento y día. El histórico se acumula en el almacenamiento. Se usa el cierre **sin ajustar**, porque las distribuciones se registran como operaciones. |
 | Benchmarks y sectores | Massive (SPY, RSP, QQQ, MDY y ETFs SPDR sectoriales) | igual | — | Decisión documentada en `config/benchmarks.yaml`. |
+| Logos de empresas | **Logo.dev**, plan Community | Clave publicable gratuita (`LOGO_DEV_TOKEN`) | ~500.000 peticiones/mes; exige atribución (en Ajustes) | Se descarga **una vez** por ticker (PNG de 128 px) a `published/logos/`; los tickers sin logo (la mayoría de ETFs) se reintentan cada 30 días. El navegador nunca llama a Logo.dev: la web sirve la copia guardada y, si no hay logo, muestra las iniciales. |
 
 ## Descartadas o como respaldo
 

@@ -55,15 +55,4 @@ export function Ticker({ t, className }: { t: string; className?: string }) {
   return <span className={cx("font-semibold tracking-[-0.01em]", className)}>{t}</span>;
 }
 
-const AVATAR = ["var(--av-1)", "var(--av-2)", "var(--av-3)", "var(--av-4)", "var(--av-5)", "var(--av-6)"];
-
-/** Round avatar with the ticker initials (no logos: no licensed asset is assumed). */
-export function AssetAvatar({ t, size = 40 }: { t: string; size?: number }) {
-  let h = 0;
-  for (const c of t) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return (
-    <span className="inline-flex shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-ink/75" style={{ width: size, height: size, background: AVATAR[h % AVATAR.length] }}>
-      {t.slice(0, 4)}
-    </span>
-  );
-}
+export { AssetAvatar } from "./asset-avatar";

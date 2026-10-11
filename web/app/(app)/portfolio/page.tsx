@@ -113,7 +113,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
             const label = p.instrument.market_ticker ?? p.instrument.isin?.slice(0, 4) ?? p.instrument.name.slice(0, 3).toUpperCase();
             const inner = (
               <>
-                <AssetAvatar t={label} />
+                <AssetAvatar t={label} logo={!!p.instrument.market_ticker} />
                 <span className="min-w-0 flex-1">
                   <span className="line-clamp-2 text-[15.5px] font-semibold leading-snug">{p.instrument.name}</span>
                   <span className="flex min-w-0 text-[13px] text-ink-2">

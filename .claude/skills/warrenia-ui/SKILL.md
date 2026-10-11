@@ -24,6 +24,7 @@ Es un panel profesional: el movimiento es rápido y funcional, nunca decorativo.
 | Unidades de una posición | `units()`: nunca redondear 0,000123 a 0,0001 | `lib/format.ts` |
 | Cifras | Clase `num` (tabular) y `whitespace-nowrap`; una cifra nunca se trunca | — |
 | Modo oscuro | Tokens redefinidos en `:root.dark`; elección en Ajustes → Apariencia (`next-themes`) | `globals.css`, `components/shell/theme.tsx` |
+| Logo de un valor | `<AssetAvatar t={ticker} />`: logo en caché (`/api/logo`, de Logo.dev) sobre blanco con aro fino; si no hay, iniciales. Pasa `logo={false}` si `t` no es un ticker | `components/fin/asset-avatar.tsx` |
 | Colores secundarios | `bg-gold`, `bg-violet`, `bg-violet-soft`, `var(--lilac)`, `var(--sand)`, `var(--av-1…6)`, `bg-thumb` | `globals.css` |
 
 ## Reglas

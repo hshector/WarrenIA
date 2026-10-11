@@ -39,3 +39,19 @@ test("worst case: headline amounts drop cents, tiny positions keep their precisi
   await expect(page.getByText("0,000123 uds")).toBeVisible();
   await expect(page.getByText(/aportaciones por \d{1,3}(\.\d{3})+,\d{2}\s€/)).toBeVisible(); // formatted, not 7565580,99
 });
+
+test("company logos: cached logo is shown, otherwise initials", async ({ page, request }) => {
+  const ok = await request.get(`/api/logo/${TOP}`);
+  expect(ok.status()).toBe(200);
+  expect(ok.headers()["content-type"]).toBe("image/png");
+  expect((await request.get("/api/logo/NOLOGO")).status()).toBe(404);
+  expect((await request.get("/api/logo/..%2F..%2Fsecret")).status()).toBe(404);
+
+  await page.goto("/radar");
+  const withLogo = page.locator(`a[href="/research/${TOP}"]`).first().locator("img");
+  await expect(withLogo).toBeVisible();
+  await expect.poll(() => withLogo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+
+  const other = page.locator('main ul li a[href^="/research/"]').filter({ hasNot: page.locator(`[href="/research/${TOP}"]`) }).nth(3);
+  await expect(other.locator("img")).toHaveCount(0); // 404 -> back to initials
+});
