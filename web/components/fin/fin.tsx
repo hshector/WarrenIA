@@ -51,18 +51,23 @@ export function StatePill({ state, className }: { state: StateKey; short?: boole
   );
 }
 
-const ACTION_STYLE: Record<ActionKey, string> = {
-  candidate: "bg-pos-soft text-pos",
-  wait: "bg-warn-soft text-warn",
-  watch: "bg-info-soft text-info",
-  avoid: "bg-neg-soft text-neg",
-  none: "bg-surface-2 text-ink-2",
+const ACTION_DOT: Record<ActionKey, string> = {
+  candidate: "bg-pos",
+  wait: "bg-warn",
+  watch: "bg-info",
+  avoid: "bg-neg",
+  none: "bg-ink-3",
 };
 
-/** What to do with the asset now: the primary signal of the radar. */
+/** What to do with the asset now: the primary signal of the radar (neutral pill + coloured dot). */
 export function ActionPill({ action, className }: { action: ActionKey | undefined; className?: string }) {
   const a = action ?? "none";
-  return <span className={cx("inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-semibold whitespace-nowrap", ACTION_STYLE[a], className)}>{ACTION_LABELS[a]}</span>;
+  return (
+    <span className={cx("inline-flex h-6 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[12px] font-semibold whitespace-nowrap text-ink", className)}>
+      <span aria-hidden className={cx("h-1.5 w-1.5 shrink-0 rounded-full", ACTION_DOT[a])} />
+      {ACTION_LABELS[a]}
+    </span>
+  );
 }
 
 export function Ticker({ t, className }: { t: string; className?: string }) {

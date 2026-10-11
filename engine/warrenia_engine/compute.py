@@ -15,7 +15,8 @@ import pandas as pd
 from .config import Config
 from .indicators import Precomputed, indicators_at
 from .panels import Panels
-from .scoring import classify, decide, overall, pct_rank, score_universe
+from .fundamentals import add_valuation, compute_fundamentals
+from .scoring import classify, decide, fundamental_scores, overall, pct_rank, score_universe
 from .sectors import sic_to_sector
 from .universe import classify_assets, eligibility
 
@@ -34,6 +35,7 @@ class Context:
     shares: pd.Series              # ticker -> shares outstanding (may be NaN)
     sector: pd.Series              # ticker -> sector name (stocks; may be None)
     net_income: pd.Series          # ticker -> last annual net income, USD (NaN = unknown or too old)
+    fund: pd.DataFrame             # ticker -> fundamental metrics of the last fiscal year (fundamentals.py)
     bench_col: int
     cols: dict[str, np.ndarray] = field(default_factory=dict)
     _cache: dict[int, pd.DataFrame] = field(default_factory=dict)
@@ -49,7 +51,8 @@ class Context:
         return self._cache[t]
 
 
-def build_context(cfg: Config, P: Panels, tickers: pd.DataFrame, fundamentals: pd.DataFrame | None) -> Context:
+def build_context(cfg: Config, P: Panels, tickers: pd.DataFrame, fundamentals: pd.DataFrame | None,
+                  facts: pd.DataFrame | None = None) -> Context:
     ref = tickers.drop_duplicates("ticker", keep="last").set_index("ticker")
     cls = classify_assets(tickers.drop_duplicates("ticker", keep="last"), cfg.universe)
     if fundamentals is not None and not fundamentals.empty:
@@ -57,16 +60,34 @@ def build_context(cfg: Config, P: Panels, tickers: pd.DataFrame, fundamentals: p
         shares = pd.to_numeric(f["shares"], errors="coerce")
         sector = f["sic"].map(sic_to_sector)
         net_income = _recent_net_income(f, P.dates[-1], cfg.momentum["action"]["fundamentals_max_age_days"])
+        fund = _recent_fundamentals(compute_fundamentals(facts, f.reset_index()), P.dates[-1],
+                                    cfg.momentum["fundamentals"]["max_age_days"])
     else:
         shares = pd.Series(dtype=float)
         sector = pd.Series(dtype=object)
         net_income = pd.Series(dtype=float)
+        fund = pd.DataFrame()
+    if not fund.empty:  # the full annual report supersedes the single net-income figure
+        net_income = fund["net_income"].combine_first(net_income)
     pre = Precomputed(P, cfg.windows)
     bench_col = P.col(cfg.primary_benchmark)
-    ctx = Context(cfg, P, pre, ref, cls, shares, sector, net_income, bench_col)
+    ctx = Context(cfg, P, pre, ref, cls, shares, sector, net_income, fund, bench_col)
     for c in CLASSES:
         ctx.cols[c] = np.array([i for i, tk in enumerate(P.tickers) if cls.get(tk) == c], dtype=int)
     return ctx
+
+
+def _recent_fundamentals(fund: pd.DataFrame, asof: pd.Timestamp, max_age_days: int) -> pd.DataFrame:
+    if fund.empty:
+        return fund
+    age = (asof - pd.to_datetime(fund["fy_end"])).dt.days
+    return fund[age <= max_age_days]
+
+
+FUND_FIELDS = ["fscore", "zscore", "gross_profitability", "roa", "cfo_assets", "accruals", "gross_margin",
+               "operating_margin", "roe", "revenue_growth", "share_change", "debt_assets", "interest_coverage",
+               "ebit_ev", "fcf_yield", "earnings_yield", "pb", "shareholder_yield", "cfo", "fcf", "revenue",
+               "financial", "debt_reported", "fy_end", "fscore_signals"]
 
 
 def _recent_net_income(f: pd.DataFrame, asof: pd.Timestamp, max_age_days: int) -> pd.Series:
@@ -108,6 +129,10 @@ def evaluate(ctx: Context, t: int, with_states: bool = True, weights_override: d
             ind["net_income"] = ni
             ind["pe"] = (mcap / ni).where(ni > 0)
             ind["profitable"] = np.where(ni.notna(), (ni > 0).astype(float), np.nan)
+            fv = add_valuation(ctx.fund, mcap) if not ctx.fund.empty else pd.DataFrame(index=ind.index)
+            fv = fv.reindex(ind.index)
+            for k in FUND_FIELDS:
+                ind[k] = fv[k] if k in fv else np.nan
         el = eligibility(ind, ctx.cls, names, mcap, cfg.universe)
         E = el.index[el["eligible"]] if len(el) else pd.Index([])
         sc = score_universe(ind.loc[E], cfg.momentum,
@@ -122,6 +147,9 @@ def evaluate(ctx: Context, t: int, with_states: bool = True, weights_override: d
             sc = score_universe(ind.loc[el.index[el["eligible"]]], cfg.momentum,
                                 prev_all.loc[el.index[el["eligible"]]] if prev_all is not None else None,
                                 weights_override=weights_override)
+        if c == "stock":
+            fs = fundamental_scores(ind.loc[sc.index], cfg.momentum)
+            sc = sc.join(fs)
         states, actions = {}, {}
         if with_states:
             for tk in sc.index:

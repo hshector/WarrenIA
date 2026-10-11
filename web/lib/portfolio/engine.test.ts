@@ -68,7 +68,7 @@ describe("contributions, cash and returns", () => {
     expect(r.totals.inferredDeposits).toBeCloseTo(401);
     expect(r.totals.netContributions).toBeCloseTo(401);
     expect(r.cashEur).toBeCloseTo(0);
-    expect(r.warnings.join(" ")).toMatch(/inferido/);
+    expect(r.warnings.join(" ")).toMatch(/inferred/);
   });
 
   it("TWR ignores the size and timing of contributions", () => {
@@ -110,7 +110,7 @@ describe("contributions, cash and returns", () => {
   it("flags positions without a price source", () => {
     const txs = [tx({ type: "deposit", trade_date: "2026-01-02", amount: 100 }), tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "gold", quantity: 1, price: 90 })];
     const r = computePortfolio([GOLD], txs, {}, {}, "2026-01-05");
-    expect(r.positions[0].priceSource).toMatch(/último precio/);
+    expect(r.positions[0].priceSource).toMatch(/last trade price/);
     expect(r.warnings.some((w) => w.includes("Gold ETC"))).toBe(true);
   });
 
@@ -197,7 +197,7 @@ describe("Spanish tax view of sales", () => {
     expect(s.gainEur).toBeCloseTo(-200);
     expect(s.washSale).toEqual({ windowMonths: 2, repurchasedQty: 5, deferredEur: 100 });
     expect(r.taxByYear[0]).toEqual({ year: "2026", gp: -100, rcm: 0, deferred: 100 });
-    expect(r.warnings.join(" ")).toMatch(/no deja computar esa pérdida/);
+    expect(r.warnings.join(" ")).toMatch(/does not let you use that loss/);
   });
 
   it("buying back after the window keeps the loss computable", () => {

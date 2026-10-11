@@ -64,10 +64,10 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
     const el = ref.current;
     if (!el) return;
     const ink3 = cssVar("var(--ink-3)");
-    const nf = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
+    const nf = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
     const chart = createChart(el, {
       height,
-      localization: { locale: "es-ES", priceFormatter: (v: number) => nf.format(v), dateFormat: "dd MMM yyyy" },
+      localization: { locale: "en-GB", priceFormatter: (v: number) => nf.format(v), dateFormat: "dd MMM yyyy" },
       autoSize: true,
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: ink3, fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 11, attributionLogo: false },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },

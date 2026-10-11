@@ -42,7 +42,7 @@ export function BacktestChart({ dates, series, labels }: { dates: string[]; seri
             </span>
           ))}
       </div>
-      <TimeSeriesChart series={specs} height={300} ariaLabel="Curvas de capital del backtest, base 100" />
+      <TimeSeriesChart series={specs} height={300} ariaLabel="Backtest growth curves, 100 at the start" />
     </div>
   );
 }

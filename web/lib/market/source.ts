@@ -162,8 +162,8 @@ export async function loadMarket() {
     if (!error) {
       error =
         e instanceof StorageError && [400, 401, 403].includes(e.status)
-          ? `Supabase rechaza la clave secreta de Vercel (${e.status}). Revisa /setup/check.`
-          : "No se pudieron leer los datos de mercado. Se reintentará en la próxima carga.";
+          ? `Supabase rejects Vercel's secret key (${e.status}). Check /setup/check.`
+          : "Could not read market data. It will retry on the next load.";
       console.error("market: load failed", e);
     }
     return null;
@@ -171,6 +171,6 @@ export async function loadMarket() {
   const latest = await getLatest().catch(fail);
   const meta = await getMeta(latest).catch(fail);
   const src = marketSource().kind;
-  if (src === "none" && process.env.VERCEL) error = "Falta SUPABASE_SECRET_KEY en Vercel. Revisa /setup/check.";
+  if (src === "none" && process.env.VERCEL) error = "SUPABASE_SECRET_KEY is missing in Vercel. Check /setup/check.";
   return { latest, meta, source: src, error };
 }

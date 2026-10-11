@@ -43,6 +43,8 @@ export interface ManualPrice {
 
 export interface Settings {
   targets: Record<"core" | "gold" | "momentum", number>;
+  /** Products chosen for each block (lib/plan/catalog.ts); missing = recommended defaults. */
+  choices?: Partial<Record<"core" | "gold" | "momentum", { isin: string; weight: number }[]>>;
   band_abs: number;
   band_rel: number;
   monthly_contribution: number;
@@ -56,21 +58,21 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const BUCKET_LABELS: Record<Bucket | "cash", string> = {
-  core: "Núcleo global",
-  gold: "Oro",
-  momentum: "Acciones / momentum",
-  other: "Otros",
-  cash: "Efectivo",
+  core: "Core",
+  gold: "Diversifiers",
+  momentum: "Momentum",
+  other: "Other",
+  cash: "Cash",
 };
 
 export const TX_LABELS: Record<TxType, string> = {
-  buy: "Compra",
-  sell: "Venta",
-  deposit: "Aportación",
-  withdrawal: "Retirada",
-  dividend: "Dividendo",
-  interest: "Intereses",
-  fee: "Comisión",
-  tax: "Impuesto",
+  buy: "Buy",
+  sell: "Sell",
+  deposit: "Deposit",
+  withdrawal: "Withdrawal",
+  dividend: "Dividend",
+  interest: "Interest",
+  fee: "Fee",
+  tax: "Tax",
   split: "Split",
 };

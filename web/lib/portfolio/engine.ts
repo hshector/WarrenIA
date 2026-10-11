@@ -248,7 +248,7 @@ export function applyTx(L: Ledger, t: Transaction): void {
       let q = t.quantity ?? 0;
       const lots = L.lots.get(iid) ?? [];
       const held = lots.reduce((s, l) => s + l.qty, 0);
-      if (q > held + 1e-7) throw new PortfolioError(`Venta de ${q} unidades el ${t.trade_date} con solo ${held.toFixed(6)} en cartera`);
+      if (q > held + 1e-7) throw new PortfolioError(`Sale of ${q} units on ${t.trade_date} with only ${held.toFixed(6)} held`);
       const proceeds = (q * (t.price ?? 0) - (t.fees ?? 0) - (t.taxes ?? 0)) * fx;
       let costSold = 0;
       while (q > EPS && lots.length) {
@@ -301,7 +301,7 @@ function priceFor(
     if (p) return { price: p.price, currency: s.currency, date: p.date, source: s.source };
   }
   const t = L.lastTradePrice.get(ins.id);
-  if (t && t.date <= d) return { price: t.price, currency: t.currency, date: t.date, source: "último precio de compra/venta" };
+  if (t && t.date <= d) return { price: t.price, currency: t.currency, date: t.date, source: "last trade price" };
   return null;
 }
 
@@ -316,7 +316,7 @@ export function computePortfolio(
   const byId = new Map(instruments.map((i) => [i.id, i]));
   const txs = sortTx(transactions.filter((t) => t.trade_date <= asOf));
   for (const t of txs) {
-    if (t.instrument_id && !byId.has(t.instrument_id)) throw new PortfolioError(`Operación ${t.id} con instrumento desconocido`);
+    if (t.instrument_id && !byId.has(t.instrument_id)) throw new PortfolioError(`Transaction ${t.id} has an unknown instrument`);
   }
   const empty: PortfolioResult = {
     asOf: null, positions: [], cashEur: 0,
@@ -353,7 +353,7 @@ export function computePortfolio(
       }
       const v = toEur(q * p.price, p.currency, fx, d);
       if (v === null) {
-        missingPrice.add(`${ins.name} (sin tipo de cambio ${p.currency})`);
+        missingPrice.add(`${ins.name} (no ${p.currency} exchange rate)`);
         continue;
       }
       value += v;
@@ -363,7 +363,7 @@ export function computePortfolio(
     series.push({ date: d, value, invested, cash: L.cash });
     prevValue = value;
   }
-  if (missingPrice.size) warnings.push(`Sin precio para valorar: ${[...missingPrice].join(", ")}.`);
+  if (missingPrice.size) warnings.push(`No price to value: ${[...missingPrice].join(", ")}.`);
 
   // ---- Positions at asOf
   const positions: Position[] = [];
@@ -378,7 +378,7 @@ export function computePortfolio(
     const valueEur = p ? toEur(qty * p.price, p.currency, fx, asOf) : qty > EPS ? null : 0;
     const unr = valueEur !== null && qty > EPS ? valueEur - cost : null;
     if (unr !== null) unrealized += unr;
-    if (p && p.source.startsWith("último precio")) warnings.push(`${ins.name}: valorado con el último precio de operación (${p.date}); sin fuente de precios.`);
+    if (p && p.source.startsWith("last trade")) warnings.push(`${ins.name}: valued at its last trade price (${p.date}); no price source.`);
     positions.push({
       instrument: ins, qty, costEur: cost, avgCostEur: qty > EPS ? cost / qty : null,
       price: p?.price ?? null, priceCurrency: p?.currency ?? null, priceDate: p?.date ?? null, priceSource: p?.source ?? null,
@@ -395,7 +395,7 @@ export function computePortfolio(
   const withdrawals = -L.flows.filter((f) => f.amount < 0).reduce((s, f) => s + f.amount, 0);
   const inferred = L.flows.filter((f) => f.inferred).reduce((s, f) => s + f.amount, 0);
   if (inferred > 0) {
-    warnings.push(`Se han inferido aportaciones por ${money(inferred)} porque las compras superaban el efectivo registrado. Registra tus aportaciones para un cálculo exacto.`);
+    warnings.push(`Deposits of ${money(inferred)} were inferred because purchases exceeded the cash recorded. Record your deposits for exact figures.`);
   }
 
   // ---- Spanish tax view of the sales
@@ -403,8 +403,8 @@ export function computePortfolio(
   for (const sr of sales) {
     if (!sr.washSale) continue;
     warnings.push(
-      `Venta de ${sr.name} el ${sr.date} con pérdida de ${(-sr.gainEur).toFixed(2).replace(".", ",")} €: compraste títulos iguales en los ${sr.washSale.windowMonths} meses anteriores o posteriores y los conservas. ` +
-        `Hacienda no deja computar esa pérdida (≈ ${sr.washSale.deferredEur.toFixed(2).replace(".", ",")} €) hasta que vendas esos títulos.`,
+      `Sale of ${sr.name} on ${sr.date} at a loss of ${money(-sr.gainEur)}: you bought the same security within ${sr.washSale.windowMonths} months before or after and still hold it. ` +
+        `Spain does not let you use that loss (about ${money(sr.washSale.deferredEur)}) until you sell those shares.`,
     );
   }
   const years = new Map<string, { year: string; gp: number; rcm: number; deferred: number }>();
@@ -426,8 +426,8 @@ export function computePortfolio(
   flowsX.push({ date: asOf, amount: value });
   let note: string | null = null;
   let x = days >= 30 ? xirr(flowsX) : null;
-  if (days < 30) note = "Menos de 30 días de historia: la TIR anualizada no es significativa.";
-  else if (days < 365) note = "Menos de un año: la TIR está anualizada y es muy sensible a movimientos recientes.";
+  if (days < 30) note = "Less than 30 days of history: the annualised return is not meaningful.";
+  else if (days < 365) note = "Less than a year: the return is annualised and very sensitive to recent moves.";
   if (x !== null && !Number.isFinite(x)) x = null;
 
   // ---- Allocation

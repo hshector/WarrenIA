@@ -26,9 +26,9 @@ cd web && npm ci && WARRENIA_LOCAL_MODE=1 npm run dev                   # http:/
 ## Tests
 
 ```bash
-cd engine && pytest -q                         # 69 tests: ajustes, indicadores, scores, reglas, señal de acción, proveedores, look-ahead, backtest
-cd web && npm test                             # 56 tests: FIFO, TWR, XIRR, fiscalidad, CSV, frescura, radar, catálogo, formato, seguridad
-cd web && npm run build && npx playwright test # 52 E2E: plan, radar, ficha, cartera, importación, responsive, PWA, móvil, modo oscuro, caso peor
+cd engine && pytest -q                         # 86 tests: ajustes, indicadores, scores, reglas, señal de acción, fundamentales (F-Score, Z''), proveedores, look-ahead, backtest
+cd web && npm test                             # 62 tests: FIFO, TWR, XIRR, fiscalidad, CSV, frescura, radar, catálogo, formato, seguridad
+cd web && npm run build && npx playwright test # 58 E2E: plan (selector de núcleo y diversificadores), radar, ficha, cartera, importación, responsive, PWA, móvil, modo oscuro, caso peor
 ```
 
 Para ver la interfaz con datos extremos pero realistas (nombres muy largos, cifras de ocho dígitos, posiciones de

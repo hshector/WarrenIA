@@ -11,7 +11,7 @@ for (const p of ["/", "/plan", "/radar", "/research/X412", "/portfolio", "/portf
 
 test("mobile: bottom tab bar and tappable radar rows", async ({ page }) => {
   await page.goto("/radar");
-  const tabs = page.getByRole("navigation", { name: "Principal" }).last();
+  const tabs = page.getByRole("navigation", { name: "Main" }).last();
   await expect(tabs).toBeVisible();
   await expect(tabs.getByRole("link")).toHaveCount(5);
   await page.locator("main ul li a").first().click();

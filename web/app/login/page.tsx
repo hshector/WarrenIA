@@ -17,19 +17,19 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="card p-6">
           <h1 className="text-[24px] font-bold tracking-[-0.02em]">Entrar</h1>
-          <p className="t-body mt-1 mb-5">Te enviamos un enlace a tu correo. Sin contraseñas.</p>
-          {sp.error === "not_allowed" && <p className="mb-4 text-[13px] text-neg">Esta cuenta no está autorizada.</p>}
-          {sp.error === "expired" && <p className="mb-4 text-[13px] text-neg">El enlace ha caducado o ya se usó. Pide uno nuevo.</p>}
-          {sp.error === "link" && <p className="mb-4 text-[13px] text-neg">No se pudo validar el enlace. Pide uno nuevo y ábrelo en este mismo navegador.</p>}
+          <p className="t-body mt-1 mb-5">We email you a sign-in link. No passwords.</p>
+          {sp.error === "not_allowed" && <p className="mb-4 text-[13px] text-neg">This account is not allowed.</p>}
+          {sp.error === "expired" && <p className="mb-4 text-[13px] text-neg">The link expired or was already used. Request a new one.</p>}
+          {sp.error === "link" && <p className="mb-4 text-[13px] text-neg">The link could not be validated. Request a new one and open it in this same browser.</p>}
           {mode === "supabase" ? (
             <LoginForm next={safeNext(sp.next)} />
           ) : (
             <p className="text-[13px] text-ink-2">
-              Falta configurar Supabase. <a href="/setup/check" className="font-medium text-accent">Ver qué falta</a>
+              Supabase is not configured yet. <a href="/setup/check" className="font-medium text-accent">See what is missing</a>
             </p>
           )}
         </div>
-        <p className="t-meta mt-6">WarrenIA es una herramienta personal de análisis. No ejecuta operaciones ni ofrece asesoramiento financiero.</p>
+        <p className="t-meta mt-6">WarrenIA is a personal analysis tool. It never places trades and does not give financial advice.</p>
       </div>
     </main>
   );

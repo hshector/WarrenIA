@@ -18,13 +18,13 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
     return (
       <>
         <PageHeader title="Radar" />
-        <EmptyState title="Todavía no hay datos">El primer cálculo aparece cuando termina la descarga inicial de datos (unas 2 horas tras configurarla).</EmptyState>
+        <EmptyState title="No data yet">The first ranking appears when the initial data download finishes (about 2 hours after setup).</EmptyState>
       </>
     );
   }
   return (
     <>
-      <PageHeader title="Radar" sub="Qué acciones tienen más fuerza de tendencia y si conviene comprarlas ahora, esperar o evitarlas." />
+      <PageHeader title="Radar" sub="Which stocks have the strongest trend, and whether to buy now, wait or avoid them." />
       <RadarView
         rows={radar.rows}
         bench={radar.bench}

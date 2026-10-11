@@ -40,8 +40,8 @@ describe("radar queries", () => {
     expect(run("all", { ...DEFAULT_FILTERS, onlyProfitable: true })).toEqual(["A", "C", "D"]);
   });
   it("hold verdict and legacy artifacts", () => {
-    expect(holdLabel({ hold: true }).text).toBe("Mantener");
-    expect(holdLabel({ hold: false }).text).toBe("Revisar venta");
+    expect(holdLabel({ hold: true }).text).toBe("Keep");
+    expect(holdLabel({ hold: false }).text).toBe("Consider selling");
     expect(hasActions(rows)).toBe(true);
     expect(hasActions([{ ...rows[0], act: undefined as unknown as "none" }])).toBe(false);
   });

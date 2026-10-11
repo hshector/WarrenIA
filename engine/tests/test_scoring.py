@@ -110,9 +110,9 @@ def test_action_candidate_requires_top_quintile_uptrend_and_no_overheating(cfg):
 
 def test_action_wait_when_overheated_never_candidate(cfg):
     d = _decide(cfg, ind=_ind(atr_above_sma50=4.5))
-    assert d["action"] == "wait" and d["entry"] and any("ATR" in w for w in d["why"])
+    assert d["action"] == "wait" and d["entry"] and any("daily moves" in w for w in d["why"])
     d = _decide(cfg, ind=_ind(r1m=0.25), sc=_sc(r1m_pct=98.0))
-    assert d["action"] == "wait" and any("en un mes" in w for w in d["why"])
+    assert d["action"] == "wait" and any("in one month" in w for w in d["why"])
     assert d["hold"]  # overheated is not a reason to sell what you already own
 
 
@@ -128,12 +128,44 @@ def test_action_avoid_and_sell_signal(cfg):
 def test_action_loss_making_company_is_watch_not_candidate(cfg):
     assert _decide(cfg, ind=_ind(profitable=0.0))["action"] == "watch"
     unknown = _decide(cfg, ind=_ind(profitable=np.nan))
-    assert unknown["action"] == "candidate" and any("Beneficios" in w for w in unknown["why"])
+    assert unknown["action"] == "candidate" and any("check the fundamentals yourself" in w for w in unknown["why"])
     etf = _decide(cfg, ind=_ind(profitable=np.nan), cls="etf")
-    assert etf["action"] == "candidate" and not any("Beneficios" in w for w in etf["why"])
+    assert etf["action"] == "candidate" and not any("fundamentals" in w for w in etf["why"])
 
 
 def test_hold_buffer_keeps_top_half(cfg):
     d = _decide(cfg, sc=_sc(overall=55.0, momentum=60.0))
     assert d["action"] != "candidate" and d["hold"]
     assert not _decide(cfg, sc=_sc(overall=45.0, momentum=60.0))["hold"]
+
+
+GOOD = dict(fscore=7.0, zscore=4.0, cfo=1e9, share_change=0.0, accruals=-0.02, ebit_ev=0.05)
+
+
+def test_fundamentals_pass_makes_a_candidate(cfg):
+    d = _decide(cfg, ind=_ind(**GOOD))
+    assert d["action"] == "candidate" and any("Passes the fundamental checks" in w for w in d["why"])
+
+
+def test_distress_is_a_red_flag_avoid(cfg):
+    d = _decide(cfg, ind=_ind(**{**GOOD, "zscore": 0.7}))
+    assert d["action"] == "avoid" and not d["hold"] and any("Altman" in w for w in d["why"])
+
+
+def test_each_yellow_flag_blocks_the_candidate(cfg):
+    for k, v, text in [("fscore", 3.0, "F-Score 3/9"), ("cfo", -1e8, "Burns cash"), ("share_change", 0.12, "share count grew 12%"),
+                       ("accruals", 0.2, "not backed by cash"), ("ebit_ev", 0.004, "Extremely expensive")]:
+        d = _decide(cfg, ind=_ind(**{**GOOD, k: v}))
+        assert d["action"] == "watch", k
+        assert any(text in w for w in d["why"]), (k, d["why"])
+        assert d["hold"]  # a yellow flag alone does not force a sale
+
+
+def test_yellow_flags_also_shown_when_waiting(cfg):
+    d = _decide(cfg, ind=_ind(**{**GOOD, "atr_above_sma50": 4.5, "fscore": 2.0}))
+    assert d["action"] == "wait" and any("F-Score 2/9" in w for w in d["why"])
+
+
+def test_bank_candidate_explains_why_health_scores_do_not_apply(cfg):
+    d = _decide(cfg, ind=_ind(**{**GOOD, "fscore": np.nan, "zscore": np.nan, "roa": 0.012, "financial": True}))
+    assert d["action"] == "candidate" and any("Bank or insurer" in w for w in d["why"])

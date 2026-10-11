@@ -103,6 +103,36 @@ action:
     min_overall: 50           # buffer: keep a holding while it stays in the top half and is not "avoid"
   fundamentals_max_age_days: 550  # older annual net income is ignored (profitability unknown)
 
+# Fundamental analysis (SEC XBRL, last annual report). Scored as cross-sectional percentiles
+# among eligible stocks, like the momentum scores. See engine/warrenia_engine/fundamentals.py.
+fundamentals:
+  max_age_days: 550             # last fiscal year must have ended within this many days
+  scores:
+    quality:                    # Novy-Marx 2013; Sloan 1996; Asness, Frazzini & Pedersen 2019
+      gross_profitability: 0.25
+      roa: 0.25
+      cfo_assets: 0.25
+      low_accruals: 0.25
+    safety:                     # Piotroski 2000; Altman 1968/1995
+      fscore: 0.3
+      zscore: 0.3
+      low_debt: 0.2
+      interest_coverage: 0.2
+    value:                      # Greenblatt 2006; Gray & Carlisle 2012
+      ebit_ev: 0.4
+      fcf_yield: 0.3
+      earnings_yield: 0.3
+  overall:
+    quality: 0.4
+    safety: 0.3
+    value: 0.3
+  rules:                        # a "Buy candidate" must pass all of them when the data exists
+    distress_zscore: 1.1        # Altman Z'' below 1.1 = distress zone -> Avoid
+    min_fscore: 5               # Piotroski F-Score >= 5 of 9 (average or better)
+    max_dilution: 0.05          # diluted share count grew <= 5% in the last fiscal year
+    max_accruals: 0.10          # (net income - operating cash flow) / assets <= 10%
+    min_ebit_ev: 0.01           # EV/EBIT above 100 is "extremely expensive"
+
 rank_history:
   daily_sessions: 25          # daily points for the most recent sessions
   weekly_back: 252            # then every 5th session back to this many sessions

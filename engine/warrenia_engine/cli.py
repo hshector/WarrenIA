@@ -65,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
         compute_and_publish(storage, cfg, now=session_close_utc(prev) + timedelta(hours=5), demo=True,
                             provider_name="synthetic (DEMO)")
         out = compute_and_publish(storage, cfg, now=now, demo=True, provider_name="synthetic (DEMO)")
+        from .pipeline import refresh_profiles
+        if refresh_profiles(prov, Lake(storage), storage, now=now, max_calls=200).get("fetched"):
+            out = compute_and_publish(storage, cfg, now=now, demo=True, provider_name="synthetic (DEMO)")
         print(json.dumps({"ingest": summary, "publish": out}, indent=2, ensure_ascii=False))
         return 0
 
@@ -89,6 +92,11 @@ def main(argv: list[str] | None = None) -> int:
             summary = ingest(prov, Lake(storage), cfg, now=now, max_seconds=args.max_minutes * 60,
                              fundamentals_provider=sec)
             print(json.dumps({"ingest": summary}, indent=2, ensure_ascii=False))
+            from .pipeline import refresh_profiles
+            try:  # profiles of the previous ranking's leaders; informative, never blocks the publish
+                print(json.dumps({"profiles": refresh_profiles(prov, Lake(storage), storage, now=now)}))
+            except Exception as e:  # noqa: BLE001
+                print(json.dumps({"profiles": f"failed: {type(e).__name__}"}))
         out = compute_and_publish(storage, cfg, now=now, demo=False)
         print(json.dumps({"publish": out}, indent=2, ensure_ascii=False))
         return 0 if out["status"] == "ok" else 0  # degraded runs still publish (flagged)

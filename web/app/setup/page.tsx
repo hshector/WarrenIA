@@ -1,22 +1,22 @@
 import { Wordmark } from "@/components/shell/brand";
 
-export const metadata = { title: "Configuración pendiente" };
+export const metadata = { title: "Setup needed" };
 
 export default function SetupPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-6 px-4">
       <Wordmark />
       <div className="card p-6">
-        <h1 className="text-[17px] font-semibold">Configuración pendiente</h1>
+        <h1 className="text-[17px] font-semibold">Setup needed</h1>
         <p className="t-body mt-2">
-          Falta configuración de Supabase o de ALLOWED_EMAILS. Por seguridad no se muestran datos ni se permite el acceso sin autenticación.
+          Supabase or ALLOWED_EMAILS is not configured. For safety no data is shown and nobody can sign in until it is.
         </p>
         <p className="t-body mt-2">
-          Añade en Vercel las variables <code className="font-mono text-ink">NEXT_PUBLIC_SUPABASE_URL</code>, <code className="font-mono text-ink">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>,{" "}
-          <code className="font-mono text-ink">SUPABASE_SECRET_KEY</code> y <code className="font-mono text-ink">ALLOWED_EMAILS</code> (ver docs/DEPLOY.md) y vuelve a desplegar.
+          Add these variables in Vercel: <code className="font-mono text-ink">NEXT_PUBLIC_SUPABASE_URL</code>, <code className="font-mono text-ink">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>,{" "}
+          <code className="font-mono text-ink">SUPABASE_SECRET_KEY</code> and <code className="font-mono text-ink">ALLOWED_EMAILS</code> (see docs/DEPLOY.md), then redeploy.
         </p>
         <a href="/setup/check" className="mt-4 inline-block text-[15px] font-medium text-accent">
-          Comprobar qué falta
+          Check what is missing
         </a>
       </div>
     </main>

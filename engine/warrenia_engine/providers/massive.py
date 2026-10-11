@@ -131,3 +131,10 @@ class MassiveProvider:
         # One row per ticker and ex-date, so a later re-fetch (corrected amount) replaces it instead of adding.
         return out.groupby(["ticker", "ex_date"], as_index=False).agg(cash_amount=("cash_amount", "sum"),
                                                                      currency=("currency", "first"))
+
+    def ticker_details(self, ticker: str) -> dict:
+        """Company profile (what the business does). One call per ticker: used sparingly and cached."""
+        r = self.http.get_json(self._url(f"/v3/reference/tickers/{ticker}")).get("results") or {}
+        return {"ticker": ticker, "name": r.get("name"), "description": r.get("description"),
+                "homepage": r.get("homepage_url"), "employees": r.get("total_employees"),
+                "list_date": r.get("list_date"), "industry": r.get("sic_description")}

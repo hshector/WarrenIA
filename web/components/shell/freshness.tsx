@@ -7,11 +7,11 @@ import type { Latest } from "@/lib/market/types";
 export function FreshnessStamp({ latest, fresh }: { latest: Latest | null; fresh: Freshness | null }) {
   if (!latest) return <span className="text-[13px] text-ink-3">Sin datos</span>;
   const stale = !latest.demo && fresh?.status === "stale";
-  const title = `Datos del cierre del ${dateLabel(latest.data_asof)} (NYSE) · calculado ${dateTimeLabel(latest.computed_at)}${fresh ? ` · ${fresh.label}` : ""}`;
+  const title = `Data from the ${dateLabel(latest.data_asof)} close (NYSE) · calculated ${dateTimeLabel(latest.computed_at)}${fresh ? ` · ${fresh.label}` : ""}`;
   return (
     <span title={title} className={cx("inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium", stale ? "bg-warn-soft text-warn" : "bg-surface-3/70 text-ink-2")}>
       <span className={cx("h-1.5 w-1.5 rounded-full", stale ? "bg-warn" : latest.demo ? "bg-accent" : "bg-pos")} />
-      {latest.demo && <span className="hidden sm:inline">Demo · </span>}Cierre {dateLabel(latest.data_asof, false)}
+      {latest.demo && <span className="hidden sm:inline">Demo · </span>}Close {dateLabel(latest.data_asof, false)}
     </span>
   );
 }
@@ -20,10 +20,10 @@ export function DataBanners({ latest, fresh, warnings = [], error }: { latest: L
   const msgs: { tone: "accent" | "warn"; text: React.ReactNode }[] = [];
   if (error) msgs.push({ tone: "warn", text: error });
   if (!latest) return msgs.length ? <Banners msgs={msgs} /> : null;
-  if (latest.demo) msgs.push({ tone: "accent", text: "Estás viendo datos de demostración (ficticios). Conecta los datos reales en Ajustes." });
+  if (latest.demo) msgs.push({ tone: "accent", text: "You are looking at demo (fictitious) data. Connect real data in Settings." });
   if (!latest.demo && fresh?.status === "stale")
-    msgs.push({ tone: "warn", text: <>Datos desactualizados: son del cierre del {dateLabel(latest.data_asof)} y ya ha cerrado el {dateLabel(fresh.expected)}.</> });
-  if (latest.status === "degraded" && !latest.demo) msgs.push({ tone: "warn", text: warnings[0] ?? "La última actualización terminó con avisos." });
+    msgs.push({ tone: "warn", text: <>Out-of-date data: from the {dateLabel(latest.data_asof)} close, but {dateLabel(fresh.expected)} has already closed.</> });
+  if (latest.status === "degraded" && !latest.demo) msgs.push({ tone: "warn", text: warnings[0] ?? "The last update finished with warnings." });
   if (!msgs.length) return null;
   return <Banners msgs={msgs} />;
 }

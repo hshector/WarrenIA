@@ -6,6 +6,7 @@ Layout (inside the Storage):
   lake/ref/splits.parquet        split events
   lake/ref/dividends.parquet     dividend events
   lake/ref/fundamentals.parquet  SIC + shares outstanding
+  lake/ref/facts.parquet         SEC XBRL annual facts (fundamental analysis)
   lake/state.json                ingested sessions, provider, refresh timestamps
 """
 

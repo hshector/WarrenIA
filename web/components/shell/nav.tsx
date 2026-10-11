@@ -7,11 +7,11 @@ import { IconOverview, IconPlan, IconPortfolio, IconRadar, IconSettings } from "
 import { cx } from "@/components/ui/primitives";
 
 export const NAV = [
-  { href: "/", label: "Inicio", icon: IconOverview },
+  { href: "/", label: "Home", icon: IconOverview },
   { href: "/plan", label: "Plan", icon: IconPlan },
   { href: "/radar", label: "Radar", icon: IconRadar },
-  { href: "/portfolio", label: "Cartera", icon: IconPortfolio },
-  { href: "/settings", label: "Ajustes", icon: IconSettings },
+  { href: "/portfolio", label: "Portfolio", icon: IconPortfolio },
+  { href: "/settings", label: "Settings", icon: IconSettings },
 ];
 
 function active(path: string, href: string) {
@@ -23,7 +23,7 @@ function active(path: string, href: string) {
 export function TopNav() {
   const path = usePathname();
   return (
-    <nav aria-label="Principal" className="hidden items-center gap-1 rounded-full bg-surface-3/70 p-1 md:flex">
+    <nav aria-label="Main" className="hidden items-center gap-1 rounded-full bg-surface-3/70 p-1 md:flex">
       {NAV.map(({ href, label }) => {
         const on = active(path, href);
         return (
@@ -44,7 +44,7 @@ export function TopNav() {
 export function TabBar() {
   const path = usePathname();
   return (
-    <nav aria-label="Principal" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
       {NAV.map(({ href, label, icon: Icon }) => {
         const on = active(path, href);
         return (

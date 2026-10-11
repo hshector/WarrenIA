@@ -80,7 +80,20 @@ const ETFS = [
   { n: "Xtrackers MSCI World Information Technology UCITS ETF 1C (acumulación, USD)", r6m: 4.56 },
   { n: "QQQ", d1: -0.1234 },
 ];
-const LONG_WHY = "Momentum fuerte en 3, 6 y 12 meses con una aceleración reciente muy superior a la de su sector y al índice de referencia (p99)";
+const LONG_WHY = "Strong momentum over 3, 6 and 12 months with a recent acceleration far above its sector and the benchmark index (top 1%)";
+const LONG_DESC =
+  "Taiwan Semiconductor Manufacturing Company Limited, together with its subsidiaries, manufactures, packages, tests and sells integrated circuits and other semiconductor devices in Taiwan, China, Europe, the Middle East, Africa, Japan, the United States and internationally. ".repeat(4);
+const EXTREME_FUND = {
+  available: true,
+  metrics: {
+    fy_end: "2025-12-31", revenue: 2.9e12, revenue_growth: 12.345, gross_margin: 0.98, operating_margin: -4.56, roa: -1.234, roe: null,
+    gross_profitability: 1.5, cfo: -9.9e11, fcf: -1.2e12, accruals: 0.987, share_change: 3.21, debt_assets: 0.99, interest_coverage: -123,
+    fscore: 0, zscore: -98.7, ebit_ev: 0.00001, fcf_yield: -0.5, earnings_yield: -0.3, pe: null, pb: 1234.5, shareholder_yield: 0,
+    mcap: 3.48e12, net_income: -4.2e11, financial: false, debt_reported: false,
+    fscore_signals: { roa_positive: false, cfo_positive: false, roa_improving: null, cash_earnings: false, leverage_not_up: false, liquidity_up: null, no_dilution: false, margin_up: true, turnover_up: false },
+  },
+  scores: { fund: 0.5, f_quality: 0.1, f_safety: null, f_value: 99.9 },
+};
 
 const patched = new Map(); // ticker -> patched row
 const latest = JSON.parse(readFileSync(path.join(out, "published", "latest.json"), "utf8"));
@@ -109,6 +122,11 @@ for (const run of readdirSync(path.join(out, "published", "runs"))) {
     for (const [t, detail] of Object.entries(shard)) {
       const r = radar.rows.find((x) => x.t === t);
       if (r && detail.row) detail.row = r;
+      if (r && patched.has(t) && r.n === STOCKS[0].n) {
+        detail.profile = { description: LONG_DESC, homepage: "https://www.example.com/a/very/long/path/that/never/ends/investor-relations", employees: 76478, list_date: "1997-10-08", industry: "Semiconductors & Related Devices", fetched_at: "2026-10-01T00:00:00Z" };
+        detail.fundamentals = EXTREME_FUND;
+        if (detail.action) detail.action.why = [LONG_WHY, ...detail.action.why, "Dilutes shareholders: share count grew 321% last year"];
+      }
     }
     writeGz(path.join(assets, f), shard);
   }
@@ -134,11 +152,11 @@ const instruments = [
   ins(2, { name: top.n, kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: top.t }),
   ins(3, { name: penny.n, kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: penny.t }),
   ins(4, { name: loser.n, kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: loser.t }),
-  ins(5, { name: "Oro", kind: "etc", bucket: "gold" }),
+  ins(5, { name: "Gold", kind: "etc", bucket: "gold" }),
 ];
 let n = 0;
 const tx = (o) => ({ id: id(1000 + ++n), instrument_id: null, quantity: null, price: null, amount: null, fees: 0, taxes: 0, currency: "EUR", fx_rate: 1, split_ratio: null, note: null, source: "manual", ...o });
-const transactions = [tx({ type: "deposit", trade_date: "2024-01-02", amount: 12_480_000, note: "Venta del piso de la calle Doctor Fleming y traspaso desde la cuenta de ahorro de Banco Santander (referencia 0049-1500-05-2710058743)" })];
+const transactions = [tx({ type: "deposit", trade_date: "2024-01-02", amount: 12_480_000, note: "Sale of the flat on Calle Doctor Fleming and transfer from the Banco Santander savings account (reference 0049-1500-05-2710058743)" })];
 for (let m = 0; m < 30; m++) {
   const d = new Date(Date.UTC(2024, 1 + m, 1)).toISOString().slice(0, 10);
   transactions.push(tx({ type: "deposit", trade_date: d, amount: 450 }));
@@ -157,7 +175,23 @@ const store = {
   transactions,
   manual_prices: [{ id: id(9001), instrument_id: id(5), price_date: "2026-10-01", price: 2_904.15 }],
   watchlist: [...patched.keys()].map((t) => ({ ticker: t, note: null, added_at: "2026-01-01T00:00:00Z" })),
-  settings: { targets: { core: 0.75, gold: 0.1, momentum: 0.15 }, band_abs: 0.05, band_rel: 0.25, monthly_contribution: 125_000 },
+  settings: {
+    targets: { core: 0.75, gold: 0.1, momentum: 0.15 },
+    band_abs: 0.05,
+    band_rel: 0.25,
+    monthly_contribution: 125_000,
+    // Every diversifier at once, with uneven weights.
+    choices: {
+      core: [{ isin: "IE00B3YLTY66", weight: 1 }],
+      gold: [
+        { isin: "IE00B4ND3602", weight: 0.35 },
+        { isin: "LU1650487413", weight: 0.25 },
+        { isin: "IE00BDFL4P12", weight: 0.2 },
+        { isin: "IE00B4NCWG09", weight: 0.1 },
+        { isin: "XS2940466316", weight: 0.1 },
+      ],
+    },
+  },
 };
 writeFileSync(path.join(out, "user.json"), JSON.stringify(store, null, 1));
 console.log(`Worst-case data in ${out} (${patched.size} rows rewritten; store: ${instruments.length} instruments, ${transactions.length} transactions)`);

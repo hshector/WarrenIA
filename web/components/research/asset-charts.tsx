@@ -54,7 +54,7 @@ export function AssetCharts({
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-3">
         <span className={cx("num text-[15px] font-semibold", change === null ? "text-ink-2" : change >= 0 ? "text-pos" : "text-neg")}>
-          {pct(change)} <span className="font-normal text-ink-3">en el periodo</span>
+          {pct(change)} <span className="font-normal text-ink-3">over the period</span>
         </span>
         {bench && (
           <Segmented
@@ -62,7 +62,7 @@ export function AssetCharts({
             value={mode}
             onChange={setMode}
             options={[
-              { value: "price", label: "Precio" },
+              { value: "price", label: "Price" },
               { value: "rel", label: `vs ${benchName}` },
             ]}
             ariaLabel="Vista"
@@ -70,7 +70,7 @@ export function AssetCharts({
         )}
       </div>
       {specs[0]?.data.length > 1 ? (
-        <TimeSeriesChart series={specs} height={height} ariaLabel={mode === "rel" ? `Evolución relativa frente a ${benchName}` : "Evolución del precio"} />
+        <TimeSeriesChart series={specs} height={height} ariaLabel={mode === "rel" ? `Performance relative to ${benchName}` : "Price history"} />
       ) : (
         <div className="flex items-center justify-center text-[14px] text-ink-3" style={{ height }}>
           Sin datos suficientes.
@@ -96,7 +96,7 @@ export function AssetCharts({
           </label>
         )}
       </div>
-      {mode === "rel" && <p className="text-[13px] text-ink-3">Si la línea sube, el activo lo hace mejor que {benchName}. Base 100 al inicio del periodo.</p>}
+      {mode === "rel" && <p className="text-[13px] text-ink-3">If the line rises, the asset is doing better than {benchName}. 100 at the start of the period.</p>}
     </div>
   );
 }
@@ -104,6 +104,6 @@ export function AssetCharts({
 /** Rank history (technical detail). */
 export function RankChart({ hist }: { hist: { d: string[]; r: (number | null)[] } }) {
   const pts = hist.d.map((d, i) => ({ time: d, value: hist.r[i] === null ? NaN : -(hist.r[i] as number) })).filter((p) => Number.isFinite(p.value));
-  if (pts.length < 2) return <p className="text-[14px] text-ink-3">Sin histórico suficiente.</p>;
-  return <TimeSeriesChart series={[{ kind: "line", data: pts, color: "var(--accent)", width: 2, priceFormat: "rank" }]} height={180} ariaLabel="Evolución de la posición en el ranking" />;
+  if (pts.length < 2) return <p className="text-[14px] text-ink-3">Not enough history.</p>;
+  return <TimeSeriesChart series={[{ kind: "line", data: pts, color: "var(--accent)", width: 2, priceFormat: "rank" }]} height={180} ariaLabel="Rank over time" />;
 }

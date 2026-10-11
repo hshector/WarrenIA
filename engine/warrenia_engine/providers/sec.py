@@ -23,6 +23,7 @@ from datetime import date
 import pandas as pd
 
 from ..http import HttpClient, ProviderError
+from ..fundamentals import CONCEPTS, FACT_COLUMNS, frame_names
 from .base import FUNDAMENTAL_COLUMNS, empty
 
 log = logging.getLogger(__name__)
@@ -138,6 +139,32 @@ class SecFundamentals:
                  sum(1 for x in rows if x["shares"]), sum(1 for x in rows if x["sic"]),
                  sum(1 for x in rows if x["net_income"] is not None))
         return pd.DataFrame(rows, columns=FUNDAMENTAL_COLUMNS) if rows else empty(FUNDAMENTAL_COLUMNS)
+
+
+    def facts(self, ciks: set[int] | None = None) -> pd.DataFrame:
+        """Annual flows and fiscal-year-end balances for every US GAAP filer (FACT_COLUMNS).
+
+        About 230 frame requests (one per tag and period). A failed frame is skipped and logged:
+        fundamentals are informative and must never block the daily run.
+        """
+        frames = frame_names(self.today)
+        rows: list[tuple] = []
+        for concept, (kind, tags, unit) in CONCEPTS.items():
+            for tag in tags:
+                for frame in frames[kind]:
+                    try:
+                        data = self.http.get_json(f"https://data.sec.gov/api/xbrl/frames/us-gaap/{tag}/{unit}/{frame}.json")
+                    except ProviderError as e:
+                        if e.status != 404:
+                            log.warning("sec facts: %s %s: %s", tag, frame, e)
+                        continue
+                    for r in data.get("data", []):
+                        cik = int(r["cik"])
+                        if ciks is not None and cik not in ciks:
+                            continue
+                        rows.append((cik, concept, tag, kind, r.get("start"), r["end"], float(r["val"])))
+        log.info("sec facts: %d values for %d filers", len(rows), len({r[0] for r in rows}))
+        return pd.DataFrame(rows, columns=FACT_COLUMNS) if rows else empty(FACT_COLUMNS)
 
 
 def _int_or_none(v) -> int | None:

@@ -10,7 +10,7 @@ import path from "node:path";
 const store = JSON.parse(readFileSync(path.resolve(process.cwd(), ".data", "e2e-worst", "user.json"), "utf8"));
 const TOP = store.instruments[1].market_ticker as string;
 
-const PAGES = ["/", "/radar", `/research/${TOP}`, "/portfolio", "/portfolio/transactions", "/watchlist"];
+const PAGES = ["/", "/plan", "/radar", `/research/${TOP}`, "/portfolio", "/portfolio/transactions", "/watchlist"];
 
 for (const p of PAGES) {
   test(`worst case renders without clipping on ${p}`, async ({ page }) => {
@@ -35,9 +35,9 @@ for (const p of PAGES) {
 
 test("worst case: headline amounts drop cents, tiny positions keep their precision", async ({ page }) => {
   await page.goto("/portfolio");
-  await expect(page.getByText(/^\d{1,3}(\.\d{3}){2,}\s€$/).first()).toBeVisible(); // millions, no cents
-  await expect(page.getByText("0,000123 uds")).toBeVisible();
-  await expect(page.getByText(/aportaciones por \d{1,3}(\.\d{3})+,\d{2}\s€/)).toBeVisible(); // formatted, not 7565580,99
+  await expect(page.getByText(/^€\d{1,3}(,\d{3}){2,}$/).first()).toBeVisible(); // millions, no cents
+  await expect(page.getByText("0.000123 units")).toBeVisible();
+  await expect(page.getByText(/Deposits of €\d{1,3}(,\d{3})+\.\d{2} were inferred/)).toBeVisible(); // formatted, not 7565580.99
 });
 
 test("company logos: cached logo is shown, otherwise initials", async ({ page, request }) => {

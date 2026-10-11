@@ -86,4 +86,20 @@ def test_stale_data_is_flagged(published):
     later = datetime(2026, 10, 14, 23, tzinfo=timezone.utc)  # two sessions later, no new ingest
     out = compute_and_publish(storage, cfg, now=later, demo=True)
     assert out["status"] == "degraded"
-    assert any("última sesión cerrada" in w for w in out["warnings"])
+    assert any("last closed session" in w for w in out["warnings"])
+
+
+def test_proxy_stats_describe_asset_classes(cfg, now):
+    from warrenia_engine.calendar import last_closed_session
+    from warrenia_engine.compute import build_context  # noqa: F401
+    from warrenia_engine.panels import build_panels
+    from warrenia_engine.providers.synthetic import SyntheticProvider
+    from warrenia_engine.proxies import proxy_stats
+
+    prov = SyntheticProvider(end=last_closed_session(now).session, sessions=380, n_stocks=20, n_etfs=5, seed=3)
+    P = build_panels(prov._bars, None, None, sessions=prov.sessions)
+    st = proxy_stats(P, len(P.dates) - 1, "SPY", cfg.proxies)
+    assert set(st) == set(cfg.proxies)
+    assert st["ACWI"]["corr_stocks"] > 0.8 and st["IEF"]["corr_stocks"] < 0 and st["GLD"]["corr_stocks"] < 0.2
+    assert st["IBIT"]["vol"] > st["GLD"]["vol"] > st["IEF"]["vol"]
+    assert 0 < st["IBIT"]["max_drawdown"] < 1 and st["IBIT"]["down_months"] >= 0

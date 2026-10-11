@@ -29,7 +29,7 @@ export function CompareChart({ sessions, series }: { sessions: string[]; series:
         <Segmented size="sm" value={range} onChange={setRange} options={[{ value: "3m", label: "3M" }, { value: "6m", label: "6M" }, { value: "1y", label: "1A" }, { value: "2y", label: "2A" }]} />
       </div>
       <TimeSeriesChart series={specs} height={320} ariaLabel="Rentabilidad comparada, base 100" />
-      <p className="t-meta">Rentabilidad total acumulada, base 100 al inicio del periodo.</p>
+      <p className="t-meta">Total return, 100 at the start of the period.</p>
     </div>
   );
 }

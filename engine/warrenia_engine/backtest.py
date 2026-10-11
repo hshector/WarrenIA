@@ -25,14 +25,14 @@ from .compute import Context, evaluate
 log = logging.getLogger(__name__)
 
 STRATEGIES = {
-    "pure_12_1": "Top N por retorno 12-1m (momentum clásico)",
-    "risk_adjusted": "Top N por Momentum Score (12-1 y 6-1 ajustados por volatilidad)",
-    "overall": "Top N por Overall Momentum Rank (metodología completa)",
-    "overall_filtered": "Overall Rank excluyendo Risk > p80 y volatilidad > 60%",
-    "candidates": "Top N solo entre «Candidatas» (lo que la app propone comprar: sin sobreextensión)",
-    "candidates_buffer": "Candidatas con regla de mantener: compra en el 20 % superior, vende al salir del 50 % "
-                         "superior o pasar a «Evitar» (el uso recomendado)",
-    "ew_universe": "Equiponderado de todo el universo elegible (referencia pasiva)",
+    "pure_12_1": "Top N by 12-month gain skipping the last month (classic momentum)",
+    "risk_adjusted": "Top N by trend strength (6 and 12-month gains adjusted for volatility)",
+    "overall": "Top N by overall momentum score (full method)",
+    "overall_filtered": "Overall score, excluding risk above 80/100 and volatility above 60%",
+    "candidates": "Top N among “Buy candidates” only (what the app suggests buying)",
+    "candidates_buffer": "Buy candidates with the keep rule: buy in the top 20%, sell when it leaves the top 50% "
+                         "or turns “Avoid” (the recommended use)",
+    "ew_universe": "Equal weight in the whole eligible market (passive reference)",
 }
 
 # Strategies that need the per-asset action (states + decide), computed only when used.
@@ -244,8 +244,8 @@ def run_backtest(ctx: Context, bt: BacktestConfig | None = None, start_t: int | 
         "status": "ok", "conclusive": conclusive,
         "period": {"first_signal": P.dates[rebal[0]].date().isoformat(), "last_signal": P.dates[rebal[-1]].date().isoformat(),
                    "end": P.dates[end_t].date().isoformat(), "rebalances": len(rebal), "years": round(years, 2)},
-        "settings": {"top_n": bt.top_n, "cost_bps_per_side": bt.cost_bps, "rebalance": "mensual (último día del mes)",
-                     "execution": "apertura de la sesión siguiente", "weights": "equiponderado, deriva hasta el siguiente rebalanceo",
+        "settings": {"top_n": bt.top_n, "cost_bps_per_side": bt.cost_bps, "rebalance": "monthly (last trading day)",
+                     "execution": "next day's open", "weights": "equal weight, drifting until the next rebalance",
                      "risk_free": 0.0},
         "strategies": STRATEGIES, "results": results,
         "sector_exposure_overall": {k: round(v, 4) for k, v in sorted(exp.items(), key=lambda x: -x[1])},
@@ -253,15 +253,15 @@ def run_backtest(ctx: Context, bt: BacktestConfig | None = None, start_t: int | 
         "curves": {"dates": [d.date().isoformat() for d in weekly.index],
                    "series": {k: [None if not np.isfinite(x) else round(float(x), 5) for x in weekly[k]] for k in weekly}},
         "limitations": [
-            "Con el plan gratuito solo hay ~2 años de historia: tras los 294 días de calentamiento quedan ~12 rebalanceos, "
-            "un único régimen de mercado y ninguna separación desarrollo/validación/test. Los resultados son "
-            "exploratorios y NO concluyentes." if not conclusive else
-            "Periodo largo: aun así, resultados pasados no garantizan resultados futuros.",
-            "La capitalización usa las acciones en circulación actuales (pequeño sesgo de anticipación en el filtro de tamaño).",
-            "El filtro de rentabilidad de las «Candidatas» usa el último beneficio anual publicado, no el conocido en cada fecha.",
-            "Valores que dejan de cotizar se valoran a su último precio disponible.",
-            "Sin impuestos ni tipo de cambio (rentabilidades en USD). Coste fijo por operación; sin impacto de mercado.",
-            "Rentabilidad sin riesgo = 0 en el Sharpe.",
+            "The free data plan has ~2 years of history: after the 294-day warm-up there are ~12 rebalances, "
+            "one market regime and no development/validation/test split. Results are exploratory and NOT "
+            "conclusive." if not conclusive else
+            "Long period: even so, past results do not guarantee future results.",
+            "Company size uses today's share count (a small look-ahead bias in the size filter).",
+            "The fundamental checks of the “Buy candidates” use the latest annual report, not the one known on each date.",
+            "Stocks that stop trading are valued at their last price.",
+            "No taxes or currency effects (returns in USD). A fixed cost per trade; no market impact.",
+            "Risk-free rate = 0 in the Sharpe ratio.",
         ],
     }
 
@@ -280,14 +280,14 @@ def run_and_publish(storage, cfg, now: datetime | None = None) -> dict:
     st = lake.state()
     sessions = sorted(pd.to_datetime(st.get("sessions", [])).date)
     if not sessions:
-        raise RuntimeError("lake vacío")
+        raise RuntimeError("empty lake")
     asof = sessions[-1]
     start = sessions[0]
     tickers = lake.read_ref("tickers")
     bars = lake.load_bars(start=start)
     bars = bars[bars["ticker"].isin(prefilter(bars, tickers, cfg))]
     P = build_panels(bars, lake.read_ref("splits"), lake.read_ref("dividends"), sessions=sessions_between(start, asof))
-    ctx = build_context(cfg, P, tickers, lake.read_ref("fundamentals"))
+    ctx = build_context(cfg, P, tickers, lake.read_ref("fundamentals"), lake.read_ref("facts"))
     out = run_backtest(ctx)
     out["computed_at"] = now.isoformat(timespec="seconds")
     out["data_asof"] = asof.isoformat()

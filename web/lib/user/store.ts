@@ -29,6 +29,7 @@ export interface UserStore {
   setWatch(ticker: string, on: boolean, note?: string | null): Promise<void>;
   settings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
+  saveChoices(c: NonNullable<Settings["choices"]>): Promise<void>;
 }
 
 export class AuthError extends Error {}
@@ -37,7 +38,7 @@ export class AuthError extends Error {}
 export async function requireStore(): Promise<UserStore> {
   const mode = appMode();
   if (mode === "local") return new LocalStore();
-  if (mode === "misconfigured") throw new AuthError("Aplicación sin configurar");
+  if (mode === "misconfigured") throw new AuthError("App not configured");
   const sb = await supabaseServer();
   const { data } = await sb.auth.getUser();
   if (!data.user || !isAllowedEmail(data.user.email)) throw new AuthError("No autorizado");
@@ -53,9 +54,9 @@ function check<T>(res: { data: T | null; error: { message: string; code?: string
     const c = res.error.code;
     console.error("db:", c, res.error.message);
     // Message is shown by app/(app)/error.tsx: say what to do, not the raw Postgres text.
-    if (c === "PGRST205" || c === "42P01") throw new Error("Faltan las tablas de la base de datos: ejecuta supabase/migrations/0001_init.sql en Supabase → SQL Editor.");
-    if (c === "42501") throw new Error("La base de datos no da permisos a tu usuario: vuelve a ejecutar supabase/migrations/0001_init.sql.");
-    throw new Error("Error de la base de datos. Inténtalo de nuevo.");
+    if (c === "PGRST205" || c === "42P01") throw new Error("Database tables are missing: run the files in supabase/migrations in Supabase → SQL Editor.");
+    if (c === "42501") throw new Error("The database denies access to your user: run supabase/migrations/0001_init.sql again.");
+    throw new Error("Database error. Please try again.");
   }
   return res.data as T;
 }
@@ -131,10 +132,17 @@ class SupabaseStore implements UserStore {
       band_abs: Number(r.band_abs),
       band_rel: Number(r.band_rel),
       monthly_contribution: Number(r.monthly_contribution),
+      choices: (r.choices as Settings["choices"]) ?? undefined,
     };
   }
   async saveSettings(s: Settings) {
-    check(await this.sb.from("settings").upsert({ ...s, updated_at: new Date().toISOString() }));
+    // choices are saved on their own (saveChoices): this keeps working before migration 0002 is applied.
+    const { choices: _ignored, ...rest } = s;
+    void _ignored;
+    check(await this.sb.from("settings").upsert({ ...rest, updated_at: new Date().toISOString() }));
+  }
+  async saveChoices(c: NonNullable<Settings["choices"]>) {
+    check(await this.sb.from("settings").upsert({ choices: c, updated_at: new Date().toISOString() }));
   }
 }
 
@@ -248,7 +256,12 @@ class LocalStore implements UserStore {
   }
   async saveSettings(s: Settings) {
     await this.mutate((d) => {
-      d.settings = s;
+      d.settings = { ...s, choices: s.choices ?? d.settings.choices };
+    });
+  }
+  async saveChoices(c: NonNullable<Settings["choices"]>) {
+    await this.mutate((d) => {
+      d.settings = { ...d.settings, choices: c };
     });
   }
 }

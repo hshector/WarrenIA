@@ -13,11 +13,11 @@ export function ValueChart({ series }: { series: DailyPoint[] }) {
     ],
     [series],
   );
-  if (series.length < 2) return <p className="py-8 text-center text-[14px] text-ink-3">El gráfico aparecerá a partir del segundo día.</p>;
+  if (series.length < 2) return <p className="py-8 text-center text-[14px] text-ink-3">The chart appears from the second day.</p>;
   return (
     <>
-      <TimeSeriesChart series={specs} height={200} ariaLabel="Valor de la cartera frente a lo aportado" />
-      <p className="mt-2 text-[12.5px] text-ink-3">Línea discontinua: dinero aportado.</p>
+      <TimeSeriesChart series={specs} height={200} ariaLabel="Portfolio value versus money invested" />
+      <p className="mt-2 text-[12.5px] text-ink-3">Dashed line: money invested.</p>
     </>
   );
 }

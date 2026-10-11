@@ -21,14 +21,14 @@ export function WatchButton({ ticker, initial }: { ticker: string; initial: bool
             () => undefined,
             () => {
               setOn(!next);
-              toast.error("No se pudo guardar el seguimiento");
+              toast.error("Could not save");
             },
           ),
         );
       }}
       className={cx("tap h-9 shrink-0 rounded-full px-4 text-[14px] font-semibold", on ? "bg-surface-3 text-ink" : "bg-accent text-accent-ink hover:bg-accent-2")}
     >
-      {on ? "Siguiendo" : "Seguir"}
+      {on ? "Following" : "Follow"}
     </button>
   );
 }

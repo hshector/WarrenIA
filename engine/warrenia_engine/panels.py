@@ -81,7 +81,7 @@ def build_panels(
             if t >= T or t == 0:
                 continue
             if not (row.split_from > 0 and row.split_to > 0):
-                notes.append(f"{row.ticker}: split ignorado (ratio inválido)")
+                notes.append(f"{row.ticker}: split ignored (invalid ratio)")
                 continue
             f = float(row.split_from) / float(row.split_to)
             price_ev[t, i] *= f
@@ -107,7 +107,7 @@ def build_panels(
             # dividend on the same basis as the raw close at t-1.
             ratio = row.cash_amount / prev
             if ratio >= 0.5:
-                notes.append(f"{row.ticker}: dividendo {row.cash_amount} ignorado (>{ratio:.0%} del precio)")
+                notes.append(f"{row.ticker}: dividend {row.cash_amount} ignored (>{ratio:.0%} of the price)")
                 continue
             price_ev[t, i] *= 1.0 - ratio
             events.setdefault(row.ticker, []).append((dates[t].date().isoformat(), 1.0 - ratio, "dividend",

@@ -83,7 +83,7 @@ def test_dividends_backfill_in_chunks_and_resume(tmp_path):
     st = lake.state()
     assert len(calls) == 1  # budget 0: exactly one chunk per run
     assert st["dividends_through"] == last.isoformat() and st["dividends_from"]
-    assert any("Dividendos cargados desde" in w for w in out["warnings"])
+    assert any("Dividends loaded from" in w for w in out["warnings"])
     ingest(prov, lake, cfg, now=NOW, history_sessions=120)  # second run finishes the backfill
     first = previous_sessions(last, 120)[0]
     assert lake.state()["dividends_from"] == first.isoformat()

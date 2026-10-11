@@ -63,6 +63,40 @@ export interface RadarRow {
   hold: boolean; // if already owned: keep (true) or review a sale (false)
   pe: number | null; // P/E on last annual net income (stocks; null if loss-making or unknown)
   prof: boolean | null; // profitable in the last fiscal year (null = unknown)
+  fund?: number | null; // Fundamentals score 0-100 (stocks; null = no US GAAP data)
+  fs?: number | null; // Piotroski F-Score 0-9
+  flags_f?: number; // fundamental flags: red x10 + yellow
+}
+
+export interface ProxyStats {
+  label: string;
+  from: string;
+  years: number;
+  ann_return: number | null;
+  vol: number | null;
+  max_drawdown: number | null;
+  corr_stocks: number | null;
+  beta_stocks: number | null;
+  worst_month: number | null;
+  when_stocks_fall: number | null;
+  stocks_when_fall: number | null;
+  down_months: number;
+}
+
+export interface Fundamentals {
+  available: boolean;
+  metrics?: Record<string, number | boolean | string | null> & { fscore_signals?: Record<string, boolean | null> | null };
+  scores?: { fund: number | null; f_quality: number | null; f_safety: number | null; f_value: number | null };
+  rules?: Record<string, number>;
+}
+
+export interface Profile {
+  description: string;
+  homepage: string | null;
+  employees: number | null;
+  list_date: string | null;
+  industry: string | null;
+  fetched_at: string;
 }
 
 export type BenchReturns = Record<string, { d1?: number | null; r1m: number | null; r3m: number | null; r6m: number | null; r12m: number | null; ytd?: number | null }>;
@@ -114,6 +148,8 @@ export interface ActionDecision {
   why: string[];
   entry: string | null;
   hold: boolean;
+  red_flags?: string[];
+  yellow_flags?: string[];
 }
 
 export interface AssetDetail {
@@ -124,6 +160,8 @@ export interface AssetDetail {
   components?: Record<"momentum" | "trend_quality" | "acceleration" | "risk", Component[]>;
   state?: { state: StateKey; tags: StateKey[]; trace: Record<string, RuleCondition[]> };
   action?: ActionDecision;
+  fundamentals?: Fundamentals | null;
+  profile?: Profile;
   report?: Report;
   hist?: { d: string[]; r: (number | null)[]; o: (number | null)[] };
   series?: { c: (number | null)[]; v: (number | null)[] };
@@ -166,6 +204,7 @@ export interface Meta {
     scores: Record<string, Record<string, number>>;
     overall: Record<string, number>;
     classification: Record<string, Record<string, number>>;
+    fundamentals?: { scores: Record<string, Record<string, number>>; overall: Record<string, number>; rules: Record<string, number> };
     windows: Record<string, number>;
     labels: Record<string, string>;
     universe: string;
@@ -190,6 +229,7 @@ export interface Market {
   breadth: { above_sma50?: number; above_sma200?: number; new_52w_high?: number; median_r3m?: number; n?: number };
   states: Record<AssetClass, Partial<Record<StateKey, number>>>;
   sectors: { sector: string; etf: string; r1m: number | null; r3m: number | null; r6m: number | null; r12m: number | null; rs_slope_21: number | null; strength: number | null; in_top50: number; eligible: number }[];
+  proxies?: Record<string, ProxyStats>;
   benchmarks: Record<string, { price: number | null; px_vs_sma50: number | null; px_vs_sma200: number | null; vol_63: number | null; dd_now: number | null; d1?: number | null; r1m: number | null; r3m: number | null; r6m: number | null; r12m: number | null }>;
   primary: string;
 }
@@ -236,60 +276,44 @@ export interface PriceFile {
 }
 
 export const STATE_LABELS: Record<StateKey, string> = {
-  strong: "Strong Uptrend",
-  improving: "Improving Momentum",
-  breakout: "Early Breakout",
-  extended: "Extended / Overheated",
-  weakening: "Weakening Momentum",
-  speculative: "High Volatility / Speculative",
-  neutral: "Neutral",
+  strong: "Strong, steady trend",
+  improving: "Gaining strength",
+  breakout: "New high (unconfirmed)",
+  extended: "Ran up too fast",
+  weakening: "Losing steam",
+  speculative: "Very volatile",
+  neutral: "No clear trend",
 };
 
-export const STATE_SHORT: Record<StateKey, string> = {
-  strong: "Strong",
-  improving: "Improving",
-  breakout: "Breakout",
-  extended: "Extended",
-  weakening: "Weakening",
-  speculative: "Speculative",
-  neutral: "Neutral",
-};
+export const STATE_SHORT = STATE_LABELS;
 
 /** Plain-language labels used in the interface. */
-export const STATE_SIMPLE: Record<StateKey, string> = {
-  strong: "Tendencia fuerte",
-  improving: "Mejorando",
-  breakout: "Ruptura",
-  extended: "Sobreextendida",
-  weakening: "Perdiendo fuerza",
-  speculative: "Muy volátil",
-  neutral: "Sin señal clara",
-};
+export const STATE_SIMPLE = STATE_LABELS;
 
 /** One-sentence explanation of each state for non-experts. */
 export const STATE_EXPLAIN: Record<StateKey, string> = {
-  strong: "Sube de forma sostenida, por encima de sus medias y cerca de máximos.",
-  improving: "Su impulso está mejorando frente al resto del mercado.",
-  breakout: "Acaba de superar sus máximos recientes con volumen. Falta confirmación.",
-  extended: "Tendencia fuerte, pero el precio se ha alejado mucho de su media.",
-  weakening: "Era una líder y está perdiendo impulso.",
-  speculative: "Movimientos muy bruscos: riesgo elevado.",
-  neutral: "No cumple las reglas de ninguna categoría concreta.",
+  strong: "Rising steadily, above its averages and near its highs.",
+  improving: "Its trend is getting stronger compared with the rest of the market.",
+  breakout: "It just broke above its recent highs on strong volume. Needs a few days to confirm.",
+  extended: "Strong trend, but the price has jumped far above its usual level in a short time.",
+  weakening: "It was a leader and is losing steam.",
+  speculative: "Very sharp moves: high risk.",
+  neutral: "It does not match any specific pattern.",
 };
 
 /** What to do with an asset now (engine: scoring.decide). */
 export const ACTION_LABELS: Record<ActionKey, string> = {
-  candidate: "Candidata",
-  wait: "Esperar retroceso",
-  watch: "Vigilar",
-  avoid: "Evitar",
-  none: "Sin señal",
+  candidate: "Buy candidate",
+  wait: "Wait for a dip",
+  watch: "Watch",
+  avoid: "Avoid",
+  none: "No signal",
 };
 
 export const ACTION_EXPLAIN: Record<ActionKey, string> = {
-  candidate: "Entre el 20 % más fuerte, con tendencia ordenada y sin haberse disparado: se puede comprar ahora.",
-  wait: "Tendencia fuerte, pero se ha disparado a corto plazo. Comprar ahora es comprar el pico: mejor esperar a que se modere.",
-  watch: "Interesante, pero todavía no es una compra: falta confirmación, fuerza o beneficios.",
-  avoid: "Sin momentum, demasiado volátil o perdiendo fuerza. No es para comprar; si la tienes, revisa la venta.",
-  none: "No tiene una señal de momentum clara.",
+  candidate: "In the strongest 20%, rising steadily without having shot up, and its finances pass every check: you can buy it now.",
+  wait: "Strong trend, but it shot up recently. Buying now means buying the spike: better to wait until it cools off.",
+  watch: "Interesting, but not a buy yet: something is missing (confirmation, strength or solid finances).",
+  avoid: "Weak trend, very volatile, losing steam or financially fragile. Not a buy; if you own it, consider selling.",
+  none: "No clear momentum signal.",
 };

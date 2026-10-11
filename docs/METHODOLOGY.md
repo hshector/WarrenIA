@@ -1,4 +1,4 @@
-# Metodología de momentum (v1.1)
+# Metodología de momentum (v1.2)
 
 Toda la configuración vive en [`config/momentum.yaml`](../config/momentum.yaml),
 [`config/universe.yaml`](../config/universe.yaml) y [`config/benchmarks.yaml`](../config/benchmarks.yaml).
@@ -126,23 +126,38 @@ respaldado es comprar el **pico de una subida explosiva**: el mes siguiente a un
 (reversión a corto plazo). Por eso cada activo recibe una acción con reglas fijas (`action` en `momentum.yaml`,
 `scoring.decide`):
 
-| Acción | Regla |
+| Acción (en la app) | Regla |
 |---|---|
-| **Evitar** | Speculative, Weakening, Momentum < 50 o precio por debajo de la SMA200 |
-| **Esperar retroceso** | Estado Extended (y Overall ≥ 60). Se indica la referencia de entrada (la SMA50) |
-| **Candidata** | Overall ≥ 80 (20 % superior), Momentum ≥ 70, precio > SMA50 > SMA200, sin Extended/Speculative/Weakening y sin pérdidas en el último ejercicio (si se conoce) |
-| **Vigilar** | Overall ≥ 60 sin cumplir lo anterior: ruptura sin confirmar, mejorando, empresa con pérdidas, Momentum < 70 o sin estructura alcista |
-| **Sin señal** | El resto |
+| **Avoid** | Speculative, Weakening, Momentum < 50, precio por debajo de la SMA200, **o bandera roja fundamental** (Altman Z'' < 1,1) |
+| **Wait for a dip** | Estado Extended («Ran up too fast») y Overall ≥ 60. Se indica la referencia de entrada (la SMA50) |
+| **Buy candidate** | Overall ≥ 80 (20 % superior), Momentum ≥ 70, precio > SMA50 > SMA200, sin Extended/Speculative/Weakening **y sin ninguna bandera amarilla fundamental** |
+| **Watch** | Overall ≥ 60 sin cumplir lo anterior (incluye las que tienen banderas amarillas) |
+| **No signal** | El resto |
 
 **Regla de mantener (buffer).** Para lo que ya tienes: *Mantener* mientras no sea «Evitar» y siga en la mitad superior
 (Overall ≥ 50); si no, *Revisar venta*. Comprar en el 20 % superior y vender solo al salir del 50 % superior reduce la
 rotación (y los impuestos) sin cambiar la idea de la estrategia; es la misma lógica de los *buffers* de los índices
 MSCI Momentum.
 
-**Valoración (informativa).** Para las acciones se publica el PER sobre el último beneficio neto anual (SEC XBRL,
-`us-gaap:NetIncomeLoss`, o `ProfitLoss` si no existe; se ignora si el ejercicio terminó hace más de 550 días). No entra
-en la puntuación. Solo se usa para no proponer como *Candidata* una empresa con pérdidas. Los emisores que reportan en
-IFRS (muchos ADR) quedan como «no disponible», nunca como pérdidas.
+**Fundamentales (v1.2).** Filtro estricto, no predictor: el momentum elige *qué sube*; los fundamentales descartan
+*empresas frágiles* que suben. Datos: último informe anual US GAAP en la SEC (XBRL *frames*), emparejado con el cierre
+de ejercicio de cada empresa (FY0, FY‑1, FY‑2); se ignora si tiene más de 550 días.
+
+| Medida | Fuente académica | Uso |
+|---|---|---|
+| Piotroski F‑Score (9 señales) | Piotroski (2000), *JAR* | Seguridad; < 5 = bandera amarilla. Solo si se conocen las 9 |
+| Altman Z'' (no manufactureras) | Altman (1968; Z'' 1995/2000) | Seguridad; < 1,1 = **bandera roja → Avoid** |
+| Beneficio bruto / activos | Novy‑Marx (2013), *JFE* | Calidad |
+| Devengos (BN − FCO) / activos | Sloan (1996), *TAR* | Calidad; > 10 % = bandera amarilla |
+| EBIT / EV | Greenblatt (2005); Gray y Carlisle (2012) | Valor; < 1 % = bandera amarilla |
+| Rentabilidad FCF y beneficio | Fama y French (1992); Asness, Frazzini y Pedersen (QMJ, 2019) | Valor |
+| Emisión neta de acciones | Pontiff y Woodgate (2008), *JF* | > 5 % anual = bandera amarilla |
+
+Otras banderas amarillas: pérdidas en el último ejercicio y flujo de caja operativo negativo. Las puntuaciones Quality,
+Safety y Value son percentiles entre las acciones del radar, combinadas 40/30/30 en un «Fundamentals score» (estilo
+QMJ). Pesos y umbrales en `fundamentals:` de `momentum.yaml`, fijados antes del backtest. Bancos y aseguradoras (SIC
+6000‑6799): el F‑Score y el Z'' no se aplican y no se inventan. Emisores IFRS (muchos ADR): «sin datos», nunca un
+suspenso. El PER sigue publicándose como dato informativo.
 
 **Validación.** El backtest compara «ranking completo» con «solo Candidatas» y «Candidatas con regla de mantener». La
 regla de esperar es de **prudencia** y no promete más rentabilidad. En el mercado sintético de demostración resta

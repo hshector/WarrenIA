@@ -15,7 +15,9 @@ Necesitas cuentas en: **GitHub** (ya la tienes), **Supabase**, **Vercel** y **Ma
 1. <https://supabase.com> → *New project*. Elige una región en la UE, p. ej. *Frankfurt*, y una contraseña de base de
    datos que guardarás tú.
 2. *SQL Editor* → *New query* → pega el contenido de [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql)
-   → *Run*. Crea las tablas con Row Level Security y el bucket privado `market`.
+   → *Run*. Crea las tablas con Row Level Security y el bucket privado `market`. Después, en otra *query*, pega
+   [`supabase/migrations/0002_settings_choices.sql`](../supabase/migrations/0002_settings_choices.sql) → *Run* (guarda
+   los productos que eliges en Plan). Si la base ya existía, ejecuta solo la 0002.
 3. *Project Settings → API Keys*. Anota:
    - **Project URL** (`https://xxxx.supabase.co`)
    - **Publishable key** (`sb_publishable_…`): se puede exponer al navegador.

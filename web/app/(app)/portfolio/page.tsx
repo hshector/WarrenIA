@@ -15,7 +15,7 @@ import { loadPortfolio } from "@/lib/portfolio/load";
 import { BUCKET_LABELS } from "@/lib/portfolio/types";
 import { requireStore } from "@/lib/user/store";
 
-export const metadata = { title: "Cartera" };
+export const metadata = { title: "Portfolio" };
 
 const BUCKET_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
@@ -37,15 +37,15 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   // Same outer structure in every branch so the action sheets keep their state across revalidation.
   const shell = (body: React.ReactNode) => (
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
-      <PageHeader title="Cartera" actions={actions} />
+      <PageHeader title="Portfolio" actions={actions} />
       {body}
     </div>
   );
   if (pf.error) {
     return shell(
       <>
-        <Callout tone="neg" title="Hay operaciones incoherentes">
-          {pf.error} Revísalas en <Link href="/portfolio/transactions" className="underline">Operaciones</Link>.
+        <Callout tone="neg" title="Some transactions don't add up">
+          {pf.error} Check them in <Link href="/portfolio/transactions" className="underline">Transactions</Link>.
         </Callout>
       </>,
     );
@@ -54,16 +54,16 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
     return shell(
       <>
         <EmptyState
-          title="Tu cartera está vacía"
+          title="Your portfolio is empty"
           action={
             <div className="flex flex-wrap justify-center gap-2">
-              <ButtonLink href="/portfolio/import">Importar CSV</ButtonLink>
+              <ButtonLink href="/portfolio/import">Import CSV</ButtonLink>
             </div>
           }
         >
-          <p>1. Añade un instrumento (por ejemplo, tu ETF MSCI World).</p>
-          <p>2. Registra tu aportación y tu compra.</p>
-          <p className="mt-2 text-ink-3">Usa los botones de arriba.</p>
+          <p>1. Add an instrument (e.g. your world ETF; the Plan has a shortcut).</p>
+          <p>2. Record your deposit and your purchase.</p>
+          <p className="mt-2 text-ink-3">Use the buttons above.</p>
         </EmptyState>
       </>,
     );
@@ -76,28 +76,28 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   return shell(
     <>
       <Card>
-        <p className="text-[14px] text-ink-2">Valor total</p>
+        <p className="text-[14px] text-ink-2">Total value</p>
         <p className="num mt-0.5 whitespace-nowrap text-[clamp(30px,9.5vw,40px)] font-bold leading-tight tracking-[-0.03em]">{moneyHeadline(t.value)}</p>
         <p className="num text-[15px]">
           <span className={t.gain >= 0 ? "font-semibold text-pos" : "font-semibold text-neg"}>
             {t.gain >= 0 ? "+" : ""}
             {money(t.gain)} ({pct(gainPct)})
           </span>{" "}
-          <span className="text-ink-3">sobre {money(t.netContributions, "EUR", 0)} aportados</span>
+          <span className="text-ink-3">on {money(t.netContributions, "EUR", 0)} invested</span>
         </p>
         <div className="mt-4">
           <ValueChart series={res.series} />
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-4">
           <div>
-            <p className="text-[13px] text-ink-2">Rentabilidad de tus inversiones</p>
+            <p className="text-[13px] text-ink-2">Return of your investments</p>
             <Delta v={res.twr.annualized ?? res.twr.cumulative} className="text-[19px] font-bold" />
-            <p className="text-[12.5px] text-ink-3">{res.twr.annualized !== null ? "anual (TWR)" : "acumulada (TWR)"}</p>
+            <p className="text-[12.5px] text-ink-3">{res.twr.annualized !== null ? "per year (time-weighted)" : "so far (time-weighted)"}</p>
           </div>
           <div>
-            <p className="text-[13px] text-ink-2">Rentabilidad de tu dinero</p>
+            <p className="text-[13px] text-ink-2">Return on your money</p>
             <Delta v={res.mwr.xirr} className="text-[19px] font-bold" />
-            <p className="text-[12.5px] text-ink-3">anual (TIR)</p>
+            <p className="text-[12.5px] text-ink-3">per year (money-weighted, IRR)</p>
           </div>
         </div>
       </Card>
@@ -108,7 +108,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
         </Callout>
       ))}
 
-      <Card title="Posiciones" pad={false}>
+      <Card title="Holdings" pad={false}>
         <ul className="mt-2 divide-y divide-line">
           {held.map((p) => {
             const mr = p.instrument.market_ticker ? rowsBy.get(p.instrument.market_ticker) : undefined;
@@ -119,7 +119,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
                 <span className="min-w-0 flex-1">
                   <span className="line-clamp-2 text-[15.5px] font-semibold leading-snug">{p.instrument.name}</span>
                   <span className="flex min-w-0 text-[13px] text-ink-2">
-                    <span className="num shrink-0 whitespace-nowrap">{units(p.qty)} uds</span>
+                    <span className="num shrink-0 whitespace-nowrap">{units(p.qty)} units</span>
                     <span className="truncate">
                       &nbsp;· {BUCKET_LABELS[p.instrument.bucket]}
                       {mr && withActions && <span className={holdLabel(mr).cls}> · {holdLabel(mr).text}</span>}
@@ -147,14 +147,14 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
           })}
           {res.cashEur > 0.005 && (
             <li className="flex items-center justify-between px-5 py-3 text-[15px]">
-              <span className="text-ink-2">Efectivo</span>
+              <span className="text-ink-2">Cash</span>
               <span className="num font-semibold">{money(res.cashEur)}</span>
             </li>
           )}
         </ul>
       </Card>
 
-      <Card title="Reparto frente a tu objetivo">
+      <Card title="Mix versus your target">
         <ul className="flex flex-col gap-4">
           {dev.map((d) => (
             <li key={d.bucket}>
@@ -172,20 +172,20 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
                 <div className={`absolute inset-y-0 left-0 rounded-full ${BUCKET_DOT[d.bucket]}`} style={{ width: `${Math.min(100, d.weight * 100)}%` }} />
                 <div className="absolute -inset-y-1 w-0.5 rounded bg-ink/70" style={{ left: `${d.target * 100}%` }} />
               </div>
-              {d.outsideBand && <p className="mt-1 text-[13px] text-warn">{d.deviation > 0 ? "Por encima" : "Por debajo"} de lo previsto: la próxima aportación lo corrige (ver Inicio).</p>}
+              {d.outsideBand && <p className="mt-1 text-[13px] text-warn">{d.deviation > 0 ? "Above" : "Below"} target: your next contribution corrects it (see Plan).</p>}
             </li>
           ))}
         </ul>
       </Card>
 
       {res.taxByYear.length > 0 && (
-        <Card title="Impuestos de tus ventas (estimación)" sub="Lo que declararías en la Renta por lo que has vendido. Informativo: revísalo con tu borrador o un asesor.">
+        <Card title="Tax on your sales (estimate)" sub="What you would declare in your Spanish tax return for what you sold. For reference: check it against your draft or an adviser.">
           <table className="w-full text-[14.5px]">
             <thead>
               <tr className="text-left text-[12.5px] text-ink-3">
-                <th className="pb-2 font-medium">Año</th>
-                <th className="pb-2 text-right font-medium">Ganancias patrimoniales</th>
-                <th className="pb-2 text-right font-medium">Capital mobiliario (ETC)</th>
+                <th className="pb-2 font-medium">Year</th>
+                <th className="pb-2 text-right font-medium">Capital gains</th>
+                <th className="pb-2 text-right font-medium">Capital income (ETCs)</th>
               </tr>
             </thead>
             <tbody>
@@ -199,10 +199,10 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
             </tbody>
           </table>
           {res.taxByYear.some((y) => y.deferred > 0) && (
-            <p className="mt-2 text-[13px] text-warn">Incluye pérdidas que no puedes computar todavía por haber recomprado los mismos títulos (ver avisos de arriba).</p>
+            <p className="mt-2 text-[13px] text-warn">Excludes losses you cannot use yet because you bought the same security back (see the warnings above).</p>
           )}
           <p className="mt-2 text-[12.5px] text-ink-3">
-            Coste y venta con comisiones, método FIFO y tipo de cambio de cada fecha. Los ETC de oro tributan como capital mobiliario (DGT V0267‑25); ambos van a la base del ahorro.
+            Cost and proceeds include fees, FIFO, and the exchange rate of each date. Gold ETCs are capital income (ruling V0267-25); both go to the savings base.
           </p>
         </Card>
       )}
@@ -210,19 +210,19 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
       <section className="card overflow-hidden">
         <details className="group">
           <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-[15px] font-medium [&::-webkit-details-marker]:hidden">
-            Más datos
+            More figures
             <IconChevronDown size={18} className="text-ink-3 transition-transform group-open:rotate-180" />
           </summary>
           <dl className="divide-y divide-line px-5 pb-3 text-[15px]">
             {[
-              ["Ganancia no realizada", money(t.unrealized)],
-              ["Ganancia realizada (FIFO)", money(t.realized)],
-              ["Dividendos", money(t.dividends)],
-              ["Intereses", money(t.interest)],
-              ["Comisiones", money(t.fees)],
-              ["Impuestos", money(t.taxes)],
-              ...res.byCurrency.map((c) => [`Exposición en ${c.currency}`, pct(c.weight, 1, false)] as [string, string]),
-              ["Valorado a", dateLabel(res.asOf)],
+              ["Unrealised gain", money(t.unrealized)],
+              ["Realised gain (FIFO)", money(t.realized)],
+              ["Dividends", money(t.dividends)],
+              ["Interest", money(t.interest)],
+              ["Fees", money(t.fees)],
+              ["Taxes", money(t.taxes)],
+              ...res.byCurrency.map((c) => [`Exposure to ${c.currency}`, pct(c.weight, 1, false)] as [string, string]),
+              ["Valued on", dateLabel(res.asOf)],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between py-2.5">
                 <dt className="text-ink-2">{k}</dt>
@@ -236,10 +236,10 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
 
       <div className="flex flex-wrap gap-2">
         <ButtonLink href="/portfolio/transactions" size="sm">
-          Operaciones e instrumentos
+          Transactions and instruments
         </ButtonLink>
         <ButtonLink href="/portfolio/import" size="sm">
-          Importar CSV
+          Import CSV
         </ButtonLink>
       </div>
     </>,

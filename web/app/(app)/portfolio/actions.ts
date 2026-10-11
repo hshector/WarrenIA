@@ -6,6 +6,7 @@ import { z } from "zod";
 import { computePortfolio, PortfolioError } from "@/lib/portfolio/engine";
 import { parseTransactionsCsv, type ParsedRow } from "@/lib/portfolio/csv";
 import type { Instrument, Transaction } from "@/lib/portfolio/types";
+import { normaliseChoices } from "@/lib/plan/catalog";
 import { requireStore } from "@/lib/user/store";
 
 export type ActionResult = { ok: boolean; message: string } | null;
@@ -17,26 +18,26 @@ const numStr = z.coerce.number().refine(Number.isFinite);
 const InstrumentSchema = z.object({
   id: opt(z.string().uuid()),
   name: z.string().trim().min(1).max(120),
-  isin: opt(z.string().trim().toUpperCase().regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/, "ISIN no válido")),
+  isin: opt(z.string().trim().toUpperCase().regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/, "Invalid ISIN")),
   kind: z.enum(["etf", "stock", "etc", "fund", "other"]),
   bucket: z.enum(["core", "gold", "momentum", "other"]),
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   price_source: z.enum(["us_market", "eodhd", "manual"]),
-  market_ticker: opt(z.string().trim().toUpperCase().regex(/^[A-Z0-9.\-]{1,12}$/, "Ticker no válido")),
-  eodhd_symbol: opt(z.string().trim().toUpperCase().regex(/^[A-Z0-9.\-]{1,24}$/, "Símbolo EODHD no válido")),
+  market_ticker: opt(z.string().trim().toUpperCase().regex(/^[A-Z0-9.\-]{1,12}$/, "Invalid ticker")),
+  eodhd_symbol: opt(z.string().trim().toUpperCase().regex(/^[A-Z0-9.\-]{1,24}$/, "Invalid EODHD symbol")),
   sector: opt(z.string().trim().max(60)),
 });
 
 function msg(e: unknown) {
   if (e instanceof z.ZodError) return e.issues.map((i) => i.message).join(" · ");
-  return e instanceof Error ? e.message : "Error inesperado";
+  return e instanceof Error ? e.message : "Unexpected error";
 }
 
 export async function saveInstrument(_: ActionResult, form: FormData): Promise<ActionResult> {
   try {
     const d = InstrumentSchema.parse(Object.fromEntries(form));
-    if (d.price_source === "us_market" && !d.market_ticker) return { ok: false, message: "Indica el ticker de EE. UU. para valorar con el motor de mercado" };
-    if (d.price_source === "eodhd" && !d.eodhd_symbol) return { ok: false, message: "Indica el símbolo EODHD (p. ej. EUNL.XETRA)" };
+    if (d.price_source === "us_market" && !d.market_ticker) return { ok: false, message: "Enter the US ticker so the market engine can value it" };
+    if (d.price_source === "eodhd" && !d.eodhd_symbol) return { ok: false, message: "Enter the EODHD symbol (e.g. EUNL.XETRA)" };
     const store = await requireStore();
     await store.upsertInstrument({
       ...(d.id ? { id: d.id } : {}),
@@ -44,7 +45,7 @@ export async function saveInstrument(_: ActionResult, form: FormData): Promise<A
       price_source: d.price_source, market_ticker: d.market_ticker ?? null, eodhd_symbol: d.eodhd_symbol ?? null, sector: d.sector ?? null,
     });
     revalidatePath("/portfolio", "layout");
-    return { ok: true, message: "Instrumento guardado" };
+    return { ok: true, message: "Instrument saved" };
   } catch (e) {
     return { ok: false, message: msg(e) };
   }
@@ -53,7 +54,7 @@ export async function saveInstrument(_: ActionResult, form: FormData): Promise<A
 export async function deleteInstrument(id: string) {
   const store = await requireStore();
   const txs = await store.transactions();
-  if (txs.some((t) => t.instrument_id === id)) throw new Error("El instrumento tiene operaciones: bórralas primero");
+  if (txs.some((t) => t.instrument_id === id)) throw new Error("This instrument has transactions: delete them first");
   await store.deleteInstrument(z.string().uuid().parse(id));
   revalidatePath("/portfolio", "layout");
 }
@@ -82,13 +83,13 @@ export async function addTransaction(_: ActionResult, form: FormData): Promise<A
   try {
     const raw = Object.fromEntries([...form.entries()].map(([k, v]) => [k, typeof v === "string" ? v.replace(",", ".") : v]));
     const d = TxSchema.parse({ ...raw, note: form.get("note") });
-    if (d.trade_date > today()) return { ok: false, message: "La fecha no puede ser futura" };
+    if (d.trade_date > today()) return { ok: false, message: "The date cannot be in the future" };
     const needsIns = ["buy", "sell", "dividend", "split"].includes(d.type);
-    if (needsIns && !d.instrument_id) return { ok: false, message: "Selecciona el instrumento" };
-    if ((d.type === "buy" || d.type === "sell") && (d.quantity === undefined || d.price === undefined)) return { ok: false, message: "Cantidad y precio son obligatorios" };
-    if (["deposit", "withdrawal", "dividend", "interest", "fee", "tax"].includes(d.type) && d.amount === undefined) return { ok: false, message: "Indica el importe" };
-    if (d.type === "split" && !d.split_ratio) return { ok: false, message: "Indica el ratio del split (acciones nuevas por cada antigua)" };
-    if (d.currency !== "EUR" && !d.fx_rate) return { ok: false, message: "Operación en divisa: indica el tipo de cambio aplicado (EUR por unidad)" };
+    if (needsIns && !d.instrument_id) return { ok: false, message: "Choose the instrument" };
+    if ((d.type === "buy" || d.type === "sell") && (d.quantity === undefined || d.price === undefined)) return { ok: false, message: "Quantity and price are required" };
+    if (["deposit", "withdrawal", "dividend", "interest", "fee", "tax"].includes(d.type) && d.amount === undefined) return { ok: false, message: "Enter the amount" };
+    if (d.type === "split" && !d.split_ratio) return { ok: false, message: "Enter the split ratio (new shares per old share)" };
+    if (d.currency !== "EUR" && !d.fx_rate) return { ok: false, message: "Foreign-currency transaction: enter the exchange rate used (EUR per unit)" };
     const store = await requireStore();
     const [instruments, txs] = await Promise.all([store.instruments(), store.transactions()]);
     const tx: Omit<Transaction, "id"> = {
@@ -100,7 +101,7 @@ export async function addTransaction(_: ActionResult, form: FormData): Promise<A
     await store.addTransactions([tx]);
     revalidatePath("/portfolio", "layout");
     revalidatePath("/");
-    return { ok: true, message: "Operación registrada" };
+    return { ok: true, message: "Transaction saved" };
   } catch (e) {
     if (e instanceof PortfolioError) return { ok: false, message: e.message };
     return { ok: false, message: msg(e) };
@@ -113,7 +114,7 @@ export async function deleteTransaction(id: string) {
   try {
     await validateLedger(instruments, txs.filter((t) => t.id !== id));
   } catch (e) {
-    if (e instanceof PortfolioError) throw new Error(`No se puede borrar: ${e.message}`);
+    if (e instanceof PortfolioError) throw new Error(`Cannot delete: ${e.message}`);
     throw e;
   }
   await store.deleteTransaction(id);
@@ -133,7 +134,7 @@ export interface ImportPreview {
 }
 
 async function buildPreview(text: string): Promise<ImportPreview> {
-  if (text.length > 2_000_000) return { ok: false, message: "Fichero demasiado grande (máx. 2 MB)", headerErrors: [], rows: [], valid: 0, invalid: 0 };
+  if (text.length > 2_000_000) return { ok: false, message: "File too large (max 2 MB)", headerErrors: [], rows: [], valid: 0, invalid: 0 };
   const store = await requireStore();
   const instruments = await store.instruments();
   const parsed = parseTransactionsCsv(text, today());
@@ -155,7 +156,7 @@ export async function commitImport(text: string): Promise<{ ok: boolean; message
   const p = await buildPreview(text);
   if (!p.ok) return { ok: false, message: p.headerErrors.join(" · ") || p.message };
   const good = p.rows.filter((r) => r.ok && r.tx);
-  if (!good.length) return { ok: false, message: "No hay filas válidas que importar" };
+  if (!good.length) return { ok: false, message: "No valid rows to import" };
   const store = await requireStore();
   let instruments = await store.instruments();
   for (const r of good) {
@@ -178,13 +179,13 @@ export async function commitImport(text: string): Promise<{ ok: boolean; message
   try {
     await validateLedger(instruments, [...existing, ...fresh.map((t, i) => ({ ...t, id: `n${i}` }))]);
   } catch (e) {
-    if (e instanceof PortfolioError) return { ok: false, message: `Importación cancelada: ${e.message}` };
+    if (e instanceof PortfolioError) return { ok: false, message: `Import cancelled: ${e.message}` };
     throw e;
   }
   const n = await store.addTransactions(fresh);
   revalidatePath("/portfolio", "layout");
   revalidatePath("/");
-  return { ok: true, message: `${n} operaciones importadas · ${txs.length - fresh.length} ya existían · ${p.invalid} filas con errores omitidas` };
+  return { ok: true, message: `${n} transactions imported · ${txs.length - fresh.length} already existed · ${p.invalid} rows with errors skipped` };
 }
 
 // --------------------------------------------------------------- settings
@@ -201,14 +202,14 @@ const SettingsSchema = z.object({
 export async function saveSettings(_: ActionResult, form: FormData): Promise<ActionResult> {
   try {
     const d = SettingsSchema.parse(Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).replace(",", ".")])));
-    if (Math.abs(d.core + d.gold + d.momentum - 100) > 0.01) return { ok: false, message: "Los pesos objetivo deben sumar 100 %" };
+    if (Math.abs(d.core + d.gold + d.momentum - 100) > 0.01) return { ok: false, message: "Target weights must add up to 100%" };
     const store = await requireStore();
     await store.saveSettings({
       targets: { core: d.core / 100, gold: d.gold / 100, momentum: d.momentum / 100 },
       band_abs: d.band_abs / 100, band_rel: d.band_rel / 100, monthly_contribution: d.monthly_contribution,
     });
     revalidatePath("/", "layout");
-    return { ok: true, message: "Ajustes guardados" };
+    return { ok: true, message: "Settings saved" };
   } catch (e) {
     return { ok: false, message: msg(e) };
   }
@@ -219,12 +220,34 @@ const PriceSchema = z.object({ instrument_id: z.string().uuid(), price_date: z.s
 export async function addManualPrice(_: ActionResult, form: FormData): Promise<ActionResult> {
   try {
     const d = PriceSchema.parse({ ...Object.fromEntries(form), price: String(form.get("price") ?? "").replace(",", ".") });
-    if (d.price_date > today()) return { ok: false, message: "Fecha futura" };
+    if (d.price_date > today()) return { ok: false, message: "Future date" };
     const store = await requireStore();
     await store.addManualPrice(d);
     revalidatePath("/portfolio", "layout");
-    return { ok: true, message: "Precio guardado" };
+    return { ok: true, message: "Price saved" };
   } catch (e) {
     return { ok: false, message: msg(e) };
+  }
+}
+
+const ChoicesSchema = z.object({
+  bucket: z.enum(["core", "gold", "momentum"]),
+  items: z.array(z.object({ isin: z.string().regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/), weight: z.number().min(0).max(100) })).max(10),
+});
+
+/** Products chosen for one block of the plan. Weights are relative; they are normalised to 100%. */
+export async function saveChoices(input: { bucket: "core" | "gold" | "momentum"; items: { isin: string; weight: number }[] }): Promise<ActionResult> {
+  try {
+    const d = ChoicesSchema.parse(input);
+    const store = await requireStore();
+    const current = normaliseChoices((await store.settings()).choices);
+    const next = normaliseChoices({ ...current, [d.bucket]: d.items });
+    if (!d.items.some((x) => x.weight > 0) || next[d.bucket].length === 0) return { ok: false, message: "Pick at least one product" };
+    await store.saveChoices(next);
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Plan updated" };
+  } catch (e) {
+    const m = msg(e);
+    return { ok: false, message: /choices/.test(m) ? "Your database needs migration 0002_settings_choices.sql (see docs/DEPLOY.md)." : m };
   }
 }

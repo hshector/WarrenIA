@@ -104,7 +104,7 @@ export function Sheet({
             <Grabber />
             <div className="flex items-center justify-between gap-3">
               <Dialog.Title className="text-[20px] font-bold">{title}</Dialog.Title>
-              <Dialog.Close className="tap rounded-full bg-surface-2 p-2 text-ink-2" aria-label="Cerrar">
+              <Dialog.Close className="tap rounded-full bg-surface-2 p-2 text-ink-2" aria-label="Close">
                 <IconClose size={16} />
               </Dialog.Close>
             </div>
