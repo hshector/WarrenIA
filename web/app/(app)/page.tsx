@@ -58,7 +58,7 @@ export default async function Home() {
               {res.totals.gain >= 0 ? "+" : ""}
               {money(res.totals.gain)} ({pct(gainPct)})
             </p>
-            <Sparkline series={res.series} className="-mx-6 -mb-6 mt-5 block h-[88px] w-[calc(100%+3rem)] text-hero-ink/70" />
+            <Sparkline series={res.series} window={30} className="-mx-6 -mb-6 mt-5 block h-[88px] w-[calc(100%+3rem)] text-hero-ink/70" />
           </>
         ) : (
           <>
