@@ -10,14 +10,54 @@ import path from "node:path";
 const store = JSON.parse(readFileSync(path.resolve(process.cwd(), ".data", "e2e-worst", "user.json"), "utf8"));
 const TOP = store.instruments[1].market_ticker as string;
 
-const PAGES = ["/", "/plan", "/radar", `/research/${TOP}`, "/portfolio", "/portfolio/transactions", "/watchlist", "/alerts", "/settings?tab=notifications"];
+const PAGES = [
+  "/",
+  "/plan",
+  "/radar",
+  "/radar?cls=etf&preset=all",
+  `/research/${TOP}`,
+  "/portfolio",
+  "/portfolio/transactions",
+  "/watchlist",
+  "/alerts",
+  "/settings",
+  "/settings?tab=data",
+  "/settings?tab=method",
+  "/settings?tab=backtest",
+  "/settings?tab=notifications",
+];
 
 for (const p of PAGES) {
   test(`worst case renders without clipping on ${p}`, async ({ page }) => {
     await page.goto(p);
     await page.waitForLoadState("networkidle");
-    const { scroll, clipped } = await page.evaluate(() => {
+    await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true))); // folded content too
+    const { scroll, clipped, outside } = await page.evaluate(() => {
       const clipped: string[] = [];
+      // Controls and text pushed past the edge of a card or the screen. On a phone
+      // the layout viewport grows to fit, so compare against clientWidth.
+      const outside: string[] = [];
+      const vw = document.documentElement.clientWidth;
+      const scrolls = (el: Element) => {
+        for (let a = el.parentElement; a; a = a.parentElement) {
+          if (/(auto|scroll)/.test(getComputedStyle(a).overflowX) && a.scrollWidth > a.clientWidth + 1) return true;
+        }
+        return false;
+      };
+      for (const el of document.querySelectorAll<HTMLElement>("header *, main *, nav *")) {
+        if (!/^(BUTTON|A|LABEL|INPUT|SELECT|SUMMARY|H1|H2|H3|P|DT|DD|TD|TH)$/.test(el.tagName) && el.getAttribute("role") !== "tab") continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || el.closest("svg, canvas, .sr-only") || scrolls(el)) continue;
+        let left = 0;
+        let right = vw;
+        for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+          if (getComputedStyle(a).overflowX === "visible") continue;
+          const ar = a.getBoundingClientRect();
+          left = Math.max(left, ar.left);
+          right = Math.min(right, ar.right);
+        }
+        if (r.right > right + 1.5 || r.left < left - 1.5) outside.push(`${el.tagName} «${(el.innerText || el.getAttribute("aria-label") || "").trim().slice(0, 40)}»`);
+      }
       for (const el of document.querySelectorAll<HTMLElement>("main *")) {
         const ownText = [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim());
         if (!ownText || !el.offsetWidth) continue;
@@ -26,10 +66,11 @@ for (const p of PAGES) {
         if (el.closest(".overflow-x-auto, .overflow-auto, input, select, textarea, svg")) continue; // scrolls
         if (el.scrollWidth > el.clientWidth + 1 && cs.display !== "inline") clipped.push(`${el.tagName} «${el.textContent!.trim().slice(0, 40)}»`);
       }
-      return { scroll: document.documentElement.scrollWidth - window.innerWidth, clipped };
+      return { scroll: document.documentElement.scrollWidth - vw, clipped, outside };
     });
     expect(scroll).toBeLessThanOrEqual(1);
     expect(clipped).toEqual([]);
+    expect(outside).toEqual([]);
   });
 }
 

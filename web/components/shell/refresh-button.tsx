@@ -80,7 +80,7 @@ export function RefreshButton() {
       disabled={!st?.configured || running}
       title={title}
       aria-label={title}
-      className="tap inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-3/70 text-ink-2 hover:text-ink disabled:opacity-40"
+      className="tap inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-3/70 text-ink-2 hover:text-ink disabled:opacity-40"
     >
       <IconRefresh size={16} className={cx(running && "animate-spin [animation-duration:0.9s]")} />
     </button>

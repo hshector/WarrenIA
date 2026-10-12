@@ -204,7 +204,7 @@ function BlockPicker({
                   value={v}
                   onChange={(e) => setW((s) => ({ ...s, [p.isin]: Number(e.target.value) }))}
                   aria-label={`Share of ${p.short}`}
-                  className="flex-1 accent-[var(--accent)]"
+                  className="min-w-0 flex-1 accent-[var(--accent)]"
                 />
                 <span className="num w-12 shrink-0 text-right font-semibold">{total > 0 ? pct(v / total, 0, false) : "0%"}</span>
               </label>
