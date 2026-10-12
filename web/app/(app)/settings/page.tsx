@@ -12,39 +12,78 @@ import { dateLabel, dateTimeLabel, int, num, pct } from "@/lib/format";
 import { computeFreshness } from "@/lib/market/freshness";
 import { getBacktest, getExcluded, loadMarket } from "@/lib/market/source";
 import type { Meta } from "@/lib/market/types";
+import { NotifySettings } from "@/components/alerts/notify-settings";
+import { DEFAULT_NOTIFY } from "@/lib/market/signals";
 import { appMode } from "@/lib/supabase/env";
 import { requireStore } from "@/lib/user/store";
 
-export const metadata = { title: "Datos y ajustes" };
+export const metadata = { title: "Settings" };
 
 const TABS = [
-  ["data", "Estado de los datos"],
-  ["method", "Cómo se calcula"],
-  ["backtest", "Validación histórica"],
-  ["portfolio", "Objetivo de cartera"],
-  ["account", "Cuenta"],
+  ["data", "Data status"],
+  ["method", "How it is calculated"],
+  ["backtest", "Historical test"],
+  ["portfolio", "Portfolio target"],
+  ["notifications", "Notifications"],
+  ["account", "Account"],
 ] as const;
 
-const SCORE_LABEL: Record<string, string> = { momentum: "Momentum Score", trend_quality: "Trend Quality", acceleration: "Acceleration Score", risk: "Risk Score (0 = menor riesgo)", inverse_risk: "100 − Risk" };
+const SCORE_LABEL: Record<string, string> = {
+  momentum: "Trend strength",
+  trend_quality: "Trend quality",
+  acceleration: "Acceleration",
+  risk: "Risk (0 = calmest)",
+  inverse_risk: "100 − Risk",
+  quality: "Quality",
+  safety: "Financial health",
+  value: "Value",
+};
+
+const FUND_LABEL: Record<string, string> = {
+  gross_profitability: "Gross profit on assets (Novy-Marx 2013)",
+  roa: "Return on assets",
+  cfo_assets: "Operating cash flow on assets",
+  low_accruals: "Profit backed by cash (Sloan 1996)",
+  fscore: "Piotroski F-Score (2000)",
+  zscore: "Altman Z'' bankruptcy score",
+  low_debt: "Low debt",
+  interest_coverage: "Interest coverage",
+  ebit_ev: "Operating profit / enterprise value (Greenblatt)",
+  fcf_yield: "Free cash flow yield",
+  earnings_yield: "Earnings yield",
+  distress_zscore: "Avoid if Altman Z'' is below",
+  min_fscore: "Buy candidate needs an F-Score of at least",
+  max_dilution: "…and share count growth of at most",
+  max_accruals: "…and accruals of at most",
+  min_ebit_ev: "…and operating profit / value of at least",
+};
 
 const MENU: { group: string; items: { href: string; label: string; sub: string }[] }[] = [
   {
-    group: "Datos",
+    group: "Data",
     items: [
-      { href: "/settings?tab=data", label: "Estado de los datos", sub: "Fecha, fuentes y cobertura" },
-      { href: "/settings?tab=method", label: "Cómo se calcula", sub: "Metodología del radar" },
-      { href: "/settings?tab=backtest", label: "Validación histórica", sub: "Backtest y sus límites" },
+      { href: "/settings?tab=data", label: "Data status", sub: "Date, sources and coverage" },
+      { href: "/settings?tab=method", label: "How it is calculated", sub: "Radar and fundamentals method" },
+      { href: "/settings?tab=backtest", label: "Historical test", sub: "Backtest and its limits" },
     ],
   },
   {
-    group: "Cartera",
+    group: "Portfolio",
     items: [
-      { href: "/settings?tab=portfolio", label: "Objetivo y aportación mensual", sub: "75 / 10 / 15 y bandas" },
-      { href: "/portfolio/transactions", label: "Operaciones e instrumentos", sub: "Editar o borrar" },
-      { href: "/portfolio/import", label: "Importar CSV", sub: "Con vista previa" },
+      { href: "/settings?tab=portfolio", label: "Target mix and monthly amount", sub: "Core / diversifiers / momentum and bands" },
+      { href: "/plan", label: "Products in each block", sub: "Core fund, diversifiers, momentum" },
+      { href: "/portfolio/transactions", label: "Transactions and instruments", sub: "Edit or delete" },
+      { href: "/portfolio/import", label: "Import CSV", sub: "With preview" },
     ],
   },
-  { group: "Cuenta", items: [{ href: "/settings?tab=account", label: "Cuenta", sub: "Sesión" }] },
+  {
+    group: "Alerts",
+    items: [
+      { href: "/settings?tab=notifications", label: "Notifications", sub: "Signal changes on your phone" },
+      { href: "/alerts", label: "Recent signal changes", sub: "What changed after each update" },
+    ],
+  },
+  { group: "Account", items: [{ href: "/settings?tab=account", label: "Account", sub: "Session" }] },
 ];
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string }> }) {
@@ -54,13 +93,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   if (!tab) {
     return (
       <div className="mx-auto max-w-[760px]">
-        <PageHeader title="Ajustes" />
+        <PageHeader title="Settings" />
         <div className="flex flex-col gap-6">
           <div>
-            <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">Apariencia</p>
+            <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">Appearance</p>
             <div className="card px-4 py-4">
               <ThemePicker />
-              <p className="mt-2.5 px-1 text-[13px] text-ink-3">Automático sigue el modo claro u oscuro de tu móvil.</p>
+              <p className="mt-2.5 px-1 text-[13px] text-ink-3">Automatic follows your phone&apos;s light or dark mode.</p>
             </div>
           </div>
           {MENU.map((g) => (
@@ -79,9 +118,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </div>
             </div>
           ))}
-          <p className="px-5 text-[12.5px] text-ink-3">WarrenIA es una herramienta de análisis: no ejecuta operaciones ni da recomendaciones.</p>
+          <p className="px-5 text-[12.5px] text-ink-3">WarrenIA is an analysis tool: it never places trades and is not personal financial advice.</p>
           <p className="-mt-4 px-5 text-[12.5px] text-ink-3">
-            Logos de empresas proporcionados por{" "}
+            Company logos provided by{" "}
             <a href="https://logo.dev" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
               Logo.dev
             </a>
@@ -95,15 +134,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="mx-auto max-w-[960px]">
       <Link href="/settings" className="text-[15px] font-medium text-accent">
-        ‹ Ajustes
+        ‹ Settings
       </Link>
       <div className="mt-3">
         <PageHeader title={title} />
       </div>
       {tab === "data" && <DataTab latest={latest} meta={meta} q={sp.q} />}
-      {tab === "method" && (meta ? <MethodTab meta={meta} /> : <EmptyState title="Sin datos publicados" />)}
+      {tab === "method" && (meta ? <MethodTab meta={meta} /> : <EmptyState title="No data published" />)}
       {tab === "backtest" && <BacktestTab />}
       {tab === "portfolio" && <PortfolioTab />}
+      {tab === "notifications" && <NotificationsTab />}
       {tab === "account" && <AccountTab />}
     </div>
   );
@@ -112,8 +152,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof loadMarket>>["latest"]; meta: Meta | null; q?: string }) {
   if (!latest || !meta) {
     return (
-      <EmptyState title="Todavía no hay datos publicados">
-        Configura los secretos del repositorio y ejecuta el workflow <code className="font-mono">market-data</code> (ver docs/DEPLOY.md). En local: <code className="font-mono">python -m warrenia_engine demo</code>.
+      <EmptyState title="No data published yet">
+        Set the repository secrets and run the <code className="font-mono">market-data</code> workflow (see docs/DEPLOY.md). Locally: <code className="font-mono">python -m warrenia_engine demo</code>.
       </EmptyState>
     );
   }
@@ -122,25 +162,25 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
   const filt = q ? excluded.filter((e) => e.t.includes(q.toUpperCase()) || e.n.toLowerCase().includes(q.toLowerCase())) : excluded;
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <Panel title="Última ejecución" actions={<RefreshButton />}>
+      <Panel title="Last run" actions={<RefreshButton />}>
         <dl className="grid grid-cols-[150px_1fr] gap-y-2 text-[13px]">
-          <dt className="text-ink-3">Datos (cierre)</dt>
+          <dt className="text-ink-3">Data (close)</dt>
           <dd>{dateLabel(meta.data_asof)} · NYSE · {meta.data_type}</dd>
-          <dt className="text-ink-3">Calculado</dt>
+          <dt className="text-ink-3">Calculated</dt>
           <dd>{dateTimeLabel(meta.computed_at)} {meta.compute_seconds ? <span className="t-meta">({num(meta.compute_seconds, 0)} s)</span> : null}</dd>
-          <dt className="text-ink-3">Frescura</dt>
-          <dd className={fresh.status === "stale" ? "text-warn" : fresh.status === "fresh" ? "text-pos" : "text-ink-2"}>{latest.demo ? "Datos de demostración" : fresh.label}</dd>
-          <dt className="text-ink-3">Estado</dt>
-          <dd>{meta.status === "ok" ? <Badge tone="pos">OK</Badge> : <Badge tone="warn">Con avisos</Badge>} {meta.demo && <Badge tone="accent">DEMO</Badge>}</dd>
-          <dt className="text-ink-3">Proveedor</dt>
+          <dt className="text-ink-3">Freshness</dt>
+          <dd className={fresh.status === "stale" ? "text-warn" : fresh.status === "fresh" ? "text-pos" : "text-ink-2"}>{latest.demo ? "Demo data" : fresh.label}</dd>
+          <dt className="text-ink-3">Status</dt>
+          <dd>{meta.status === "ok" ? <Badge tone="pos">OK</Badge> : <Badge tone="warn">With warnings</Badge>} {meta.demo && <Badge tone="accent">DEMO</Badge>}</dd>
+          <dt className="text-ink-3">Provider</dt>
           <dd>{meta.provider}</dd>
-          <dt className="text-ink-3">Ventana de datos</dt>
+          <dt className="text-ink-3">Data window</dt>
           <dd className="num">
-            {dateLabel(meta.data_window.first_session)} → {dateLabel(meta.data_window.last_session)} ({int(meta.data_window.sessions)} sesiones)
+            {dateLabel(meta.data_window.first_session)} → {dateLabel(meta.data_window.last_session)} ({int(meta.data_window.sessions)} sessions)
           </dd>
-          <dt className="text-ink-3">Rentabilidad total</dt>
-          <dd>{meta.total_return ? "Sí (splits y dividendos)" : "No: solo splits (dividendos no disponibles)"}</dd>
-          <dt className="text-ink-3">Ejecución</dt>
+          <dt className="text-ink-3">Total return</dt>
+          <dd>{meta.total_return ? "Yes (splits and dividends)" : "No: splits only (dividends not available)"}</dd>
+          <dt className="text-ink-3">Run</dt>
           <dd className="font-mono text-[12px] text-ink-2">
             {meta.run_id} · cfg {meta.methodology.config_hash}
             {meta.git_sha ? ` · ${meta.git_sha.slice(0, 7)}` : ""}
@@ -156,13 +196,13 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
           </div>
         )}
       </Panel>
-      <Panel title="Cobertura del universo" meta={meta.methodology.universe}>
+      <Panel title="Market coverage" meta={meta.methodology.universe}>
         <div className="grid gap-4 sm:grid-cols-2">
           {(["stock", "etf"] as const).map((c) => (
             <div key={c} className="flex flex-col gap-2">
-              <span className="t-label">{c === "stock" ? "Acciones" : "ETFs"}</span>
+              <span className="t-label">{c === "stock" ? "Stocks" : "ETFs"}</span>
               <span className="num text-[20px] font-semibold">
-                {int(meta.coverage[c].eligible)} <span className="text-[13px] font-normal text-ink-3">elegibles de {int(meta.coverage[c].candidates)}</span>
+                {int(meta.coverage[c].eligible)} <span className="text-[13px] font-normal text-ink-3">eligible of {int(meta.coverage[c].candidates)}</span>
               </span>
               <ul className="flex flex-col gap-1 text-[12.5px]">
                 {Object.entries(meta.coverage[c].excluded_by_reason).map(([r, n]) => (
@@ -176,26 +216,26 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
           ))}
         </div>
       </Panel>
-      <Panel title="Fuentes, coste y frecuencia" className="xl:col-span-2">
+      <Panel title="Sources, cost and frequency" className="xl:col-span-2">
         <div className="grid gap-4 text-[13px] text-ink-2 md:grid-cols-2">
           <ul className="flex flex-col gap-2">
-            <li><span className="text-ink">Precios EE. UU. (acciones y ETFs):</span> Massive (antes Polygon.io), plan gratuito: fin de día, ~2 años de historia, 5 peticiones/min. Una petición devuelve todo el mercado de una sesión.</li>
-            <li><span className="text-ink">Capitalización y sector:</span> SEC EDGAR (oficial, gratuito): acciones en circulación × precio; sector aproximado desde el código SIC (no GICS).</li>
-            <li><span className="text-ink">Tipos de cambio:</span> tipos de referencia del BCE (oficiales, diarios).</li>
-            <li><span className="text-ink">Precios en EUR de ETFs/ETCs:</span> EODHD, plan gratuito (~20 llamadas/día): suficiente para unos pocos instrumentos de cartera.</li>
+            <li><span className="text-ink">US prices (stocks and ETFs):</span> Massive (formerly Polygon.io), free plan: end of day, ~2 years of history, 5 requests/min. One request returns the whole market for a day. Company descriptions come from the same provider.</li>
+            <li><span className="text-ink">Company size, sector and annual reports:</span> SEC EDGAR (official, free): shares outstanding × price; sector approximated from the SIC code (not GICS); financial statements from XBRL filings (US GAAP frames; IFRS filers such as European ADRs from each company&apos;s own file, converted to USD at ECB rates).</li>
+            <li><span className="text-ink">Exchange rates:</span> ECB reference rates (official, daily).</li>
+            <li><span className="text-ink">EUR prices of ETFs/ETCs:</span> EODHD free plan (~20 calls/day): enough for a handful of portfolio instruments.</li>
           </ul>
           <ul className="flex flex-col gap-2">
-            <li><span className="text-ink">Frecuencia:</span> un proceso programado en GitHub Actions tras cada cierre de NYSE (≈ 05:15 UTC, reintento 11:05 UTC) y bajo demanda con «Actualizar» (cada 15 min como máximo).</li>
-            <li><span className="text-ink">Tipo de dato:</span> cierre diario. Sin tiempo real ni intradía.</li>
-            <li><span className="text-ink">Coste:</span> 0 €/mes en la configuración actual. Ampliar historia (backtest robusto) requiere un plan de pago.</li>
-            <li><span className="text-ink">Uso:</span> personal y privado; los datos no se redistribuyen (la app requiere login).</li>
+            <li><span className="text-ink">Frequency:</span> a scheduled GitHub Actions job after each NYSE close (≈ 05:15 UTC, retry 11:05 UTC) and on demand with &ldquo;Refresh&rdquo; (at most every 15 min). Annual reports weekly.</li>
+            <li><span className="text-ink">Data type:</span> daily close. No real time or intraday.</li>
+            <li><span className="text-ink">Cost:</span> €0/month as configured. A longer history (a robust backtest) needs a paid plan.</li>
+            <li><span className="text-ink">Use:</span> personal and private; data is not redistributed (the app requires sign-in).</li>
           </ul>
         </div>
       </Panel>
-      <Panel title={`Activos excluidos (${int(excluded.length)})`} meta="Cada exclusión mantiene su motivo" className="xl:col-span-2" pad={false}>
+      <Panel title={`Excluded assets (${int(excluded.length)})`} meta="Each exclusion keeps its reason" className="xl:col-span-2" pad={false}>
         <form className="px-4 pb-3 md:px-5">
           <input type="hidden" name="tab" value="data" />
-          <input name="q" defaultValue={q} placeholder="Buscar ticker o nombre" className="h-8 w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none pointer-coarse:text-[16px]" />
+          <input name="q" defaultValue={q} placeholder="Search ticker or name" className="h-8 w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none pointer-coarse:text-[16px]" />
         </form>
         <div className="max-h-[420px] overflow-auto">
           <table className="w-full min-w-[640px] text-[12.5px]">
@@ -209,7 +249,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
               ))}
             </tbody>
           </table>
-          {filt.length > 300 && <p className="t-meta px-5 py-2">Mostrando 300 de {int(filt.length)}. Usa la búsqueda.</p>}
+          {filt.length > 300 && <p className="t-meta px-5 py-2">Showing 300 of {int(filt.length)}. Use the search.</p>}
         </div>
       </Panel>
     </div>
@@ -222,7 +262,7 @@ function MethodTab({ meta }: { meta: Meta }) {
   const sens = meta.sensitivity;
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <Panel title="Overall Momentum Rank" meta={`Metodología v${m.version} · pesos fijados a priori, no optimizados con el backtest`}>
+      <Panel title="Overall momentum score" meta={`Method v${m.version} · weights fixed in advance, not tuned on the backtest`}>
         <ul className="flex flex-col gap-2">
           {Object.entries(m.overall).map(([k, w]) => (
             <li key={k} className="flex items-center gap-3 text-[13px]">
@@ -235,11 +275,11 @@ function MethodTab({ meta }: { meta: Meta }) {
           ))}
         </ul>
         <p className="t-meta mt-4">
-          Cada score es la media ponderada de percentiles transversales de sus componentes, reexpresada como percentil (0–100) dentro de su clase (acciones o ETFs). El retorno relativo frente a un único
-          benchmark no se usa como factor de ranking: restar la misma referencia a todos los activos no cambia el orden (se muestra como contexto).
+          Each score is the weighted average of its components&apos; percentiles across the market, expressed again as a percentile (0-100) within its class (stocks or ETFs). Return versus a single
+          benchmark is not a ranking factor: subtracting the same reference from every asset does not change the order (it is shown as context).
         </p>
       </Panel>
-      <Panel title="Componentes">
+      <Panel title="Components">
         <div className="flex flex-col gap-4">
           {Object.entries(m.scores).map(([s, comps]) => (
             <div key={s}>
@@ -256,27 +296,27 @@ function MethodTab({ meta }: { meta: Meta }) {
           ))}
         </div>
       </Panel>
-      <Panel title="Sensibilidad de los pesos" meta="Perturbación aleatoria (Dirichlet) de los pesos del Overall">
+      <Panel title="Weight sensitivity" meta="Random (Dirichlet) changes to the overall weights">
         {sens ? (
           <div className="flex flex-col gap-3 text-[13px]">
             <p className="text-ink-2">
-              {sens.samples} variaciones de pesos alrededor de los actuales. Correlación de Spearman con el ranking base: mediana <span className="num text-ink">{num(sens.spearman.median, 3)}</span> (p5 {num(sens.spearman.p05, 3)}). Coincidencia del top-{sens.top_n}: mediana <span className="num text-ink">{pct(sens.topn_overlap.median, 0, false)}</span>, p5 {pct(sens.topn_overlap.p05, 0, false)}, mínimo {pct(sens.topn_overlap.min, 0, false)}.
+              {sens.samples} weight variations around the current ones. Spearman correlation with the base ranking: median <span className="num text-ink">{num(sens.spearman.median, 3)}</span> (p5 {num(sens.spearman.p05, 3)}). Top-{sens.top_n} overlap: median <span className="num text-ink">{pct(sens.topn_overlap.median, 0, false)}</span>, p5 {pct(sens.topn_overlap.p05, 0, false)}, minimum {pct(sens.topn_overlap.min, 0, false)}.
             </p>
-            <p>{sens.passes_target ? <Badge tone="pos">Cumple el objetivo</Badge> : <Badge tone="warn">No cumple el objetivo</Badge>} <span className="t-meta">objetivo declarado: coincidencia mediana ≥ {pct(sens.target_median_topn_overlap, 0, false)}</span></p>
+            <p>{sens.passes_target ? <Badge tone="pos">Meets the target</Badge> : <Badge tone="warn">Misses the target</Badge>} <span className="t-meta">declared target: median overlap ≥ {pct(sens.target_median_topn_overlap, 0, false)}</span></p>
           </div>
         ) : (
-          <p className="t-body">Universo insuficiente para el análisis.</p>
+          <p className="t-body">Market too small for this analysis.</p>
         )}
       </Panel>
-      <Panel title="Correlación entre componentes" meta="Correlación de rangos en el universo actual (detección de doble conteo)">
+      <Panel title="Correlation between components" meta="Rank correlation in today&apos;s market (double-counting check)">
         {corr ? (
           <>
             {corr.high_pairs.length > 0 ? (
-              <Callout tone="warn" title={`Pares con |ρ| ≥ ${corr.threshold} (revisar)`}>
+              <Callout tone="warn" title={`Pairs with |ρ| ≥ ${corr.threshold} (review)`}>
                 {corr.high_pairs.map((p) => `${m.labels[p.a] ?? p.a} ↔ ${m.labels[p.b] ?? p.b}: ${num(p.rho, 2)}`).join(" · ")}
               </Callout>
             ) : (
-              <p className="text-[13px] text-pos">Ningún par supera el umbral de {corr.threshold}.</p>
+              <p className="text-[13px] text-pos">No pair exceeds {corr.threshold}.</p>
             )}
             <div className="mt-3 overflow-x-auto">
               <table className="text-[10.5px]">
@@ -287,7 +327,7 @@ function MethodTab({ meta }: { meta: Meta }) {
                       {corr.matrix[i].map((v, j) => {
                         const x = v ?? 0;
                         return (
-                          <td key={j} title={`${a} · ${corr.labels[j]}: ${v === null ? "n/d" : v.toFixed(2)}`} className="num h-5 w-7 text-center" style={{ background: x >= 0 ? `rgb(82 127 98 / ${Math.abs(x) * 0.55})` : `rgb(90 110 148 / ${Math.abs(x) * 0.55})` }}>
+                          <td key={j} title={`${a} · ${corr.labels[j]}: ${v === null ? "n/a" : v.toFixed(2)}`} className="num h-5 w-7 text-center" style={{ background: x >= 0 ? `rgb(82 127 98 / ${Math.abs(x) * 0.55})` : `rgb(90 110 148 / ${Math.abs(x) * 0.55})` }}>
                             {i === j ? "" : v === null ? "·" : Math.round(x * 10)}
                           </td>
                         );
@@ -296,14 +336,48 @@ function MethodTab({ meta }: { meta: Meta }) {
                   ))}
                 </tbody>
               </table>
-              <p className="t-meta mt-2">Valores × 10. Verde = correlación positiva, azul = negativa.</p>
+              <p className="t-meta mt-2">Values × 10. Green = positive correlation, blue = negative.</p>
             </div>
           </>
         ) : (
-          <p className="t-body">No disponible.</p>
+          <p className="t-body">Not available.</p>
         )}
       </Panel>
-      <Panel title="Reglas de clasificación" meta="Umbrales explícitos (config/momentum.yaml)" className="xl:col-span-2">
+      <Panel title="Fundamentals" meta="From the last annual report (SEC, US GAAP or IFRS) · percentiles among stocks · config/momentum.yaml" className="xl:col-span-2">
+        {m.fundamentals ? (
+          <div className="grid gap-4 text-[12.5px] md:grid-cols-4">
+            {Object.entries(m.fundamentals.scores).map(([s, comps]) => (
+              <div key={s}>
+                <p className="t-label mb-1">
+                  {SCORE_LABEL[s] ?? s} · {Math.round((m.fundamentals!.overall[s] ?? 0) * 100)}%
+                </p>
+                <ul className="flex flex-col gap-0.5 text-ink-2">
+                  {Object.entries(comps).map(([k, w]) => (
+                    <li key={k} className="flex justify-between gap-3">
+                      <span>{FUND_LABEL[k] ?? k}</span>
+                      <span className="num text-ink-3">{Math.round(w * 100)}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            <div>
+              <p className="t-label mb-1">Rules</p>
+              <ul className="flex flex-col gap-0.5 text-ink-2">
+                {Object.entries(m.fundamentals.rules).map(([k, v]) => (
+                  <li key={k} className="flex justify-between gap-3">
+                    <span>{FUND_LABEL[k] ?? k}</span>
+                    <span className="num text-ink-3">{String(v)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <p className="t-body">Not published by this run.</p>
+        )}
+      </Panel>
+      <Panel title="Status rules" meta="Explicit thresholds (config/momentum.yaml)" className="xl:col-span-2">
         <div className="grid gap-4 text-[12.5px] md:grid-cols-3">
           {Object.entries(m.classification).map(([k, v]) => (
             <div key={k}>
@@ -327,45 +401,45 @@ function MethodTab({ meta }: { meta: Meta }) {
 async function BacktestTab() {
   const bt = await getBacktest();
   if (!bt || bt.status !== "ok" || !bt.results) {
-    return <EmptyState title="Sin backtest publicado">{bt?.message ?? "El workflow «backtest» se ejecuta los sábados o manualmente desde GitHub Actions."}</EmptyState>;
+    return <EmptyState title="No backtest published">{bt?.message ?? "The “backtest” workflow runs on Saturdays or manually from GitHub Actions."}</EmptyState>;
   }
   const labels: Record<string, string> = { ...(bt.strategies ?? {}) };
-  for (const k of Object.keys(bt.results)) if (k.startsWith("bench_")) labels[k] = `Benchmark ${k.slice(6)} (comprar y mantener)`;
+  for (const k of Object.keys(bt.results)) if (k.startsWith("bench_")) labels[k] = `Benchmark ${k.slice(6)} (buy and hold)`;
   const keys = Object.keys(bt.results);
   const cols: [string, string, (v: number | null) => string][] = [
     ["cagr", "CAGR", (v) => pct(v)],
-    ["vol", "Volatilidad", (v) => pct(v, 1, false)],
+    ["vol", "Volatility", (v) => pct(v, 1, false)],
     ["sharpe", "Sharpe", (v) => num(v)],
     ["max_drawdown", "Max DD", (v) => pct(v, 1, false)],
     ["calmar", "Calmar", (v) => num(v)],
-    ["annual_turnover", "Rotación anual", (v) => (v === null || v === undefined ? "—" : `${num(v, 1)}x`)],
-    ["total_costs", "Costes", (v) => pct(v, 2, false)],
+    ["annual_turnover", "Yearly turnover", (v) => (v === null || v === undefined ? "—" : `${num(v, 1)}x`)],
+    ["total_costs", "Costs", (v) => pct(v, 2, false)],
   ];
   return (
     <div className="flex flex-col gap-4">
-      <Callout tone={bt.conclusive ? "info" : "warn"} title={bt.conclusive ? "Backtest" : "Resultados exploratorios, NO concluyentes"}>
-        {bt.limitations?.[0]} {bt.demo && "Además, estos resultados usan datos sintéticos de demostración."}
+      <Callout tone={bt.conclusive ? "info" : "warn"} title={bt.conclusive ? "Backtest" : "Exploratory results, NOT conclusive"}>
+        {bt.limitations?.[0]} {bt.demo && "These results also use synthetic demo data."}
       </Callout>
       {bt.results.overall && bt.results.candidates_buffer && (
-        <Panel title="¿Compensa esperar a que se moderen las subidas?">
+        <Panel title="Does waiting for a dip pay off?">
           <p className="text-[14px] leading-relaxed text-ink-2">
-            Ranking completo (comprar las más fuertes aunque se hayan disparado): <b className="text-ink">{pct(bt.results.overall.cagr as number | null)}</b> anual · Solo «Candidatas» con
-            regla de mantener (el uso que propone la app): <b className="text-ink">{pct(bt.results.candidates_buffer.cagr as number | null)}</b> anual, con una rotación de{" "}
-            {num(bt.results.candidates_buffer.annual_turnover as number | null, 1)}x frente a {num(bt.results.overall.annual_turnover as number | null, 1)}x. «Esperar retroceso» es una regla
-            de prudencia (evitar comprar el pico de una subida explosiva), no una promesa de más rentabilidad: esta comparación dirá con datos reales, y con más historia, cuánto cuesta o
-            aporta. {bt.demo && "Con datos sintéticos no significa nada: el mercado de demostración no tiene reversiones a corto plazo por construcción."}
+            Full ranking (buying the strongest even after a spike): <b className="text-ink">{pct(bt.results.overall.cagr as number | null)}</b> a year · Buy candidates only, with the keep
+            rule (how the app suggests using it): <b className="text-ink">{pct(bt.results.candidates_buffer.cagr as number | null)}</b> a year, with turnover of{" "}
+            {num(bt.results.candidates_buffer.annual_turnover as number | null, 1)}x versus {num(bt.results.overall.annual_turnover as number | null, 1)}x. &ldquo;Wait for a dip&rdquo; is a
+            prudence rule (avoid buying the top of a sudden jump), not a promise of higher returns: with real data and more history, this comparison will show what it costs or adds.{" "}
+            {bt.demo && "With synthetic data it means nothing: the demo market has no short-term reversals by construction."}
           </p>
         </Panel>
       )}
-      <Panel title="Curvas de capital" meta={`${bt.period?.first_signal} → ${bt.period?.end} · ${bt.period?.rebalances} rebalanceos mensuales · ejecución en la apertura siguiente · ${bt.settings?.cost_bps_per_side} pb por lado`}>
+      <Panel title="Growth of 1 unit" meta={`${bt.period?.first_signal} → ${bt.period?.end} · ${bt.period?.rebalances} monthly rebalances · executed at the next open · ${bt.settings?.cost_bps_per_side} bp per side`}>
         {bt.curves && <BacktestChart dates={bt.curves.dates} series={bt.curves.series} labels={labels} />}
       </Panel>
-      <Panel title="Métricas" pad={false}>
+      <Panel title="Metrics" pad={false}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-[13px]">
             <thead>
               <tr className="border-b border-line text-right text-[11px] uppercase tracking-[0.05em] text-ink-3">
-                <th className="px-4 py-2 text-left font-medium md:px-5">Estrategia</th>
+                <th className="px-4 py-2 text-left font-medium md:px-5">Strategy</th>
                 {cols.map(([, l]) => (
                   <th key={l} className="px-3 py-2 font-medium">
                     {l}
@@ -389,25 +463,25 @@ async function BacktestTab() {
         </div>
       </Panel>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="Por régimen de mercado" meta="Rentabilidad anualizada de la estrategia completa (Overall)">
+        <Panel title="By market regime" meta="Annualised return of the full method (overall score)">
           <ul className="flex flex-col gap-1.5 text-[13px]">
             {Object.entries((bt.results.overall?.regimes as Record<string, { days: number; ann_return: number | null }>) ?? {}).map(([k, v]) => (
               <li key={k} className="flex justify-between text-ink-2">
                 <span>{k}</span>
                 <span className="num">
-                  {pct(v.ann_return)} <span className="text-ink-3">({v.days} días)</span>
+                  {pct(v.ann_return)} <span className="text-ink-3">({v.days} days)</span>
                 </span>
               </li>
             ))}
           </ul>
         </Panel>
-        <Panel title="Limitaciones">
+        <Panel title="Limitations">
           <ul className="flex list-disc flex-col gap-1.5 pl-4 text-[13px] text-ink-2 marker:text-ink-3">
             {bt.limitations?.map((l) => <li key={l}>{l}</li>)}
           </ul>
         </Panel>
       </div>
-      <p className="t-meta">Resultados históricos simulados. No garantizan resultados futuros. Calculado {dateTimeLabel(bt.computed_at)} con datos al {dateLabel(bt.data_asof)}.</p>
+      <p className="t-meta">Simulated historical results. They do not guarantee future results. Calculated {dateTimeLabel(bt.computed_at)} with data to {dateLabel(bt.data_asof)}.</p>
     </div>
   );
 }
@@ -416,9 +490,19 @@ async function PortfolioTab() {
   const store = await requireStore();
   const s = await store.settings();
   return (
-    <Panel title="Pesos objetivo y bandas" meta="Orientativos: no obligan a invertir exactamente esos porcentajes">
+    <Panel title="Target weights and bands" meta="Guidance: you do not have to hit them exactly. Products are chosen in the Plan.">
       <SettingsForm settings={s} />
     </Panel>
+  );
+}
+
+async function NotificationsTab() {
+  const store = await requireStore();
+  const [s, devices] = await Promise.all([store.settings(), store.pushSubscriptions().catch(() => [])]);
+  return (
+    <div className="max-w-[640px]">
+      <NotifySettings publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null} prefs={{ ...DEFAULT_NOTIFY, ...s.notify }} devices={devices.length} />
+    </div>
   );
 }
 
@@ -426,19 +510,19 @@ async function AccountTab() {
   const store = await requireStore();
   const mode = appMode();
   return (
-    <Panel title="Cuenta">
+    <Panel title="Account">
       <div className="flex flex-col gap-3 text-[13px]">
         <p className="text-ink-2">
           {mode === "supabase" ? (
-            <>Sesión iniciada como <span className="text-ink">{store.email}</span>. Tus datos están aislados por usuario (Row Level Security).</>
+            <>Signed in as <span className="text-ink">{store.email}</span>. Your data is isolated per user (Row Level Security).</>
           ) : (
-            <>Modo local de desarrollo: datos guardados en <code className="font-mono">web/.data/user.json</code>, sin login. No disponible en Vercel.</>
+            <>Local development mode: data stored in <code className="font-mono">web/.data/user.json</code>, no sign-in. Not available on Vercel.</>
           )}
         </p>
         {mode === "supabase" && (
           <form action={signOut}>
             <Button type="submit">
-              <IconLogout size={15} /> Cerrar sesión
+              <IconLogout size={15} /> Sign out
             </Button>
           </form>
         )}

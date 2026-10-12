@@ -41,8 +41,8 @@ export function RefreshButton() {
           wasRunning.current = false;
           dispatchedAt.current = 0;
           router.refresh();
-          if (ours && j.conclusion === "success") toast.success("Datos actualizados");
-          else if (ours && j.conclusion) toast.error("La actualización no terminó bien", { description: "Se siguen mostrando los datos del último cierre válido." });
+          if (ours && j.conclusion === "success") toast.success("Data updated");
+          else if (ours && j.conclusion) toast.error("The update did not finish", { description: "Showing the data of the last valid close." });
         }
       } catch {
         /* keep last state */
@@ -59,21 +59,21 @@ export function RefreshButton() {
     const r = await fetch("/api/refresh", { method: "POST" });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-      toast.error(j.message ?? "No se pudo lanzar la actualización");
+      toast.error(j.message ?? "Could not start the update");
       return;
     }
     wasRunning.current = true;
     dispatchedAt.current = Date.now();
-    toast("Actualización en cola", { description: "Los datos de cierre se recalculan en unos minutos." });
+    toast("Update queued", { description: "Closing data is recalculated in a few minutes." });
     setTimeout(() => setKick((k) => k + 1), 4000);
   }
 
   const running = isRunning(st);
   const title = !st?.configured
-    ? "Configura GITHUB_DISPATCH_TOKEN para lanzar actualizaciones desde la web"
+    ? "Set GITHUB_DISPATCH_TOKEN to start updates from the web"
     : running
-      ? "Actualización en curso"
-      : "Descargar el último cierre y recalcular";
+      ? "Update running"
+      : "Download the latest close and recalculate";
   return (
     <button
       onClick={trigger}

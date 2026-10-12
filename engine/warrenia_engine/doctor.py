@@ -114,6 +114,43 @@ def _check_db(base: str, key: str) -> Check:
     return Check("Base de datos", False, f"Supabase respondió {r.status_code}: {r.text[:160]}")
 
 
+MIGRATIONS = [
+    ("0002_settings_choices.sql", "settings?select=choices&limit=1", "productos elegidos en Plan"),
+    ("0003_cash_notifications.sql", "push_subscriptions?select=id&limit=1", "liquidez y notificaciones"),
+]
+
+
+def _check_migrations(base: str, key: str) -> list[Check]:
+    """Later migrations: missing ones only disable a feature (never fatal), so say which file to run."""
+    out = []
+    for name, probe, what in MIGRATIONS:
+        try:
+            r = requests.get(f"{base}/rest/v1/{probe}", headers=supabase_headers(key), timeout=20)
+        except requests.RequestException:
+            continue
+        ok = r.status_code == 200
+        out.append(Check(f"Migración {name[:4]}", ok, f"Aplicada ({what})." if ok else
+                         f"Falta: ejecuta supabase/migrations/{name} en Supabase → SQL Editor ({what}).", fatal=False))
+    return out
+
+
+def _check_vapid() -> Check:
+    k, sub = os.environ.get("VAPID_PRIVATE_KEY", "").strip(), os.environ.get("VAPID_SUBJECT", "").strip()
+    if not k and not sub:
+        return Check("Notificaciones", False, "Sin VAPID_PRIVATE_KEY / VAPID_SUBJECT: no se envían avisos de cambios de señal "
+                     "(opcional; ver docs/GUIA.md).", fatal=False)
+    if not k or not sub:
+        return Check("Notificaciones", False, "Falta VAPID_PRIVATE_KEY o VAPID_SUBJECT en los secrets de GitHub.", fatal=False)
+    try:
+        from py_vapid import Vapid
+
+        Vapid.from_string(k)
+    except Exception:  # noqa: BLE001
+        return Check("Notificaciones", False, "VAPID_PRIVATE_KEY no es una clave válida: genera una nueva en Ajustes → Notifications.",
+                     fatal=False)
+    return Check("Notificaciones", True, "Clave VAPID válida.", fatal=False)
+
+
 def _check_massive(key: str, now: datetime) -> Check:
     base = os.environ.get("MASSIVE_BASE_URL", "https://api.polygon.io").rstrip("/")
     # The session before the last one: always available on free plans (today's may not be yet).
@@ -166,12 +203,14 @@ def run_doctor(now: datetime | None = None, require_massive: bool = True) -> tup
     if base and key:
         checks.extend(_check_storage(base, key, bucket))
         checks.append(_check_db(base, key))
+        checks.extend(_check_migrations(base, key))
     mkey = os.environ.get("MASSIVE_API_KEY", "")
     if mkey:
         checks.append(_check_massive(mkey, now))
     elif require_massive:
         checks.append(Check("MASSIVE_API_KEY", False, f"Falta el secret en {SECRETS_PAGE}."))
     checks.append(_check_sec(os.environ.get("SEC_USER_AGENT", "")))
+    checks.append(_check_vapid())
     ok = all(c.ok or not c.fatal for c in checks)
     return ok, checks
 

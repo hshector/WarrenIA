@@ -6,7 +6,7 @@ import { allowedEmails, supabaseBaseUrl } from "./env";
 
 export type Check = { name: string; ok: boolean; detail: string; warn?: boolean };
 
-const VERCEL_VARS = "Vercel → proyecto → Settings → Environments → Production";
+const VERCEL_VARS = "Vercel → project → Settings → Environments → Production";
 const KEYS_PAGE = "Supabase → Project Settings → API Keys";
 
 export function keyKind(key: string | undefined): "secret" | "publishable" | "service_role" | "anon" | "missing" | "unknown" {
@@ -45,7 +45,7 @@ export async function runDoctor(): Promise<Check[]> {
   out.push({
     name: "NEXT_PUBLIC_SUPABASE_URL",
     ok: urlOk,
-    detail: !rawUrl ? `Falta. Añádela en ${VERCEL_VARS} (tipo Config).` : urlOk ? "Formato correcto." : "No tiene la forma https://<ref>.supabase.co (Supabase → Project Settings → Data API → Project URL).",
+    detail: !rawUrl ? `Missing. Add it in ${VERCEL_VARS} (type Config).` : urlOk ? "Format OK." : "Not of the form https://<ref>.supabase.co (Supabase → Project Settings → Data API → Project URL).",
   });
 
   const pk = keyKind(pub);
@@ -54,12 +54,12 @@ export async function runDoctor(): Promise<Check[]> {
     ok: pk === "publishable" || pk === "anon",
     detail:
       pk === "missing"
-        ? `Falta. Añádela en ${VERCEL_VARS} (tipo Config). Valor: ${KEYS_PAGE} → Publishable key.`
+        ? `Missing. Add it in ${VERCEL_VARS} (type Config). Value: ${KEYS_PAGE} → Publishable key.`
         : pk === "secret" || pk === "service_role"
-          ? `¡Aquí has puesto la clave SECRETA! Bórrala y pon la Publishable key (${KEYS_PAGE}). Después rota la secreta en Supabase.`
+          ? `You put the SECRET key here! Delete it and use the Publishable key (${KEYS_PAGE}). Then rotate the secret key in Supabase.`
           : pk === "publishable" || pk === "anon"
-            ? "Es la clave pública."
-            : `No parece una clave de Supabase. Valor correcto: ${KEYS_PAGE} → Publishable key.`,
+            ? "This is the public key."
+            : `This does not look like a Supabase key. Correct value: ${KEYS_PAGE} → Publishable key.`,
   });
 
   const sk = keyKind(sec);
@@ -68,16 +68,16 @@ export async function runDoctor(): Promise<Check[]> {
     ok: sk === "secret" || sk === "service_role",
     detail:
       sk === "missing"
-        ? `Falta. Añádela en ${VERCEL_VARS} (tipo Secret). Valor: ${KEYS_PAGE} → Secret keys.`
+        ? `Missing. Add it in ${VERCEL_VARS} (type Secret). Value: ${KEYS_PAGE} → Secret keys.`
         : sk === "publishable" || sk === "anon"
-          ? `Has puesto la clave pública. Aquí va la Secret key (sb_secret_…) de ${KEYS_PAGE}.`
+          ? `You put the public key. This needs the Secret key (sb_secret_…) from ${KEYS_PAGE}.`
           : sk === "secret" || sk === "service_role"
-            ? "Es una clave de administrador."
-            : `No parece una clave de Supabase. Valor correcto: ${KEYS_PAGE} → Secret keys.`,
+            ? "This is an admin key."
+            : `This does not look like a Supabase key. Correct value: ${KEYS_PAGE} → Secret keys.`,
   });
 
   const emails = allowedEmails();
-  out.push({ name: "ALLOWED_EMAILS", ok: emails.length > 0, detail: emails.length ? `${emails.length} correo(s) autorizado(s).` : `Falta. Añade tu correo en ${VERCEL_VARS}.` });
+  out.push({ name: "ALLOWED_EMAILS", ok: emails.length > 0, detail: emails.length ? `${emails.length} allowed email(s).` : `Missing. Add your email in ${VERCEL_VARS}.` });
 
   if (!urlOk) return out;
 
@@ -93,42 +93,42 @@ export async function runDoctor(): Promise<Check[]> {
       detail:
         r.status === 200
           ? emailOn
-            ? "Supabase acepta la clave pública y el acceso por correo está activo."
-            : "El acceso por correo está desactivado: Supabase → Authentication → Sign In / Providers → Email → activar."
+            ? "Supabase accepts the public key and email sign-in is on."
+            : "Email sign-in is off: Supabase → Authentication → Sign In / Providers → Email → enable."
           : r.status === 401 || r.status === 403
-            ? `Supabase rechaza la clave pública (${r.status}). Vuelve a copiarla de ${KEYS_PAGE} → Publishable key.`
-            : `Supabase respondió ${r.status || "sin conexión"}.`,
+            ? `Supabase rejects the public key (${r.status}). Copy it again from ${KEYS_PAGE} → Publishable key.`
+            : `Supabase answered ${r.status || "no connection"}.`,
     });
   }
 
   if (sk === "secret" || sk === "service_role") {
     const db = await get(`${url}/rest/v1/settings?select=user_id&limit=1`, sec);
     out.push({
-      name: "Base de datos",
+      name: "Database",
       ok: db.status === 200,
       detail:
         db.status === 200
-          ? "Tablas creadas."
+          ? "Tables created."
           : db.status === 404 || db.text.includes("PGRST205")
-            ? "Faltan las tablas: ejecuta supabase/migrations/0001_init.sql en Supabase → SQL Editor."
+            ? "Tables missing: run the files in supabase/migrations in Supabase → SQL Editor."
             : db.status === 401 || db.status === 403
-              ? `Supabase rechaza la clave secreta (${db.status}). Vuelve a copiarla de ${KEYS_PAGE} → Secret keys.`
-              : `Supabase respondió ${db.status || "sin conexión"}.`,
+              ? `Supabase rejects the secret key (${db.status}). Copy it again from ${KEYS_PAGE} → Secret keys.`
+              : `Supabase answered ${db.status || "no connection"}.`,
     });
     const bucket = process.env.SUPABASE_BUCKET || "market";
     const b = await get(`${url}/storage/v1/bucket/${bucket}`, sec);
     out.push({
-      name: "Almacén de datos",
+      name: "Data storage",
       ok: b.status === 200,
-      detail: b.status === 200 ? `El bucket '${bucket}' existe.` : `No se encuentra el bucket '${bucket}' (${b.status}): ejecuta supabase/migrations/0001_init.sql.`,
+      detail: b.status === 200 ? `The '${bucket}' bucket exists.` : `The '${bucket}' bucket was not found (${b.status}): run supabase/migrations/0001_init.sql.`,
     });
     if (b.status === 200) {
       const l = await get(`${url}/storage/v1/object/${bucket}/published/latest.json`, sec);
       out.push({
-        name: "Datos de mercado",
+        name: "Market data",
         ok: l.status === 200,
         warn: l.status !== 200,
-        detail: l.status === 200 ? "Hay datos publicados." : "Aún no hay datos: se crean cuando termina la primera descarga en GitHub Actions.",
+        detail: l.status === 200 ? "Data has been published." : "No data yet: it appears when the first download finishes in GitHub Actions.",
       });
     }
   }

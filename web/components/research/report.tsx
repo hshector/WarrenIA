@@ -3,7 +3,7 @@ import type { RuleCondition } from "@/lib/market/types";
 import { STATE_SIMPLE, type StateKey } from "@/lib/market/types";
 
 function fmtVal(c: RuleCondition) {
-  if (typeof c.value === "boolean") return c.value ? "sí" : "no";
+  if (typeof c.value === "boolean") return c.value ? "yes" : "no";
   if (c.value === null) return "n/d";
   const v = c.value;
   return Math.abs(v) < 5 && !Number.isInteger(v) ? v.toFixed(2).replace(".", ",") : String(Math.round(v * 10) / 10).replace(".", ",");
@@ -20,7 +20,7 @@ export function RuleTrace({ trace, state }: { trace: Record<string, RuleConditio
           <details key={k} open={fired} className={cx("rounded-[14px] px-4 py-2.5", fired ? "bg-accent-soft" : "bg-surface-2")}>
             <summary className="cursor-pointer text-[14px] text-ink-2">
               <span className={fired ? "font-semibold text-ink" : ""}>{STATE_SIMPLE[k]}</span>
-              <span className="ml-2 text-ink-3">{conds.filter((c) => c.pass).length}/{conds.length} condiciones</span>
+              <span className="ml-2 text-ink-3">{conds.filter((c) => c.pass).length}/{conds.length} conditions</span>
             </summary>
             <ul className="mt-2 flex flex-col gap-1">
               {conds.map((c, i) => (
@@ -37,7 +37,7 @@ export function RuleTrace({ trace, state }: { trace: Record<string, RuleConditio
           </details>
         );
       })}
-      <p className="text-[12.5px] text-ink-3">Se aplica la primera categoría que se cumple, en este orden. Umbrales en config/momentum.yaml.</p>
+      <p className="text-[12.5px] text-ink-3">The first status that matches, in this order, is applied. Thresholds in config/momentum.yaml.</p>
     </div>
   );
 }

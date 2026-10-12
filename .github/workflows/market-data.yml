@@ -1,5 +1,6 @@
 # Daily market data job: incremental ingest (Massive EOD) + SEC fundamentals +
-# scoring + publish to Supabase Storage, then EUR prices (EODHD) and ECB FX.
+# scoring + publish to Supabase Storage, signal-change notifications, then EUR
+# prices (EODHD) and ECB FX.
 # Runs without the web being open. Also triggered by the web "Actualizar" button
 # (workflow_dispatch) and manually from the Actions tab.
 name: market-data
@@ -39,6 +40,8 @@ jobs:
       MASSIVE_MIN_INTERVAL: ${{ vars.MASSIVE_MIN_INTERVAL || '12.5' }}
       SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
       EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
       INGEST_MAX_MINUTES: "180"  # leaves ~2.5h for corporate actions, SEC, compute and publish
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +57,11 @@ jobs:
       - name: Ingest + compute + publish
         id: ingest
         run: python -m warrenia_engine ${{ github.event.inputs.mode || 'update' }}
+      - name: Signal-change notifications (Web Push)
+        # Once per session; skipped without VAPID secrets. Never fails the job.
+        if: steps.ingest.outcome == 'success'
+        continue-on-error: true
+        run: python -m warrenia_engine notify
       - name: EUR prices + ECB FX (portfolio)
         if: success() || failure() && steps.ingest.outcome == 'failure'
         run: python -m warrenia_engine eu-prices

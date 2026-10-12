@@ -4,14 +4,14 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "WarrenIA — Momentum Intelligence",
     short_name: "WarrenIA",
-    description: "Momentum Radar y seguimiento de cartera personal. Análisis, sin ejecución de órdenes.",
+    description: "Investment plan, momentum radar and personal portfolio tracking. Analysis only, never places orders.",
     start_url: "/",
     scope: "/",
     display: "standalone",
     orientation: "portrait-primary",
     background_color: "#f3f4f1",
     theme_color: "#f3f4f1",
-    lang: "es",
+    lang: "en",
     categories: ["finance"],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

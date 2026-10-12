@@ -48,7 +48,7 @@ export function useThemeClass(): string {
 /** Ajustes → Apariencia. */
 export function ThemePicker() {
   const { theme, setTheme } = useTheme();
-  // The stored choice is only known in the browser: the server renders "Automático".
+  // The stored choice is only known in the browser: the server renders "Automatic".
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -56,13 +56,13 @@ export function ThemePicker() {
   );
   return (
     <Segmented<Choice>
-      ariaLabel="Apariencia"
+      ariaLabel="Appearance"
       value={mounted ? ((theme as Choice) ?? "system") : "system"}
       onChange={setTheme}
       options={[
-        { value: "system", label: "Automático" },
-        { value: "light", label: "Claro" },
-        { value: "dark", label: "Oscuro" },
+        { value: "system", label: "Automatic" },
+        { value: "light", label: "Light" },
+        { value: "dark", label: "Dark" },
       ]}
       className="w-full"
     />

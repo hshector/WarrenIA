@@ -10,6 +10,7 @@ dependencies = [
   "pyyaml>=6",
   "requests>=2.32",
   "exchange_calendars>=4.5",
+  "pywebpush>=2.0,<3",       # signal-change notifications (Web Push, VAPID)
 ]
 
 [project.optional-dependencies]

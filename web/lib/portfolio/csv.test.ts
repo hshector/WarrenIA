@@ -29,12 +29,12 @@ describe("csv import", () => {
     ].join("\n");
     const { rows } = parseTransactionsCsv(text, "2026-10-10");
     expect(rows.map((r) => r.ok)).toEqual([false, false, false, false, false, false]);
-    expect(rows[0].errors).toContain("Fecha no válida");
-    expect(rows[1].errors).toContain("Falta ISIN o ticker");
-    expect(rows[2].errors).toContain("Cantidad debe ser > 0");
+    expect(rows[0].errors).toContain("Invalid date");
+    expect(rows[1].errors).toContain("Missing ISIN or ticker");
+    expect(rows[2].errors).toContain("Quantity must be > 0");
     expect(rows[3].errors.join()).toMatch(/fx_rate/);
-    expect(rows[4].errors).toContain("Fecha futura");
-    expect(rows[5].errors.join()).toMatch(/Tipo desconocido/);
+    expect(rows[4].errors).toContain("Future date");
+    expect(rows[5].errors.join()).toMatch(/Unknown type/);
   });
 
   it("flags duplicates within the file and produces stable hashes", () => {

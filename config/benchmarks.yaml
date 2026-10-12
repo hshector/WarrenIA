@@ -26,3 +26,14 @@ sectors:
   Materials: XLB
   Real Estate: XLRE
   Utilities: XLU
+
+# US-listed funds used ONLY to measure how each asset class has behaved (volatility, worst fall,
+# link to stocks). EU retail investors cannot buy them (PRIIPs); the Plan shows the UCITS/ETC to buy.
+proxies:
+  ACWI: "All-world stocks (developed + emerging)"
+  URTH: "World stocks (developed only)"
+  GLD: "Gold"
+  SLV: "Silver"
+  DBC: "Broad commodities (futures)"
+  IBIT: "Bitcoin"
+  IEF: "US government bonds (7-10 years)"

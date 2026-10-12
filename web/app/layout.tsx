@@ -10,7 +10,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "WarrenIA", template: "%s · WarrenIA" },
-  description: "Momentum intelligence y seguimiento de cartera personal. Herramienta de análisis; no ejecuta operaciones.",
+  description: "Investment plan, momentum radar and personal portfolio tracking. An analysis tool; it never places trades.",
   applicationName: "WarrenIA",
   appleWebApp: { capable: true, title: "WarrenIA", statusBarStyle: "default" },
   icons: { icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }, { url: "/icons/icon-192.png", sizes: "192x192" }], apple: "/icons/apple-touch-icon.png" },
@@ -33,7 +33,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // suppressHydrationWarning: next-themes sets the theme class on <html> before React hydrates.
-    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-dvh">
         <ThemeProvider>
           {children}

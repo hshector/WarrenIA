@@ -67,7 +67,7 @@ def test_short_history_is_reported_not_faked(cfg):
     out = run_backtest(ctx, BacktestConfig(top_n=10))
     assert out["status"] == "ok" and out["conclusive"] is False
     assert out["period"]["rebalances"] >= 2
-    assert any("NO concluyentes" in x for x in out["limitations"])
+    assert any("NOT conclusive" in x for x in out["limitations"])
 
 
 def test_buffer_keeps_holdings_in_top_half_and_fills_with_candidates():

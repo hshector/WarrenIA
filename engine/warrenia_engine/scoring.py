@@ -8,22 +8,28 @@ import pandas as pd
 SCORE_KEYS = ["momentum", "trend_quality", "acceleration", "risk"]
 
 STATES = {
-    "speculative": "High Volatility / Speculative",
-    "extended": "Extended / Overheated",
-    "weakening": "Weakening Momentum",
-    "breakout": "Early Breakout",
-    "strong": "Strong Uptrend",
-    "improving": "Improving Momentum",
-    "neutral": "Neutral",
+    "speculative": "Very volatile",
+    "extended": "Ran up too fast",
+    "weakening": "Losing steam",
+    "breakout": "New high (unconfirmed)",
+    "strong": "Strong, steady trend",
+    "improving": "Gaining strength",
+    "neutral": "No clear trend",
 }
+
+# Rule texts referenced by decide() (kept as constants so both stay in sync).
+EXT_ATR = "Daily moves (ATR) above the 50-day average"
+EXT_D200 = "Distance to the 200-day average minus its own 95th percentile"
+EXT_R1M_PCT = "1-month gain: percentile in the market"
+EXT_R1M = "1-month gain"
 STATE_ORDER = ["speculative", "extended", "weakening", "breakout", "strong", "improving"]
 
 ACTIONS = {
-    "candidate": "Candidata",
-    "wait": "Esperar retroceso",
-    "watch": "Vigilar",
-    "avoid": "Evitar",
-    "none": "Sin señal",
+    "candidate": "Buy candidate",
+    "wait": "Wait for a dip",
+    "watch": "Watch",
+    "avoid": "Avoid",
+    "none": "No signal",
 }
 
 
@@ -136,46 +142,46 @@ def classify(ind: pd.Series, sc: pd.Series, cfg: dict) -> dict:
         return {"text": text, "value": bool(value), "op": "==", "threshold": True, "pass": bool(value)}
 
     sp = c["speculative"]
-    t_sp = [cond("Volatilidad 63d anualizada", ind["vol_63"], ">=", sp["abs_vol_63"]),
+    t_sp = [cond("Yearly volatility (last 3 months)", ind["vol_63"], ">=", sp["abs_vol_63"]),
             cond("Risk Score", risk, ">=", sp["min_risk"]),
-            cond("Volatilidad 63d anualizada (con Risk alto)", ind["vol_63"], ">=", sp["min_vol_63_with_risk"])]
+            cond("Yearly volatility, with a high risk score", ind["vol_63"], ">=", sp["min_vol_63_with_risk"])]
     trace["speculative"] = t_sp
     spec = t_sp[0]["pass"] or (t_sp[1]["pass"] and t_sp[2]["pass"])
 
     ex = c["extended"]
-    t_ext = [cond("Momentum Score", mom, ">=", ex["min_momentum"]),
-             cond("ATRs sobre la SMA50", ind["atr_above_sma50"], ">", ex["atr_above_sma50"]),
-             cond("Distancia a SMA200 menos su percentil 95 histórico", f(ind["dist200"]) - f(ind["dist200_own_q"]), ">", 0.0),
-             cond("Subida de 1 mes: percentil en el universo", sc.get("r1m_pct", np.nan), ">=", ex["spike_r1m_pct"]),
-             cond("Subida de 1 mes", ind.get("r1m", np.nan), ">=", ex["spike_r1m_min"])]
+    t_ext = [cond("Momentum score", mom, ">=", ex["min_momentum"]),
+             cond(EXT_ATR, ind["atr_above_sma50"], ">", ex["atr_above_sma50"]),
+             cond(EXT_D200, f(ind["dist200"]) - f(ind["dist200_own_q"]), ">", 0.0),
+             cond(EXT_R1M_PCT, sc.get("r1m_pct", np.nan), ">=", ex["spike_r1m_pct"]),
+             cond(EXT_R1M, ind.get("r1m", np.nan), ">=", ex["spike_r1m_min"])]
     trace["extended"] = t_ext
     spike = t_ext[3]["pass"] and t_ext[4]["pass"]
     extended = t_ext[0]["pass"] and (t_ext[1]["pass"] or t_ext[2]["pass"] or spike)
 
     wk = c["weakening"]
-    t_wk = [cond("Momentum Score", mom, ">=", wk["min_momentum"]),
-            cond("Cambio del percentil de Momentum en 21 sesiones", dmom, "<=", -wk["mom_pct_drop"]),
-            boolc(f"Cruce bajo la SMA50 tras >= {wk['sma50_days_above']} sesiones por encima", ind["sma50_cross_down"]),
+    t_wk = [cond("Momentum score", mom, ">=", wk["min_momentum"]),
+            cond("Change in momentum percentile over 1 month", dmom, "<=", -wk["mom_pct_drop"]),
+            boolc(f"Fell below its 50-day average after {wk['sma50_days_above']}+ days above it", ind["sma50_cross_down"]),
             cond("Acceleration Score", acc, "<=", wk["max_acceleration"])]
     trace["weakening"] = t_wk
     weakening = t_wk[0]["pass"] and sum(x["pass"] for x in t_wk[1:]) >= wk["min_signals"]
 
-    t_bo = [boolc(f"Cierre sobre el máximo previo de {c['breakout']['lookback_high']}d en las últimas "
-                  f"{c['breakout']['recent_sessions']} sesiones, con volumen >= {c['breakout']['volume_multiple']}x "
-                  f"y consolidación previa", ind["breakout"])]
+    t_bo = [boolc(f"Closed above its previous {c['breakout']['lookback_high']}-day high in the last "
+                  f"{c['breakout']['recent_sessions']} days, on {c['breakout']['volume_multiple']}x normal volume, "
+                  f"after a quiet period", ind["breakout"])]
     trace["breakout"] = t_bo
     breakout = t_bo[0]["pass"]
 
     st = c["strong"]
-    t_st = [cond("Momentum Score", mom, ">=", st["min_momentum"]),
+    t_st = [cond("Momentum score", mom, ">=", st["min_momentum"]),
             cond("Trend Quality", tq, ">=", st["min_trend_quality"]),
-            boolc("Precio > SMA50 > SMA200", f(ind["price"]) > 0 and f(ind["px_vs_sma50"]) > 0 and f(ind["sma50"]) > f(ind["sma200"])),
-            cond("Distancia al máximo de 52 semanas", ind["dist_52w_high"], "<=", st["max_dist_52w_high"])]
+            boolc("Price above 50-day average, which is above the 200-day", f(ind["price"]) > 0 and f(ind["px_vs_sma50"]) > 0 and f(ind["sma50"]) > f(ind["sma200"])),
+            cond("Distance to the 1-year high", ind["dist_52w_high"], "<=", st["max_dist_52w_high"])]
     trace["strong"] = t_st
     strong = all(x["pass"] for x in t_st)
 
     im = c["improving"]
-    t_im = [cond("Cambio del percentil de Momentum en 21 sesiones", dmom, ">=", im["mom_pct_rise"]),
+    t_im = [cond("Change in momentum percentile over 1 month", dmom, ">=", im["mom_pct_rise"]),
             cond("Acceleration Score", acc, ">=", im["min_acceleration"])]
     trace["improving"] = t_im
     improving = all(x["pass"] for x in t_im)
@@ -190,25 +196,55 @@ def classify(ind: pd.Series, sc: pd.Series, cfg: dict) -> dict:
 # ------------------------------------------------------------------ action
 
 def _fmt_num(v: float, digits: int = 2) -> str:
-    return f"{v:,.{digits}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{v:,.{digits}f}"
 
 
 def _fmt_pct(v: float, digits: int = 0) -> str:
-    return f"{v * 100:+.{digits}f}%".replace(".", ",")
+    return f"{v * 100:+.{digits}f}%"
+
+
+def fundamental_flags(ind: pd.Series, cfg: dict) -> tuple[list[str], list[str]]:
+    """(red flags -> Avoid, yellow flags -> not a buy yet). Unknown data never raises a flag."""
+    r = cfg["fundamentals"]["rules"]
+    g = lambda k: ind.get(k, np.nan)  # noqa: E731
+    ok = lambda v: v is not None and not (isinstance(v, float) and not np.isfinite(v))  # noqa: E731
+    red, yellow = [], []
+    z = g("zscore")
+    if ok(z) and z < r["distress_zscore"]:
+        red.append(f"Balance sheet in the danger zone: Altman Z'' {z:.1f} (below {r['distress_zscore']:g} means a high risk "
+                   "of financial distress)")
+    if ok(g("profitable")) and g("profitable") == 0:
+        yellow.append("Lost money in its last fiscal year")
+    cfo = g("cfo")
+    if ok(cfo) and cfo < 0:
+        yellow.append("Burns cash: operating cash flow was negative last year")
+    f = g("fscore")
+    if ok(f) and f < r["min_fscore"]:
+        yellow.append(f"Weak financial health: Piotroski F-Score {int(f)}/9 (needs {r['min_fscore']}+)")
+    d = g("share_change")
+    if ok(d) and d > r["max_dilution"]:
+        yellow.append(f"Dilutes shareholders: share count grew {d * 100:.0f}% last year")
+    acc = g("accruals")
+    if ok(acc) and acc > r["max_accruals"]:
+        yellow.append(f"Profits not backed by cash: accruals {acc * 100:.0f}% of assets")
+    ey = g("ebit_ev")
+    if ok(ey) and ey < r["min_ebit_ev"]:
+        yellow.append("Extremely expensive: the business earns less than 1% of what it costs (EV/EBIT above 100)")
+    return red, yellow
 
 
 def decide(ind: pd.Series, sc: pd.Series, state: dict, cfg: dict, cls: str = "stock") -> dict:
     """What to do with the asset now (pure rules over published metrics).
 
-    candidate  top quintile, orderly uptrend (P > SMA50 > SMA200), no overheating, not loss-making
-    wait       strong but overheated (Extended): buying now means buying a spike; wait for a pullback
-    watch      interesting but not yet a buy (breakout unconfirmed, improving, loss-making, rank 60-80)
-    avoid      speculative, weakening, momentum below the median or price below its SMA200
+    candidate  top 20% by momentum score, steady uptrend (price > 50-day avg > 200-day avg), has not
+               shot up too fast, and passes every fundamental check that has data
+    wait       strong but ran up too fast (Extended): buying now means buying the spike
+    watch      interesting but not a buy yet (unconfirmed breakout, gaining strength, a yellow flag)
+    avoid      very volatile, losing steam, weak momentum, below its 200-day average, or a red flag
     none       nothing relevant
 
     `hold` answers the question for an asset you already own (buffer rule): keep it while it is not
-    "avoid" and stays in the top half (overall >= hold.min_overall). Buying in the top 20% but only
-    selling below the top 50% cuts turnover (and taxes) without changing the strategy's intent.
+    "avoid" and stays in the top half (overall >= hold.min_overall).
     """
     a = cfg["action"]
     f = lambda v: float(v) if v is not None and np.isfinite(v) else np.nan  # noqa: E731
@@ -216,67 +252,99 @@ def decide(ind: pd.Series, sc: pd.Series, state: dict, cfg: dict, cls: str = "st
     tags = set(state["tags"])
     px_s50, px_s200 = f(ind.get("px_vs_sma50")), f(ind.get("px_vs_sma200"))
     s50, s200 = f(ind.get("sma50")), f(ind.get("sma200"))
-    profitable = ind.get("profitable")
-    profitable = None if profitable is None or (isinstance(profitable, float) and not np.isfinite(profitable)) \
-        else bool(profitable)
     uptrend = px_s50 > 0 and s50 > s200
+    red, yellow = fundamental_flags(ind, cfg) if cls == "stock" else ([], [])
     why: list[str] = []
     entry = None
 
-    avoid = []
+    avoid = list(red)
     if "speculative" in tags:
-        avoid.append(f"Muy volátil: {_fmt_pct(f(ind['vol_63'])).lstrip('+')} anualizada en 63 sesiones")
+        avoid.append(f"Very volatile: swings of {f(ind['vol_63']) * 100:.0f}% a year")
     if "weakening" in tags:
-        avoid.append("Era líder y está perdiendo impulso")
+        avoid.append("Was a leader and is losing steam")
     if np.isfinite(mom) and mom < a["avoid"]["max_momentum"]:
-        avoid.append(f"Momentum por debajo de la mitad del universo (p{int(round(mom))})")
+        avoid.append(f"Weaker trend than half the market (momentum {int(round(mom))}/100)")
     if np.isfinite(px_s200) and px_s200 < 0:
-        avoid.append("Cotiza por debajo de su media de 200 sesiones (tendencia de fondo bajista)")
+        avoid.append("Trading below its 200-day average: the long-term trend is down")
 
     if avoid:
         action, why = "avoid", avoid
     elif "extended" in tags and np.isfinite(ov) and ov >= a["watch"]["min_overall"]:
         action = "wait"
         tr = {c["text"]: c for c in state["trace"].get("extended", [])}
-        atr = tr.get("ATRs sobre la SMA50")
+        atr = tr.get(EXT_ATR)
         if atr and atr["pass"]:
-            why.append(f"Precio a {_fmt_num(atr['value'], 1)} ATR por encima de su media de 50 sesiones "
-                       f"(umbral {_fmt_num(atr['threshold'], 0)})")
-        d200 = tr.get("Distancia a SMA200 menos su percentil 95 histórico")
+            why.append(f"Price is {atr['value']:.1f} daily moves above its 50-day average (limit {atr['threshold']:g})")
+        d200 = tr.get(EXT_D200)
         if d200 and d200["pass"]:
-            why.append(f"Distancia a su media de 200 sesiones ({_fmt_pct(f(ind['dist200']))}) en máximos de su propia historia")
-        r1 = tr.get("Subida de 1 mes")
-        r1p = tr.get("Subida de 1 mes: percentil en el universo")
+            why.append(f"Furthest above its 200-day average ({_fmt_pct(f(ind['dist200']))}) in its own history")
+        r1, r1p = tr.get(EXT_R1M), tr.get(EXT_R1M_PCT)
         if r1 and r1p and r1["pass"] and r1p["pass"]:
-            why.append(f"Ha subido {_fmt_pct(f(ind['r1m']))} en un mes (5 % superior del universo)")
+            why.append(f"Up {_fmt_pct(f(ind['r1m']))} in one month (top 5% of the market)")
+        why += yellow
         if np.isfinite(s50):
-            entry = ("Mejor punto de entrada: cuando el precio se acerque a su media de 50 sesiones "
-                     f"(hoy {_fmt_num(s50)} $) y la subida del último mes se modere.")
+            entry = (f"Better entry: when the price comes back towards its 50-day average (today ${_fmt_num(s50)}) "
+                     "and the last month's jump cools off.")
     elif (np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and mom >= a["candidate"]["min_momentum"]
-          and uptrend and profitable is not False):
+          and uptrend and not yellow):
         action = "candidate"
-        why.append(f"En el {max(1, int(round(100 - ov)))} % superior del universo, con tendencia ordenada "
-                   "(precio > media 50 > media 200) y sin sobreextensión")
+        why.append(f"In the top {max(1, int(round(100 - ov)))}% of the market, rising steadily "
+                   "(price above its 50-day average, which is above the 200-day) without having shot up")
         if "breakout" in tags:
-            why.append("Además acaba de romper máximos con volumen")
-        if profitable is None and cls == "stock":
-            why.append("Beneficios de la empresa no disponibles: revísalos tú antes de comprar")
+            why.append("It also just broke to a new high on strong volume")
+        has_fund = any(np.isfinite(f(ind.get(k))) for k in ("roa", "fscore", "zscore"))
+        if cls == "stock" and not has_fund:
+            why.append("No annual report data at the SEC for this company: check its fundamentals yourself")
+        elif cls == "stock" and bool(ind.get("financial")) is True:
+            why.append("Bank or insurer: the health scores (F-Score, Z'') do not apply; profitability checks passed")
+        elif cls == "stock":
+            why.append("Passes the fundamental checks: profitable, cash-backed earnings, no distress, no heavy dilution")
     else:
-        watch = []
-        if np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and profitable is False:
-            watch.append("Puntuación alta, pero la empresa perdió dinero en su último ejercicio")
+        watch = list(yellow)
         if "breakout" in tags:
-            watch.append("Ruptura reciente con volumen: falta confirmación")
+            watch.append("Just broke to a new high on strong volume: needs confirmation")
         if "improving" in tags:
-            watch.append("Su impulso mejora, pero aún no está entre las líderes")
-        if np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and not uptrend:
-            watch.append("Puntuación alta, pero sin estructura alcista completa (precio > media 50 > media 200)")
-        if (np.isfinite(ov) and ov >= a["candidate"]["min_overall"] and np.isfinite(mom)
-                and mom < a["candidate"]["min_momentum"]):
-            watch.append(f"Puntuación alta por calidad y bajo riesgo, pero su impulso aún no es de líder (p{int(round(mom))})")
+            watch.append("Gaining strength, but not a leader yet")
+        top = np.isfinite(ov) and ov >= a["candidate"]["min_overall"]
+        if top and not uptrend:
+            watch.append("High score, but the trend is not orderly yet (price, 50-day and 200-day averages not stacked upwards)")
+        if top and np.isfinite(mom) and mom < a["candidate"]["min_momentum"]:
+            watch.append(f"High score thanks to quality and low risk, but its trend is not a leader's (momentum {int(round(mom))}/100)")
         if not watch and np.isfinite(ov) and ov >= a["watch"]["min_overall"]:
-            watch.append(f"Buena puntuación ({int(round(ov))}/100), aún fuera del 20 % superior")
-        action, why = ("watch", watch) if watch else ("none", ["Sin una señal de momentum clara"])
+            watch.append(f"Good score ({int(round(ov))}/100) but outside the top 20%")
+        action, why = ("watch", watch) if watch else ("none", ["No clear momentum signal"])
 
     hold = action != "avoid" and np.isfinite(ov) and ov >= a["hold"]["min_overall"]
-    return {"action": action, "label": ACTIONS[action], "why": why, "entry": entry, "hold": bool(hold)}
+    return {"action": action, "label": ACTIONS[action], "why": why, "entry": entry, "hold": bool(hold),
+            "red_flags": red, "yellow_flags": yellow}
+
+
+# ------------------------------------------------------------------ fundamentals
+
+FUND_SIGN = {"low_accruals": ("accruals", -1), "low_debt": ("debt_assets", -1)}
+
+
+def fundamental_scores(fund: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Quality, Safety, Value and the overall Fundamentals score (0-100 percentiles).
+
+    Rows without data stay NaN (unknown is never "bad"). Each score needs at least half of
+    its component weight, like the momentum scores.
+    """
+    fc = cfg["fundamentals"]
+    out = pd.DataFrame(index=fund.index)
+    if fund.empty:
+        for k in ("f_quality", "f_safety", "f_value", "fund"):
+            out[k] = np.nan
+        return out
+    comps = {}
+    for score in fc["scores"].values():
+        for k in score:
+            src, sign = FUND_SIGN.get(k, (k, 1))
+            x = pd.to_numeric(fund[src], errors="coerce") if src in fund else pd.Series(np.nan, index=fund.index)
+            comps[k] = pct_rank(sign * x)
+    comp = pd.DataFrame(comps, index=fund.index)
+    for name, w in fc["scores"].items():
+        out[f"f_{name}"] = composite(comp, w, 0.5)
+    sub = out.rename(columns={f"f_{k}": k for k in fc["overall"]})
+    out["fund"] = composite(sub, fc["overall"], 0.6)
+    return out.join(comp.add_prefix("fpct_"))

@@ -11,10 +11,10 @@ export function LoginForm({ next }: { next: string }) {
   return (
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="next" value={next} />
-      <label className="t-label" htmlFor="email">Correo electrónico</label>
-      <Input id="email" name="email" type="email" autoComplete="email" required placeholder="tu@correo.com" />
+      <label className="t-label" htmlFor="email">Email</label>
+      <Input id="email" name="email" type="email" autoComplete="email" required placeholder="you@example.com" />
       <Button variant="primary" type="submit" disabled={pending} className="mt-1">
-        {pending ? "Enviando…" : "Enviar enlace de acceso"}
+        {pending ? "Sending…" : "Email me a sign-in link"}
       </Button>
       {state && <p className={state.ok ? "text-[13px] text-ink-2" : "text-[13px] text-neg"}>{state.message}</p>}
     </form>

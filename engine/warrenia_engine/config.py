@@ -52,7 +52,12 @@ class Config:
     @property
     def reference_tickers(self) -> list[str]:
         """Tickers that must always be loaded (benchmarks + sector ETFs)."""
-        return sorted(set(self.benchmark_tickers) | set(self.sector_etfs.values()) | {self.primary_benchmark})
+        return sorted(set(self.benchmark_tickers) | set(self.sector_etfs.values()) | {self.primary_benchmark}
+                      | set(self.proxies))
+
+    @property
+    def proxies(self) -> dict[str, str]:
+        return dict(self.benchmarks.get("proxies") or {})
 
     def with_overrides(self, momentum: dict[str, Any] | None = None) -> "Config":
         m = json.loads(json.dumps(self.momentum))

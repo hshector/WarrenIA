@@ -12,7 +12,7 @@ import { applyRadar, DEFAULT_FILTERS, hasActions, PRESETS, riskLabel, type Filte
 import { ACTION_LABELS, STATE_SIMPLE, type ActionKey, type BenchReturns, type RadarRow, type StateKey } from "@/lib/market/types";
 
 const PAGE = 40;
-const H_LABEL: Record<Horizon, string> = { r1m: "1 mes", r3m: "3 meses", r6m: "6 meses", r12m: "1 año" };
+const H_LABEL: Record<Horizon, string> = { r1m: "1 month", r3m: "3 months", r6m: "6 months", r12m: "1 year" };
 
 export function RadarView({
   rows,
@@ -58,14 +58,14 @@ export function RadarView({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Segmented
-          ariaLabel="Tipo de activo"
+          ariaLabel="Asset type"
           value={filters.cls}
           onChange={(v) => {
             setFilters((f) => ({ ...f, cls: v, sectors: [] }));
             setN(PAGE);
           }}
           options={[
-            { value: "stock", label: "Acciones" },
+            { value: "stock", label: "Stocks" },
             { value: "etf", label: "ETFs" },
           ]}
           className="w-full sm:w-auto"
@@ -74,8 +74,8 @@ export function RadarView({
           <div className="relative flex-1 sm:w-64">
             <IconSearch size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />
             <Input
-              aria-label="Buscar"
-              placeholder="Buscar"
+              aria-label="Search"
+              placeholder="Search"
               value={filters.search}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
               className="h-10 bg-surface pl-10 shadow-[var(--shadow-card)]"
@@ -105,16 +105,16 @@ export function RadarView({
       </div>
 
       <p className="text-[13.5px] text-ink-2">
-        {preset.question} · {data.length} resultados
+        {preset.question} · {data.length} results
         {preset.note && <span className="text-warn"> · {preset.note}</span>}
       </p>
 
       {filters.cls === "etf" && (
         <p className="rounded-[14px] bg-warn-soft px-4 py-3 text-[13.5px] text-ink">
-          Estos ETFs cotizan en EE. UU. y, como inversor particular en España, <b>no puedes comprarlos</b> (normativa europea PRIIPs: no tienen el documento KID en
-          español). Sirven para ver qué mercados, sectores o materias primas lideran. Para invertir, usa su equivalente UCITS:{" "}
+          These ETFs are listed in the US and, as a retail investor in the EU, <b>you cannot buy them</b> (PRIIPs rules: they have no EU key information document).
+          Use them to see which markets, sectors or commodities are leading. To invest, use a European UCITS equivalent:{" "}
           <Link href="/plan" className="font-semibold text-accent">
-            ver Plan
+            see Plan
           </Link>
           .
         </p>
@@ -122,17 +122,17 @@ export function RadarView({
 
       {data.length === 0 ? (
         <div className="card px-6 py-12 text-center text-[15px] text-ink-2">
-          {preset.key === "watch" ? "Aún no sigues ningún activo. Abre uno y pulsa «Seguir»." : "Ningún activo cumple estos filtros."}
+          {preset.key === "watch" ? "You don't follow anything yet. Open an asset and tap Follow." : "Nothing matches these filters."}
         </div>
       ) : (
         <div className="card overflow-hidden">
           <div className="hidden grid-cols-[36px_minmax(0,1fr)_150px_80px_100px_56px] items-center gap-3 border-b border-line px-5 py-3 text-[12.5px] text-ink-3 md:grid">
             <span>#</span>
-            <span>Activo</span>
-            <span>Qué hacer</span>
-            <span className="text-right">Riesgo</span>
+            <span>Asset</span>
+            <span>What to do</span>
+            <span className="text-right">Risk</span>
             <span className="text-right">{H_LABEL[horizon]}</span>
-            <span className="text-right">Puntos</span>
+            <span className="text-right">Score</span>
           </div>
           <ul className="divide-y divide-line">
             {data.slice(0, n).map((r) => {
@@ -151,8 +151,8 @@ export function RadarView({
                         <span className="block truncate text-[13px] text-ink-2">
                           {r.t}
                           <span className="md:hidden"> · {withActions ? ACTION_LABELS[r.act] : STATE_SIMPLE[r.st]}</span>
-                          {heldSet.has(r.t) && <span className="text-accent-2"> · En cartera</span>}
-                          {watchSet.has(r.t) && !heldSet.has(r.t) && <span className="text-ink-3"> · Siguiendo</span>}
+                          {heldSet.has(r.t) && <span className="text-accent-2"> · Owned</span>}
+                          {watchSet.has(r.t) && !heldSet.has(r.t) && <span className="text-ink-3"> · Following</span>}
                         </span>
                       </span>
                     </span>
@@ -175,14 +175,14 @@ export function RadarView({
           </ul>
           {n < data.length && (
             <button onClick={() => setN(n + PAGE)} className="w-full border-t border-line py-4 text-[15px] font-medium text-accent transition-colors hover:bg-surface-2 active:bg-surface-3">
-              Ver más
+              Show more
             </button>
           )}
         </div>
       )}
       <p className="text-[12.5px] text-ink-3">
-        La puntuación (0‑100) compara cada activo con el resto del universo usando precios de cierre: fuerza de tendencia, calidad, aceleración y riesgo. «Qué hacer» aplica reglas fijas
-        sobre esa puntuación (sobreextensión, volatilidad, pérdida de fuerza, beneficios). Es un análisis cuantitativo, no una recomendación personalizada.
+        The score (0-100) compares each asset with the rest of the market using closing prices: trend strength, trend quality, acceleration and risk. &ldquo;What to do&rdquo; applies fixed
+        rules on top (overheating, volatility, losing steam and, for stocks, the last annual report). Quantitative analysis, not personal advice.
       </p>
     </div>
   );
@@ -210,20 +210,20 @@ function FiltersSheet({
   const toggle = <T,>(arr: T[], v: T) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   return (
     <Sheet
-      title="Filtros"
-      description="Filtra y ajusta la lista del radar"
+      title="Filters"
+      description="Filter and adjust the radar list"
       size="sm"
       trigger={
         <button
-          aria-label="Filtros"
+          aria-label="Filters"
           className={cx("tap inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-[14px] font-medium shadow-[var(--shadow-card)]", count ? "bg-ink text-surface" : "bg-surface text-ink")}
         >
-          <IconFilter size={17} /> Filtros{count ? ` · ${count}` : ""}
+          <IconFilter size={17} /> Filters{count ? ` · ${count}` : ""}
         </button>
       }
     >
       <div className="flex flex-col gap-5">
-        <Field label="Rentabilidad mostrada">
+        <Field label="Return shown">
           <Select value={horizon} onChange={(e) => setHorizon(e.target.value as Horizon)}>
             {(Object.keys(H_LABEL) as Horizon[]).map((h) => (
               <option key={h} value={h}>
@@ -233,7 +233,7 @@ function FiltersSheet({
           </Select>
         </Field>
         <div>
-          <p className="mb-2 text-[13px] font-medium text-ink-2">Qué hacer</p>
+          <p className="mb-2 text-[13px] font-medium text-ink-2">What to do</p>
           <div className="flex flex-wrap gap-2">
             {ACTIONS.map((a) => (
               <button key={a} onClick={() => set("actions", toggle(filters.actions, a))} className={cx("tap rounded-full", filters.actions.length > 0 && !filters.actions.includes(a) && "opacity-40")}>
@@ -242,31 +242,31 @@ function FiltersSheet({
             ))}
           </div>
         </div>
-        <Field label="Riesgo máximo">
+        <Field label="Maximum risk">
           <Select value={filters.maxRisk} onChange={(e) => set("maxRisk", Number(e.target.value))}>
-            <option value={100}>Cualquiera</option>
-            <option value={66}>Bajo o medio</option>
-            <option value={33}>Solo bajo</option>
+            <option value={100}>Any</option>
+            <option value={66}>Low or medium</option>
+            <option value={33}>Low only</option>
           </Select>
         </Field>
         {filters.cls === "stock" && (
-          <Field label="Tamaño de la empresa">
+          <Field label="Company size">
             <Select value={filters.minMcap} onChange={(e) => set("minMcap", Number(e.target.value))}>
-              <option value={0}>Todas (desde 2.000 M$)</option>
-              <option value={10e9}>Grandes (desde 10.000 M$)</option>
-              <option value={50e9}>Muy grandes (desde 50.000 M$)</option>
+              <option value={0}>All (from $2B)</option>
+              <option value={10e9}>Large (from $10B)</option>
+              <option value={50e9}>Very large (from $50B)</option>
             </Select>
           </Field>
         )}
-        <Field label="Liquidez mínima">
+        <Field label="Minimum trading volume">
           <Select value={filters.minAdv} onChange={(e) => set("minAdv", Number(e.target.value))}>
-            <option value={0}>Cualquiera</option>
-            <option value={50e6}>Alta (desde 50 M$ al día)</option>
-            <option value={200e6}>Muy alta (desde 200 M$ al día)</option>
+            <option value={0}>Any</option>
+            <option value={50e6}>High (from $50M a day)</option>
+            <option value={200e6}>Very high (from $200M a day)</option>
           </Select>
         </Field>
         <div>
-          <p className="mb-2 text-[13px] font-medium text-ink-2">Estado técnico</p>
+          <p className="mb-2 text-[13px] font-medium text-ink-2">Trend status</p>
           <div className="flex flex-wrap gap-2">
             {STATES.map((s) => (
               <button key={s} onClick={() => set("states", toggle(filters.states, s))} className={cx("tap rounded-full", filters.states.length > 0 && !filters.states.includes(s) && "opacity-40")}>
@@ -293,22 +293,22 @@ function FiltersSheet({
         )}
         {filters.cls === "stock" && (
           <label className="flex items-center justify-between text-[15px]">
-            Solo empresas con beneficios (último ejercicio)
+            Profitable companies only (last fiscal year)
             <input type="checkbox" checked={filters.onlyProfitable} onChange={(e) => set("onlyProfitable", e.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />
           </label>
         )}
         <label className="flex items-center justify-between text-[15px]">
-          Solo lo que tengo en cartera
+          Only what I own
           <input type="checkbox" checked={filters.onlyHeld} onChange={(e) => set("onlyHeld", e.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />
         </label>
       </div>
       <div className="mt-6 flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={() => setFilters((f) => ({ ...DEFAULT_FILTERS, cls: f.cls, search: f.search }))}>
-          Restablecer
+          Reset
         </Button>
         <Dialog.Close asChild>
           <Button variant="primary" className="flex-1">
-            Ver resultados
+            Show results
           </Button>
         </Dialog.Close>
       </div>

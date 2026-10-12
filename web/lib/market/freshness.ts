@@ -44,11 +44,11 @@ export function computeFreshness(
       lastClosed,
       expected,
       missedSessions: missed,
-      label: missed === 1 ? "Falta 1 sesión por actualizar" : `Faltan ${missed} sesiones por actualizar`,
+      label: missed === 1 ? "1 session behind" : `${missed} sessions behind`,
     };
   }
   if (lastClosed && lastClosed > dataAsof) {
-    return { status: "pending", dataAsof, lastClosed, expected, missedSessions: 0, label: "Nuevo cierre pendiente de procesar" };
+    return { status: "pending", dataAsof, lastClosed, expected, missedSessions: 0, label: "New close not processed yet" };
   }
-  return { status: "fresh", dataAsof, lastClosed, expected, missedSessions: 0, label: "Datos al día (cierre)" };
+  return { status: "fresh", dataAsof, lastClosed, expected, missedSessions: 0, label: "Up to date (close)" };
 }

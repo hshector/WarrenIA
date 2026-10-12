@@ -2,7 +2,8 @@
 // until the user confirms. Generic format (see docs/import-template.csv); column
 // names accept Spanish or English aliases. Delimiter and decimal comma are detected.
 
-import type { Transaction, TxType } from "./types";
+import type { Bucket, InstrumentKind, Transaction, TxType } from "./types";
+import { isTradeRepublic, parseTradeRepublic } from "./tr";
 
 export interface ParsedRow {
   line: number;
@@ -12,6 +13,10 @@ export interface ParsedRow {
   isin: string | null;
   ticker: string | null;
   name: string | null;
+  /** Broker's own type (e.g. TRADING/SAVINGS_PLAN_EXECUTED), shown in the preview. */
+  source?: string;
+  /** What a new instrument should be (from the broker's asset class). */
+  hint?: { kind: InstrumentKind; bucket: Bucket };
 }
 
 const ALIASES: Record<string, string[]> = {
@@ -111,19 +116,22 @@ export function rowHash(parts: (string | number | null)[]): string {
   return fnv(s, 2166136261) + fnv(s, 0x811c9dc5 ^ 0x5bd1e995);
 }
 
-export function parseTransactionsCsv(text: string, today: string): { rows: ParsedRow[]; headerErrors: string[]; columns: string[] } {
+export type CsvFormat = "generic" | "trade_republic";
+
+export function parseTransactionsCsv(text: string, today: string): { rows: ParsedRow[]; headerErrors: string[]; columns: string[]; format: CsvFormat } {
   const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim().length);
-  if (!lines.length) return { rows: [], headerErrors: ["El fichero está vacío"], columns: [] };
+  if (!lines.length) return { rows: [], headerErrors: ["The file is empty"], columns: [], format: "generic" };
   const d = detectDelimiter(lines[0]);
   const header = splitLine(lines[0], d).map((h) => h.toLowerCase());
+  if (d === "," && isTradeRepublic(header)) return { ...parseTradeRepublic(lines, today), format: "trade_republic" };
   const idx: Record<string, number> = {};
   for (const [key, aliases] of Object.entries(ALIASES)) {
     const i = header.findIndex((h) => aliases.includes(h));
     if (i >= 0) idx[key] = i;
   }
   const headerErrors: string[] = [];
-  for (const req of ["date", "type"]) if (idx[req] === undefined) headerErrors.push(`Falta la columna obligatoria «${req}»`);
-  if (headerErrors.length) return { rows: [], headerErrors, columns: header };
+  for (const req of ["date", "type"]) if (idx[req] === undefined) headerErrors.push(`Missing required column "${req}"`);
+  if (headerErrors.length) return { rows: [], headerErrors, columns: header, format: "generic" };
   const decimalComma = d === ";";
 
   const rows: ParsedRow[] = lines.slice(1).map((line, k) => {
@@ -131,34 +139,34 @@ export function parseTransactionsCsv(text: string, today: string): { rows: Parse
     const get = (key: string) => (idx[key] !== undefined ? cells[idx[key]] : undefined);
     const errors: string[] = [];
     const date = parseDate(get("date"));
-    if (!date) errors.push("Fecha no válida");
-    else if (date > today) errors.push("Fecha futura");
+    if (!date) errors.push("Invalid date");
+    else if (date > today) errors.push("Future date");
     const type = TYPES[(get("type") || "").toLowerCase().normalize("NFC")];
-    if (!type) errors.push(`Tipo desconocido «${get("type") ?? ""}»`);
+    if (!type) errors.push(`Unknown type "${get("type") ?? ""}"`);
     const nums: Record<string, number | null> = {};
     for (const key of ["quantity", "price", "amount", "fees", "taxes", "fx_rate", "split_ratio"]) {
       const v = parseNumber(get(key), decimalComma);
-      if (Number.isNaN(v)) errors.push(`Número no válido en «${key}»`);
+      if (Number.isNaN(v)) errors.push(`Invalid number in "${key}"`);
       nums[key] = v !== null && Number.isNaN(v) ? null : v;
     }
     const isin = (get("isin") || "").toUpperCase() || null;
-    if (isin && !/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(isin)) errors.push("ISIN con formato no válido");
+    if (isin && !/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(isin)) errors.push("Badly formatted ISIN");
     const ticker = (get("ticker") || "").toUpperCase() || null;
     const name = get("name") || null;
     const currency = (get("currency") || "EUR").toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) errors.push("Divisa no válida");
+    if (!/^[A-Z]{3}$/.test(currency)) errors.push("Invalid currency");
     const needsInstrument = type && ["buy", "sell", "dividend", "split"].includes(type);
-    if (needsInstrument && !isin && !ticker) errors.push("Falta ISIN o ticker");
+    if (needsInstrument && !isin && !ticker) errors.push("Missing ISIN or ticker");
     if (type === "buy" || type === "sell") {
-      if (!(nums.quantity && nums.quantity > 0)) errors.push("Cantidad debe ser > 0");
-      if (nums.price === null || nums.price < 0) errors.push("Precio no válido");
+      if (!(nums.quantity && nums.quantity > 0)) errors.push("Quantity must be > 0");
+      if (nums.price === null || nums.price < 0) errors.push("Invalid price");
     }
     if (type && ["deposit", "withdrawal", "interest", "fee", "tax", "dividend"].includes(type)) {
-      if (nums.amount === null || nums.amount < 0) errors.push("Importe no válido (debe ser positivo)");
+      if (nums.amount === null || nums.amount < 0) errors.push("Invalid amount (must be positive)");
     }
     if (type === "split" && !(nums.split_ratio && nums.split_ratio > 0)) errors.push("split_ratio debe ser > 0");
     if (nums.fx_rate !== null && nums.fx_rate <= 0) errors.push("fx_rate debe ser > 0");
-    if (currency !== "EUR" && nums.fx_rate === null) errors.push("Operación en divisa: indica fx_rate (EUR por unidad)");
+    if (currency !== "EUR" && nums.fx_rate === null) errors.push("Foreign-currency row: fill in fx_rate (EUR per unit)");
 
     const ok = errors.length === 0;
     const tx = ok
@@ -187,9 +195,9 @@ export function parseTransactionsCsv(text: string, today: string): { rows: Parse
     const prev = seen.get(r.tx.import_hash);
     if (prev) {
       r.ok = false;
-      r.errors.push(`Duplicada de la línea ${prev}`);
+      r.errors.push(`Duplicate of line ${prev}`);
       r.tx = null;
     } else seen.set(r.tx.import_hash, r.line);
   }
-  return { rows, headerErrors, columns: header };
+  return { rows, headerErrors, columns: header, format: "generic" };
 }

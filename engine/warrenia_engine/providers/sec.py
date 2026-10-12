@@ -23,6 +23,7 @@ from datetime import date
 import pandas as pd
 
 from ..http import HttpClient, ProviderError
+from ..fundamentals import CONCEPTS, FACT_COLUMNS, frame_names, parse_companyfacts
 from .base import FUNDAMENTAL_COLUMNS, empty
 
 log = logging.getLogger(__name__)
@@ -138,6 +139,66 @@ class SecFundamentals:
                  sum(1 for x in rows if x["shares"]), sum(1 for x in rows if x["sic"]),
                  sum(1 for x in rows if x["net_income"] is not None))
         return pd.DataFrame(rows, columns=FUNDAMENTAL_COLUMNS) if rows else empty(FUNDAMENTAL_COLUMNS)
+
+
+    def facts(self, ciks: set[int] | None = None) -> pd.DataFrame:
+        """Annual flows and fiscal-year-end balances for every US GAAP filer (FACT_COLUMNS).
+
+        About 230 frame requests (one per tag and period). A failed frame is skipped and logged:
+        fundamentals are informative and must never block the daily run.
+        """
+        frames = frame_names(self.today)
+        rows: list[tuple] = []
+        for concept, (kind, tags, unit) in CONCEPTS.items():
+            for tag in tags:
+                for frame in frames[kind]:
+                    try:
+                        data = self.http.get_json(f"https://data.sec.gov/api/xbrl/frames/us-gaap/{tag}/{unit}/{frame}.json")
+                    except ProviderError as e:
+                        if e.status != 404:
+                            log.warning("sec facts: %s %s: %s", tag, frame, e)
+                        continue
+                    for r in data.get("data", []):
+                        cik = int(r["cik"])
+                        if ciks is not None and cik not in ciks:
+                            continue
+                        rows.append((cik, concept, tag, kind, r.get("start"), r["end"], float(r["val"]), unit))
+        log.info("sec facts: %d values for %d filers", len(rows), len({r[0] for r in rows}))
+        return pd.DataFrame(rows, columns=FACT_COLUMNS) if rows else empty(FACT_COLUMNS)
+
+
+    def companyfacts(self, cik: int) -> list[tuple]:
+        """All annual facts of one filer (IFRS filers are not in the US GAAP frames). 404 = no XBRL data."""
+        try:
+            js = self.http.get_json(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json")
+        except ProviderError as e:
+            if e.status == 404:
+                return []
+            raise
+        return parse_companyfacts(js, cik)
+
+    def fx_rates(self) -> dict[str, float]:
+        """USD per unit of every currency with an ECB reference rate (latest), for IFRS reports."""
+        return ecb_usd_rates()
+
+
+ECB_ALL = "https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A?lastNObservations=1&format=csvdata"
+
+
+def ecb_usd_rates(http: HttpClient | None = None) -> dict[str, float]:
+    import io
+
+    http = http or HttpClient("ecb", min_interval=0.5)
+    r = http.request("GET", ECB_ALL, headers={"Accept": "text/csv"})
+    df = pd.read_csv(io.StringIO(r.text))
+    per_eur = {c: float(v) for c, v in zip(df["CURRENCY"], pd.to_numeric(df["OBS_VALUE"], errors="coerce")) if v and v > 0}
+    if "USD" not in per_eur:
+        return {}
+    usd = per_eur["USD"]  # USD per EUR
+    out = {c: usd / v for c, v in per_eur.items()}  # USD per unit of c
+    out["EUR"] = usd
+    out["USD"] = 1.0
+    return out
 
 
 def _int_or_none(v) -> int | None:

@@ -1,4 +1,4 @@
-# Metodología de momentum (v1.1)
+# Metodología de momentum (v1.3)
 
 Toda la configuración vive en [`config/momentum.yaml`](../config/momentum.yaml),
 [`config/universe.yaml`](../config/universe.yaml) y [`config/benchmarks.yaml`](../config/benchmarks.yaml).
@@ -126,23 +126,62 @@ respaldado es comprar el **pico de una subida explosiva**: el mes siguiente a un
 (reversión a corto plazo). Por eso cada activo recibe una acción con reglas fijas (`action` en `momentum.yaml`,
 `scoring.decide`):
 
-| Acción | Regla |
+| Acción (en la app) | Regla |
 |---|---|
-| **Evitar** | Speculative, Weakening, Momentum < 50 o precio por debajo de la SMA200 |
-| **Esperar retroceso** | Estado Extended (y Overall ≥ 60). Se indica la referencia de entrada (la SMA50) |
-| **Candidata** | Overall ≥ 80 (20 % superior), Momentum ≥ 70, precio > SMA50 > SMA200, sin Extended/Speculative/Weakening y sin pérdidas en el último ejercicio (si se conoce) |
-| **Vigilar** | Overall ≥ 60 sin cumplir lo anterior: ruptura sin confirmar, mejorando, empresa con pérdidas, Momentum < 70 o sin estructura alcista |
-| **Sin señal** | El resto |
+| **Avoid** | Speculative, Weakening, Momentum < 50, precio por debajo de la SMA200, **o bandera roja fundamental** (Altman Z'' < 1,1) |
+| **Wait for a dip** | Estado Extended («Ran up too fast») y Overall ≥ 60. Se indica la referencia de entrada (la SMA50) |
+| **Buy candidate** | Overall ≥ 80 (20 % superior), Momentum ≥ 70, precio > SMA50 > SMA200, sin Extended/Speculative/Weakening **y sin ninguna bandera amarilla fundamental** |
+| **Watch** | Overall ≥ 60 sin cumplir lo anterior (incluye las que tienen banderas amarillas) |
+| **No signal** | El resto |
 
 **Regla de mantener (buffer).** Para lo que ya tienes: *Mantener* mientras no sea «Evitar» y siga en la mitad superior
 (Overall ≥ 50); si no, *Revisar venta*. Comprar en el 20 % superior y vender solo al salir del 50 % superior reduce la
 rotación (y los impuestos) sin cambiar la idea de la estrategia; es la misma lógica de los *buffers* de los índices
 MSCI Momentum.
 
-**Valoración (informativa).** Para las acciones se publica el PER sobre el último beneficio neto anual (SEC XBRL,
-`us-gaap:NetIncomeLoss`, o `ProfitLoss` si no existe; se ignora si el ejercicio terminó hace más de 550 días). No entra
-en la puntuación. Solo se usa para no proponer como *Candidata* una empresa con pérdidas. Los emisores que reportan en
-IFRS (muchos ADR) quedan como «no disponible», nunca como pérdidas.
+**Fundamentales (v1.2).** Filtro estricto, no predictor: el momentum elige *qué sube*; los fundamentales descartan
+*empresas frágiles* que suben. Datos: último informe anual US GAAP en la SEC (XBRL *frames*), emparejado con el cierre
+de ejercicio de cada empresa (FY0, FY‑1, FY‑2); se ignora si tiene más de 550 días.
+
+| Medida | Fuente académica | Uso |
+|---|---|---|
+| Piotroski F‑Score (9 señales) | Piotroski (2000), *JAR* | Seguridad; < 5 = bandera amarilla. Solo si se conocen las 9 |
+| Altman Z'' (no manufactureras) | Altman (1968; Z'' 1995/2000) | Seguridad; < 1,1 = **bandera roja → Avoid** |
+| Beneficio bruto / activos | Novy‑Marx (2013), *JFE* | Calidad |
+| Devengos (BN − FCO) / activos | Sloan (1996), *TAR* | Calidad; > 10 % = bandera amarilla |
+| EBIT / EV | Greenblatt (2005); Gray y Carlisle (2012) | Valor; < 1 % = bandera amarilla |
+| Rentabilidad FCF y beneficio | Fama y French (1992); Asness, Frazzini y Pedersen (QMJ, 2019) | Valor |
+| Emisión neta de acciones | Pontiff y Woodgate (2008), *JF* | > 5 % anual = bandera amarilla |
+
+Otras banderas amarillas: pérdidas en el último ejercicio y flujo de caja operativo negativo. Las puntuaciones Quality,
+Safety y Value son percentiles entre las acciones del radar, combinadas 40/30/30 en un «Fundamentals score» (estilo
+QMJ). Pesos y umbrales en `fundamentals:` de `momentum.yaml`, fijados antes del backtest. Bancos y aseguradoras (SIC
+6000‑6799): el F‑Score y el Z'' no se aplican y no se inventan. Emisores IFRS (muchos ADR): «sin datos», nunca un
+suspenso. El PER sigue publicándose como dato informativo.
+
+**Empresas extranjeras (IFRS) y ADR (v1.3).** Las empresas que presentan sus cuentas en IFRS (la mayoría de los ADR
+europeos) no están en las tablas *frames* de US GAAP. Su informe anual (20‑F/40‑F) se lee del archivo *companyfacts*
+de cada empresa en la SEC, con las mismas medidas (equivalencias de la taxonomía `ifrs-full` en `fundamentals.py`;
+deuda corriente y no corriente separadas para no contarla dos veces). Los ratios no dependen de la moneda; los importes
+se pasan a USD con los tipos de referencia del BCE. En los **ADR** no se calculan ratios de precio (PER, EV/EBIT,
+rentabilidad FCF): el precio es por ADR, la SEC da acciones ordinarias y la relación ADR/acción no está en los datos,
+así que el ratio podría salir varias veces equivocado. Calidad y salud financiera sí se calculan.
+
+**Cambios de señal y avisos.** Cada cálculo compara la acción y el veredicto de mantener de cada valor con la
+publicación anterior y los guarda en `published/signals.json` (120 días). `python -m warrenia_engine notify` envía un
+aviso Web Push por usuario y sesión, como mucho, con lo que le afecta: valores que tiene (sobre todo «considerar
+vender»), valores que sigue y nuevas candidatas (según sus preferencias). Nunca se envía dos veces la misma sesión.
+
+**Proyección de patrimonio (página Plan).** Rentabilidades reales a largo plazo por clase de activo, con su fuente:
+- **Acciones:** 4,5 %, volatilidad 16 %. DMS 1900‑2023 da 5,0 %; se rebaja por las valoraciones actuales.
+- **Oro:** 1 % (Erb y Harvey 2013).
+- **Materias primas:** 1 % (Levine et al. 2018).
+- **Bonos a corto y liquidez:** alrededor de 0 %.
+- **Bitcoin:** 0 %, con volatilidad del 60 %. No tiene flujos de caja ni historia suficiente.
+- **Momentum:** sin prima extra.
+
+Se combinan según la mezcla del plan, con correlaciones de largo plazo. Se simulan 2.000 trayectorias mensuales
+log‑normales con semilla fija y se muestran los percentiles 10, 50 y 90 en euros de hoy, antes de impuestos.
 
 **Validación.** El backtest compara «ranking completo» con «solo Candidatas» y «Candidatas con regla de mantener». La
 regla de esperar es de **prudencia** y no promete más rentabilidad. En el mercado sintético de demostración resta

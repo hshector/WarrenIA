@@ -69,13 +69,33 @@ def clean(v: Any, sig: int = 6) -> Any:
     return v
 
 
+FUND_METRICS = [
+    "fy_end", "revenue", "revenue_growth", "gross_margin", "operating_margin", "roa", "roe", "gross_profitability",
+    "cfo", "fcf", "accruals", "share_change", "debt_assets", "interest_coverage", "fscore", "zscore",
+    "ebit_ev", "fcf_yield", "earnings_yield", "pe", "pb", "shareholder_yield", "mcap", "net_income",
+    "financial", "debt_reported", "fscore_signals", "standard", "currency",
+]
+
+
+def fundamentals_block(i: pd.Series, s: pd.Series, cfg, adr: bool = False) -> dict | None:
+    """Everything the stock page needs to explain the fundamental verdict."""
+    if not np.isfinite(i.get("fscore", np.nan)) and not np.isfinite(i.get("roa", np.nan)) and not np.isfinite(i.get("zscore", np.nan)):
+        return {"available": False}
+    return clean({
+        "available": True,
+        "metrics": {k: i.get(k) for k in FUND_METRICS} | {"adr": adr},
+        "scores": {k: s.get(k) for k in ("fund", "f_quality", "f_safety", "f_value")},
+        "rules": cfg.momentum["fundamentals"]["rules"],
+    })
+
+
 def shard_of(ticker: str) -> str:
     c = ticker[:1].upper()
     return c if "A" <= c <= "Z" else "_"
 
 
 def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dict, meta_extra: dict,
-                    prev_states: dict[str, str] | None = None) -> dict[str, Any]:
+                    prev_states: dict[str, str] | None = None, profiles: pd.DataFrame | None = None) -> dict[str, Any]:
     cfg = ctx.cfg
     P = ctx.P
     asof = P.dates[t].date()
@@ -136,7 +156,7 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
     for c in CLASSES:
         r = res[c]
         sc, ind, el = r.scores, r.ind, r.elig
-        universe_label = "acciones" if c == "stock" else "ETFs"
+        universe_label = "stocks" if c == "stock" else "ETFs"
         hp = {h: pct_rank(ind.loc[sc.index, h]) for h in ("r1m", "r3m", "r6m", "r12m")}
         reasons_count: dict[str, int] = {}
         for tk, e in el.iterrows():
@@ -185,17 +205,20 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
                 "act": act["action"], "hold": act["hold"],
                 "pe": clean(i.get("pe")) if c == "stock" else None,
                 "prof": None if c != "stock" or not np.isfinite(i.get("profitable", np.nan)) else bool(i["profitable"]),
+                "fund": clean(round(s["fund"], 1)) if c == "stock" and np.isfinite(s.get("fund", np.nan)) else None,
+                "fs": clean(i.get("fscore")) if c == "stock" else None,
+                "flags_f": len(act.get("red_flags", [])) * 10 + len(act.get("yellow_flags", [])),
             }
             rows.append(row)
             quality = {
                 "source": meta_extra["provider"], "asof": asof.isoformat(),
                 "history_sessions": int(i["history_sessions"]), "missing_frac": clean(i["missing_frac"]),
                 "total_return": meta_extra["total_return"],
-                "notes": ([] if meta_extra["total_return"] else ["Precios ajustados solo por splits (sin dividendos)."])
-                + (["Capitalización estimada: acciones en circulación (SEC) × precio."] if c == "stock" and np.isfinite(mcap) else [])
-                + (["Capitalización no disponible."] if c == "stock" and not np.isfinite(mcap) else [])
-                + (["Sector aproximado a partir del código SIC de la SEC (no GICS)."] if sector else [])
-                + (["Movimiento diario > 50% en el último año (verificado como no reversible)."] if i["extreme_moves"] > 0 else []),
+                "notes": ([] if meta_extra["total_return"] else ["Prices adjusted for splits only (dividends not included)."])
+                + (["Company size estimated as shares outstanding (SEC) x price."] if c == "stock" and np.isfinite(mcap) else [])
+                + (["Company size not available."] if c == "stock" and not np.isfinite(mcap) else [])
+                + (["Sector approximated from the SEC industry code (not GICS)."] if sector else [])
+                + (["A daily move above 50% in the last year (checked: not a data error)."] if i["extreme_moves"] > 0 else []),
             }
             rep = report(tk, row["n"], c, i, s, st, act, bench, bench_ret.get(bench, {}),
                          {h: hp[h].get(tk) for h in hp}, universe_label, quality)
@@ -208,6 +231,7 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
             details[tk] = {
                 "row": row, "indicators": clean({k: i.get(k) for k in DETAIL_INDICATORS}),
                 "components": comps, "state": clean(st), "action": clean(act), "report": rep, "hist": hist_for(c, tk),
+                "fundamentals": fundamentals_block(i, s, cfg, adr=ctx.ref["type"].get(tk) == "ADRC") if c == "stock" else None,
                 "eligible": True,
             }
         top_n = cfg.momentum["reports"]["top_stocks" if c == "stock" else "top_etfs"]
@@ -235,6 +259,13 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
         d["series"] = {"c": clean(cser.tolist(), 6), "v": [None if not np.isfinite(x) else int(x) for x in vser]}
         # Adjustment events inside the window: raw(t) = adj(t) / prod(factors with ex_date > t)
         d["events"] = [list(e) for e in P.events.get(tk, []) if e[0] >= sessions[0]]
+
+    if profiles is not None and not profiles.empty:
+        for r in profiles.drop_duplicates("ticker", keep="last").itertuples(index=False):
+            if r.ticker in details and isinstance(r.description, str) and r.description.strip():
+                details[r.ticker]["profile"] = clean({"description": r.description.strip(), "homepage": r.homepage,
+                                                      "employees": r.employees, "list_date": r.list_date,
+                                                      "industry": r.industry, "fetched_at": r.fetched_at})
 
     shards: dict[str, dict] = {}
     for tk, d in details.items():
@@ -270,8 +301,10 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
                               "px_vs_sma200": clean(r["px_vs_sma200"]), "vol_63": clean(r["vol_63"]),
                               "dd_now": clean(r["dd_now"]), **bench_ret[b]}
 
+    from .proxies import proxy_stats
     market = {"asof": asof.isoformat(), "breadth": breadth, "states": states_count, "sectors": sectors_out,
-              "benchmarks": bench_state, "primary": bench}
+              "benchmarks": bench_state, "primary": bench,
+              "proxies": proxy_stats(P, t, bench, cfg.proxies)}
 
     s_sc = res["stock"].scores
     sens = sensitivity(s_sc, cfg.momentum["overall"], cfg.momentum["sensitivity"]) if len(s_sc) >= 50 else None
@@ -286,6 +319,7 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
         "methodology": {"version": cfg.momentum["methodology_version"], "config_hash": cfg.hash,
                         "scores": cfg.momentum["scores"], "overall": cfg.momentum["overall"],
                         "classification": cfg.momentum["classification"], "action": cfg.momentum["action"],
+                        "fundamentals": cfg.momentum["fundamentals"],
                         "windows": cfg.windows,
                         "labels": LABELS, "universe": cfg.universe["coverage_statement"].strip(),
                         "universe_rules": {k: cfg.universe[k] for k in ("stocks", "etfs")}},
@@ -335,6 +369,17 @@ def previous_states(storage: Storage, prefix: str = "published") -> tuple[dict[s
         return {}, None
     radar = read_json(storage, f"{prefix}/{latest['path']}/radar.json.gz") or {"rows": []}
     return {r["t"]: r["st"] for r in radar["rows"]}, latest.get("data_asof")
+
+
+def previous_actions(storage: Storage, prefix: str = "published") -> dict[str, list]:
+    """Ticker -> [action, hold, name] of the latest published run (signal-change notifications)."""
+    from .signals import snapshot
+
+    latest = read_json(storage, f"{prefix}/latest.json")
+    if not latest:
+        return {}
+    radar = read_json(storage, f"{prefix}/{latest['path']}/radar.json.gz") or {"rows": []}
+    return snapshot(radar["rows"])
 
 
 def previous_meta(storage: Storage, prefix: str = "published") -> dict | None:

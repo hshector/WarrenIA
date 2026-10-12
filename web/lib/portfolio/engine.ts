@@ -27,7 +27,7 @@
 import { money } from "../format";
 
 import { xirr } from "./xirr";
-import type { Bucket, Instrument, Settings, Transaction } from "./types";
+import { PLAN_KEYS, type Bucket, type Instrument, type PlanKey, type Settings, type Transaction } from "./types";
 
 export interface PricePoint {
   date: string;
@@ -109,7 +109,7 @@ export interface PortfolioResult {
   series: DailyPoint[];
   twr: { cumulative: number | null; annualized: number | null; days: number };
   mwr: { xirr: number | null; note: string | null };
-  allocation: { bucket: Bucket | "cash"; value: number; weight: number }[];
+  allocation: { bucket: Bucket; value: number; weight: number }[];
   byCurrency: { currency: string; value: number; weight: number }[];
   sales: SaleRecord[];
   taxByYear: { year: string; gp: number; rcm: number; deferred: number }[];
@@ -248,7 +248,7 @@ export function applyTx(L: Ledger, t: Transaction): void {
       let q = t.quantity ?? 0;
       const lots = L.lots.get(iid) ?? [];
       const held = lots.reduce((s, l) => s + l.qty, 0);
-      if (q > held + 1e-7) throw new PortfolioError(`Venta de ${q} unidades el ${t.trade_date} con solo ${held.toFixed(6)} en cartera`);
+      if (q > held + 1e-7) throw new PortfolioError(`Sale of ${q} units on ${t.trade_date} with only ${held.toFixed(6)} held`);
       const proceeds = (q * (t.price ?? 0) - (t.fees ?? 0) - (t.taxes ?? 0)) * fx;
       let costSold = 0;
       while (q > EPS && lots.length) {
@@ -301,7 +301,7 @@ function priceFor(
     if (p) return { price: p.price, currency: s.currency, date: p.date, source: s.source };
   }
   const t = L.lastTradePrice.get(ins.id);
-  if (t && t.date <= d) return { price: t.price, currency: t.currency, date: t.date, source: "último precio de compra/venta" };
+  if (t && t.date <= d) return { price: t.price, currency: t.currency, date: t.date, source: "last trade price" };
   return null;
 }
 
@@ -316,7 +316,7 @@ export function computePortfolio(
   const byId = new Map(instruments.map((i) => [i.id, i]));
   const txs = sortTx(transactions.filter((t) => t.trade_date <= asOf));
   for (const t of txs) {
-    if (t.instrument_id && !byId.has(t.instrument_id)) throw new PortfolioError(`Operación ${t.id} con instrumento desconocido`);
+    if (t.instrument_id && !byId.has(t.instrument_id)) throw new PortfolioError(`Transaction ${t.id} has an unknown instrument`);
   }
   const empty: PortfolioResult = {
     asOf: null, positions: [], cashEur: 0,
@@ -353,7 +353,7 @@ export function computePortfolio(
       }
       const v = toEur(q * p.price, p.currency, fx, d);
       if (v === null) {
-        missingPrice.add(`${ins.name} (sin tipo de cambio ${p.currency})`);
+        missingPrice.add(`${ins.name} (no ${p.currency} exchange rate)`);
         continue;
       }
       value += v;
@@ -363,7 +363,7 @@ export function computePortfolio(
     series.push({ date: d, value, invested, cash: L.cash });
     prevValue = value;
   }
-  if (missingPrice.size) warnings.push(`Sin precio para valorar: ${[...missingPrice].join(", ")}.`);
+  if (missingPrice.size) warnings.push(`No price to value: ${[...missingPrice].join(", ")}.`);
 
   // ---- Positions at asOf
   const positions: Position[] = [];
@@ -378,7 +378,7 @@ export function computePortfolio(
     const valueEur = p ? toEur(qty * p.price, p.currency, fx, asOf) : qty > EPS ? null : 0;
     const unr = valueEur !== null && qty > EPS ? valueEur - cost : null;
     if (unr !== null) unrealized += unr;
-    if (p && p.source.startsWith("último precio")) warnings.push(`${ins.name}: valorado con el último precio de operación (${p.date}); sin fuente de precios.`);
+    if (p && p.source.startsWith("last trade")) warnings.push(`${ins.name}: valued at its last trade price (${p.date}); no price source.`);
     positions.push({
       instrument: ins, qty, costEur: cost, avgCostEur: qty > EPS ? cost / qty : null,
       price: p?.price ?? null, priceCurrency: p?.currency ?? null, priceDate: p?.date ?? null, priceSource: p?.source ?? null,
@@ -395,7 +395,7 @@ export function computePortfolio(
   const withdrawals = -L.flows.filter((f) => f.amount < 0).reduce((s, f) => s + f.amount, 0);
   const inferred = L.flows.filter((f) => f.inferred).reduce((s, f) => s + f.amount, 0);
   if (inferred > 0) {
-    warnings.push(`Se han inferido aportaciones por ${money(inferred)} porque las compras superaban el efectivo registrado. Registra tus aportaciones para un cálculo exacto.`);
+    warnings.push(`Deposits of ${money(inferred)} were inferred because purchases exceeded the cash recorded. Record your deposits for exact figures.`);
   }
 
   // ---- Spanish tax view of the sales
@@ -403,8 +403,8 @@ export function computePortfolio(
   for (const sr of sales) {
     if (!sr.washSale) continue;
     warnings.push(
-      `Venta de ${sr.name} el ${sr.date} con pérdida de ${(-sr.gainEur).toFixed(2).replace(".", ",")} €: compraste títulos iguales en los ${sr.washSale.windowMonths} meses anteriores o posteriores y los conservas. ` +
-        `Hacienda no deja computar esa pérdida (≈ ${sr.washSale.deferredEur.toFixed(2).replace(".", ",")} €) hasta que vendas esos títulos.`,
+      `Sale of ${sr.name} on ${sr.date} at a loss of ${money(-sr.gainEur)}: you bought the same security within ${sr.washSale.windowMonths} months before or after and still hold it. ` +
+        `Spain does not let you use that loss (about ${money(sr.washSale.deferredEur)}) until you sell those shares.`,
     );
   }
   const years = new Map<string, { year: string; gp: number; rcm: number; deferred: number }>();
@@ -426,12 +426,12 @@ export function computePortfolio(
   flowsX.push({ date: asOf, amount: value });
   let note: string | null = null;
   let x = days >= 30 ? xirr(flowsX) : null;
-  if (days < 30) note = "Menos de 30 días de historia: la TIR anualizada no es significativa.";
-  else if (days < 365) note = "Menos de un año: la TIR está anualizada y es muy sensible a movimientos recientes.";
+  if (days < 30) note = "Less than 30 days of history: the annualised return is not meaningful.";
+  else if (days < 365) note = "Less than a year: the return is annualised and very sensitive to recent moves.";
   if (x !== null && !Number.isFinite(x)) x = null;
 
   // ---- Allocation
-  const alloc = new Map<Bucket | "cash", number>();
+  const alloc = new Map<Bucket, number>();
   const cur = new Map<string, number>();
   for (const p of positions) {
     if (!p.valueEur) continue;
@@ -440,7 +440,7 @@ export function computePortfolio(
     cur.set(c, (cur.get(c) ?? 0) + p.valueEur);
   }
   if (L.cash > 0.005) {
-    alloc.set("cash", L.cash);
+    alloc.set("cash", (alloc.get("cash") ?? 0) + L.cash); // broker cash + money-market funds
     cur.set("EUR", (cur.get("EUR") ?? 0) + L.cash);
   }
   const w = (v: number) => (value > 0 ? v / value : 0);
@@ -513,7 +513,7 @@ function taxView(raw: RawSale[], txs: Transaction[], byId: Map<string, Instrumen
 // ------------------------------------------------------------ targets & plan
 
 export interface TargetRow {
-  bucket: "core" | "gold" | "momentum";
+  bucket: PlanKey;
   target: number;
   weight: number;
   value: number;
@@ -521,31 +521,50 @@ export interface TargetRow {
   outsideBand: boolean;
 }
 
-/** Deviation vs targets on invested assets (cash excluded), 5/25-style bands. */
-export function targetDeviation(res: PortfolioResult, s: Settings): TargetRow[] {
-  const invested = res.allocation.filter((a) => a.bucket !== "cash").reduce((t, a) => t + a.value, 0);
-  return (Object.keys(s.targets) as ("core" | "gold" | "momentum")[]).map((b) => {
-    const v = res.allocation.find((a) => a.bucket === b)?.value ?? 0;
-    const weight = invested > 0 ? v / invested : 0;
-    const dev = weight - s.targets[b];
-    const outside = invested > 0 && (Math.abs(dev) > s.band_abs || (s.targets[b] > 0 && Math.abs(dev) / s.targets[b] > s.band_rel));
-    return { bucket: b, target: s.targets[b], weight, value: v, deviation: dev, outsideBand: outside };
-  });
+/** Blocks shown against their targets: cash only when you gave it a target. */
+export function activeKeys(targets: Settings["targets"]): PlanKey[] {
+  return PLAN_KEYS.filter((k) => k !== "cash" || (targets.cash ?? 0) > 0);
 }
 
 /**
- * Split a new contribution across buckets to move towards the targets without
+ * Deviation vs targets, 5/25-style bands. Uninvested cash is left out unless cash is one of
+ * your blocks (target above 0%): then broker cash and money-market funds count as that block.
+ */
+export function targetDeviation(res: PortfolioResult, s: Settings): TargetRow[] {
+  const keys = activeKeys(s.targets);
+  const withCash = keys.includes("cash");
+  const invested = res.allocation.filter((a) => withCash || a.bucket !== "cash").reduce((t, a) => t + a.value, 0);
+  return keys.map((b) => {
+    const v = res.allocation.find((a) => a.bucket === b)?.value ?? 0;
+    const weight = invested > 0 ? v / invested : 0;
+    const target = s.targets[b] ?? 0;
+    const dev = weight - target;
+    const outside = invested > 0 && (Math.abs(dev) > s.band_abs || (target > 0 && Math.abs(dev) / target > s.band_rel));
+    return { bucket: b, target, weight, value: v, deviation: dev, outsideBand: outside };
+  });
+}
+
+/** Current value of each plan block (0 for blocks not shown). */
+export function blockValues(dev: TargetRow[] | null): Record<PlanKey, number> {
+  const out: Record<PlanKey, number> = { core: 0, gold: 0, momentum: 0, cash: 0 };
+  for (const d of dev ?? []) out[d.bucket] = d.value;
+  return out;
+}
+
+/**
+ * Split a new contribution across blocks to move towards the targets without
  * selling (cash-flow rebalancing). Informational only.
  */
-export function contributionPlan(values: Record<"core" | "gold" | "momentum", number>, otherValue: number, targets: Settings["targets"], amount: number) {
-  const keys = Object.keys(targets) as ("core" | "gold" | "momentum")[];
+export function contributionPlan(values: Partial<Record<PlanKey, number>>, otherValue: number, targets: Settings["targets"], amount: number): Record<PlanKey, number> {
+  const keys = PLAN_KEYS;
+  const t = (k: PlanKey) => targets[k] ?? 0;
   const base = keys.reduce((s, k) => s + (values[k] ?? 0), 0) + otherValue + amount;
-  const need = Object.fromEntries(keys.map((k) => [k, Math.max(0, targets[k] * base - (values[k] ?? 0))])) as Record<string, number>;
+  const need = Object.fromEntries(keys.map((k) => [k, Math.max(0, t(k) * base - (values[k] ?? 0))])) as Record<PlanKey, number>;
   const totalNeed = keys.reduce((s, k) => s + need[k], 0);
-  const tw = keys.reduce((s, k) => s + targets[k], 0) || 1;
-  const out: Record<string, number> = {};
+  const tw = keys.reduce((s, k) => s + t(k), 0) || 1;
+  const out = {} as Record<PlanKey, number>;
   for (const k of keys) {
-    out[k] = totalNeed >= amount ? (totalNeed > 0 ? (amount * need[k]) / totalNeed : 0) : need[k] + ((amount - totalNeed) * targets[k]) / tw;
+    out[k] = totalNeed >= amount ? (totalNeed > 0 ? (amount * need[k]) / totalNeed : 0) : need[k] + ((amount - totalNeed) * t(k)) / tw;
   }
-  return out as Record<"core" | "gold" | "momentum", number>;
+  return out;
 }

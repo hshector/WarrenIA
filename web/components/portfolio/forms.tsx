@@ -7,10 +7,8 @@ import { addManualPrice, addTransaction, deleteInstrument, deleteTransaction, sa
 import { IconPlus, IconTrash } from "@/components/ui/icons";
 import { Button, Field, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Sheet } from "@/components/ui/sheet";
-import { contributionPlan } from "@/lib/portfolio/engine";
-import { PRODUCTS } from "@/lib/plan/catalog";
+import { instrumentKind, PRODUCTS } from "@/lib/plan/catalog";
 import { BUCKET_LABELS, TX_LABELS, type Instrument, type Settings, type TxType } from "@/lib/portfolio/types";
-import { money } from "@/lib/format";
 
 /** Errors stay next to the form; success is a toast (the sheet closes). */
 function Result({ state }: { state: ActionResult }) {
@@ -40,17 +38,17 @@ export function TransactionForm({ instruments, defaultOpen = false }: { instrume
   const trade = type === "buy" || type === "sell";
   return (
     <Sheet
-      title="Registrar operación"
+      title="New transaction"
       open={open}
       onOpenChange={setOpen}
       trigger={
         <Button variant="primary" size="sm">
-          <IconPlus size={16} /> Operación
+          <IconPlus size={16} /> Transaction
         </Button>
       }
     >
       <form action={action} className="grid grid-cols-2 gap-3.5">
-        <Field label="Tipo">
+        <Field label="Type">
           <Select name="type" value={type} onChange={(e) => setType(e.target.value as TxType)}>
             {(Object.keys(TX_LABELS) as TxType[]).map((t) => (
               <option key={t} value={t}>
@@ -59,11 +57,11 @@ export function TransactionForm({ instruments, defaultOpen = false }: { instrume
             ))}
           </Select>
         </Field>
-        <Field label="Fecha">
+        <Field label="Date">
           <Input type="date" name="trade_date" required defaultValue={new Date().toISOString().slice(0, 10)} max={new Date().toISOString().slice(0, 10)} />
         </Field>
         {needsIns && (
-          <Field label="Instrumento" className="col-span-2" hint={instruments.length ? undefined : "Primero añade un instrumento."}>
+          <Field label="Instrument" className="col-span-2" hint={instruments.length ? undefined : "Add an instrument first."}>
             <Select name="instrument_id" required>
               {instruments.map((i) => (
                 <option key={i.id} value={i.id}>
@@ -75,39 +73,39 @@ export function TransactionForm({ instruments, defaultOpen = false }: { instrume
         )}
         {trade && (
           <>
-            <Field label="Unidades">
-              <Input name="quantity" inputMode="decimal" required placeholder="0,000000" />
+            <Field label="Units">
+              <Input name="quantity" inputMode="decimal" required placeholder="0.000000" />
             </Field>
-            <Field label="Precio por unidad">
+            <Field label="Price per unit">
               <Input name="price" inputMode="decimal" required placeholder="0,00" />
             </Field>
-            <Field label="Comisión">
-              <Input name="fees" inputMode="decimal" placeholder="1,00" />
+            <Field label="Fee">
+              <Input name="fees" inputMode="decimal" placeholder="1.00" />
             </Field>
             {type === "sell" && (
-              <Field label="Impuestos retenidos">
+              <Field label="Tax withheld">
                 <Input name="taxes" inputMode="decimal" placeholder="0,00" />
               </Field>
             )}
           </>
         )}
         {!trade && type !== "split" && (
-          <Field label={type === "dividend" ? "Importe neto cobrado" : "Importe"} className={type === "dividend" ? "" : "col-span-2"}>
+          <Field label={type === "dividend" ? "Net amount received" : "Amount"} className={type === "dividend" ? "" : "col-span-2"}>
             <Input name="amount" inputMode="decimal" required placeholder="0,00" />
           </Field>
         )}
         {type === "dividend" && (
-          <Field label="Retención (informativo)">
+          <Field label="Tax withheld (for reference)">
             <Input name="taxes" inputMode="decimal" placeholder="0,00" />
           </Field>
         )}
         {type === "split" && (
-          <Field label="Ratio (nuevas por cada antigua)" className="col-span-2" hint="Split 4:1 → 4 · contrasplit 1:10 → 0,1">
+          <Field label="Ratio (new shares per old share)" className="col-span-2" hint="Split 4:1 → 4 · reverse split 1:10 → 0.1">
             <Input name="split_ratio" inputMode="decimal" required />
           </Field>
         )}
         {type !== "split" && (
-          <Field label="Divisa">
+          <Field label="Currency">
             <Select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {["EUR", "USD", "GBP", "CHF"].map((c) => (
                 <option key={c}>{c}</option>
@@ -116,20 +114,20 @@ export function TransactionForm({ instruments, defaultOpen = false }: { instrume
           </Field>
         )}
         {currency !== "EUR" && type !== "split" && (
-          <Field label="Tipo de cambio (EUR por 1 unidad)" hint="El aplicado por tu bróker en la operación">
-            <Input name="fx_rate" inputMode="decimal" required placeholder="0,92" />
+          <Field label="Exchange rate (EUR per 1 unit)" hint="The one your broker applied">
+            <Input name="fx_rate" inputMode="decimal" required placeholder="0.92" />
           </Field>
         )}
-        <Field label="Nota" className="col-span-2">
-          <Input name="note" maxLength={500} placeholder="Opcional" />
+        <Field label="Note" className="col-span-2">
+          <Input name="note" maxLength={500} placeholder="Optional" />
         </Field>
         <div className="col-span-2 flex items-center justify-between gap-3 pt-1">
           <Result state={state} />
           <Button variant="primary" type="submit" disabled={pending} className="ml-auto min-w-32">
-            {pending ? "Guardando…" : "Guardar"}
+            {pending ? "Saving…" : "Save"}
           </Button>
         </div>
-        <p className="col-span-2 text-[13px] text-ink-3">Registra también cada ingreso de dinero en el bróker como «Aportación»: así la rentabilidad es exacta.</p>
+        <p className="col-span-2 text-[13px] text-ink-3">Also record every cash transfer into the broker as a “Deposit”: that keeps the returns exact.</p>
       </form>
     </Sheet>
   );
@@ -139,31 +137,31 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
   const [open, setOpen] = useState(false);
   const [preset, setPreset] = useState<string>("");
   const fromPlan = PRODUCTS.find((p) => p.isin === preset);
-  const d: Partial<Instrument> = instrument ?? (fromPlan ? { name: fromPlan.name, isin: fromPlan.isin, kind: fromPlan.kind, bucket: fromPlan.bucket, currency: "EUR" } : {});
+  const d: Partial<Instrument> = instrument ?? (fromPlan ? { name: fromPlan.name, isin: fromPlan.isin, kind: instrumentKind(fromPlan), bucket: fromPlan.bucket, currency: "EUR" } : {});
   const [source, setSource] = useState(instrument?.price_source ?? "eodhd");
   const [state, action, pending] = useActionState<ActionResult, FormData>(saveInstrument, null);
   useSuccessToast(state, () => setOpen(false));
   return (
     <Sheet
-      title={instrument ? "Editar instrumento" : "Nuevo instrumento"}
+      title={instrument ? "Edit instrument" : "New instrument"}
       open={open}
       onOpenChange={setOpen}
       trigger={
         trigger ?? (
           <Button size="sm">
-            <IconPlus size={16} /> Instrumento
+            <IconPlus size={16} /> Instrument
           </Button>
         )
       }
     >
       {!instrument && (
-        <Field label="Elegir de tu plan" hint="Rellena nombre, ISIN, tipo y bloque" className="mb-3.5">
-          <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Elegir de tu plan">
-            <option value="">Otro instrumento…</option>
-            {PRODUCTS.map((p) => (
+        <Field label="Pick from your plan" hint="Fills in name, ISIN, type and block" className="mb-3.5">
+          <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Pick from your plan">
+            <option value="">Another instrument…</option>
+            {PRODUCTS.filter((p) => p.vehicle !== "Cash account").map((p) => (
               <option key={p.isin} value={p.isin}>
                 {BUCKET_LABELS[p.bucket]} · {p.name}
-                {p.recommended ? " (recomendado)" : ""}
+                {p.recommended ? " (recommended)" : ""}
               </option>
             ))}
           </Select>
@@ -171,49 +169,49 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
       )}
       <form key={preset} action={action} className="grid grid-cols-2 gap-3.5">
         {instrument && <input type="hidden" name="id" value={instrument.id} />}
-        <Field label="Nombre" className="col-span-2">
-          <Input name="name" required defaultValue={d.name} placeholder="p. ej. iShares Core MSCI World UCITS ETF" />
+        <Field label="Name" className="col-span-2">
+          <Input name="name" required defaultValue={d.name} placeholder="e.g. Vanguard FTSE All-World UCITS ETF" />
         </Field>
         <Field label="ISIN">
           <Input name="isin" defaultValue={d.isin ?? ""} placeholder="IE00B4L5Y983" className="font-mono uppercase" />
         </Field>
-        <Field label="Tipo">
+        <Field label="Type">
           <Select name="kind" defaultValue={d.kind ?? "etf"}>
             <option value="etf">ETF</option>
-            <option value="etc">ETC (p. ej. oro)</option>
-            <option value="stock">Acción</option>
-            <option value="fund">Fondo</option>
-            <option value="other">Otro</option>
+            <option value="etc">ETC / ETP (gold, bitcoin…)</option>
+            <option value="stock">Stock</option>
+            <option value="fund">Index fund</option>
+            <option value="other">Other</option>
           </Select>
         </Field>
-        <Field label="Bloque de la estrategia">
+        <Field label="Plan block">
           <Select name="bucket" defaultValue={d.bucket ?? "core"}>
-            {(["core", "gold", "momentum", "other"] as const).map((b) => (
+            {(["core", "gold", "momentum", "cash", "other"] as const).map((b) => (
               <option key={b} value={b}>
                 {BUCKET_LABELS[b]}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="Fuente de precio">
+        <Field label="Price source">
           <Select name="price_source" value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
-            <option value="eodhd">EODHD (ETF/ETC en Xetra, EUR)</option>
-            <option value="us_market">Mercado EE. UU. (motor, USD)</option>
+            <option value="eodhd">EODHD (ETF/ETC on Xetra, EUR)</option>
+            <option value="us_market">US market (engine, USD)</option>
             <option value="manual">Manual</option>
           </Select>
         </Field>
         {source === "eodhd" && (
-          <Field label="Símbolo EODHD" hint="Formato TICKER.BOLSA, p. ej. EUNL.XETRA" className="col-span-2">
+          <Field label="EODHD symbol" hint="Format TICKER.EXCHANGE, e.g. VWCE.XETRA" className="col-span-2">
             <Input name="eodhd_symbol" defaultValue={instrument?.eodhd_symbol ?? ""} className="font-mono uppercase" />
           </Field>
         )}
         {source === "us_market" && (
-          <Field label="Ticker EE. UU." hint="Se valora con el cierre en USD convertido con el tipo del BCE" className="col-span-2">
+          <Field label="US ticker" hint="Valued at the USD close converted with the ECB rate" className="col-span-2">
             <Input name="market_ticker" defaultValue={instrument?.market_ticker ?? ""} className="font-mono uppercase" />
           </Field>
         )}
         {source !== "us_market" && (
-          <Field label="Divisa de cotización">
+          <Field label="Trading currency">
             <Select name="currency" defaultValue={d.currency ?? "EUR"}>
               {["EUR", "USD", "GBP", "CHF"].map((c) => (
                 <option key={c}>{c}</option>
@@ -222,13 +220,13 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
           </Field>
         )}
         {source === "us_market" && <input type="hidden" name="currency" value="USD" />}
-        <Field label="Sector (acciones)">
+        <Field label="Sector (stocks)">
           <Input name="sector" defaultValue={instrument?.sector ?? ""} placeholder="Technology" />
         </Field>
         <div className="col-span-2 flex items-center justify-between gap-3 pt-1">
           <Result state={state} />
           <Button variant="primary" type="submit" disabled={pending} className="ml-auto min-w-32">
-            {pending ? "Guardando…" : "Guardar"}
+            {pending ? "Saving…" : "Save"}
           </Button>
         </div>
       </form>
@@ -240,13 +238,13 @@ export function DeleteButton({ id, kind, label }: { id: string; kind: "tx" | "in
   const [pending, start] = useTransition();
   return (
     <ConfirmDialog
-      title={`¿${label}?`}
-      description={kind === "tx" ? "La operación se elimina del registro y la cartera se recalcula." : "Se elimina el instrumento de tu cartera."}
-      confirmLabel="Borrar"
+      title={`${label}?`}
+      description={kind === "tx" ? "The transaction is removed and the portfolio recalculated." : "The instrument is removed from your portfolio."}
+      confirmLabel="Delete"
       onConfirm={() =>
         start(() =>
           (kind === "tx" ? deleteTransaction(id) : deleteInstrument(id)).then(
-            () => void toast.success(kind === "tx" ? "Operación borrada" : "Instrumento borrado"),
+            () => void toast.success(kind === "tx" ? "Transaction deleted" : "Instrument deleted"),
             (e: Error) => void toast.error(e.message),
           ),
         )
@@ -267,7 +265,7 @@ export function ManualPriceForm({ instruments }: { instruments: Instrument[] }) 
   if (!manual.length) return null;
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
-      <Field label="Instrumento (precio manual)">
+      <Field label="Instrument (manual price)">
         <Select name="instrument_id">
           {manual.map((i) => (
             <option key={i.id} value={i.id}>
@@ -276,14 +274,14 @@ export function ManualPriceForm({ instruments }: { instruments: Instrument[] }) 
           ))}
         </Select>
       </Field>
-      <Field label="Fecha">
+      <Field label="Date">
         <Input type="date" name="price_date" required defaultValue={new Date().toISOString().slice(0, 10)} />
       </Field>
-      <Field label="Precio">
+      <Field label="Price">
         <Input name="price" inputMode="decimal" required className="w-28" />
       </Field>
       <Button type="submit" disabled={pending}>
-        Guardar precio
+        Save price
       </Button>
       <Result state={state} />
     </form>
@@ -295,81 +293,33 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   useSuccessToast(state);
   return (
     <form action={action} className="grid max-w-xl grid-cols-2 gap-3.5 sm:grid-cols-3">
-      <Field label="Núcleo global %">
+      <Field label="Core %">
         <Input name="core" inputMode="decimal" defaultValue={Math.round(settings.targets.core * 1000) / 10} />
       </Field>
-      <Field label="Oro %">
+      <Field label="Diversifiers %">
         <Input name="gold" inputMode="decimal" defaultValue={Math.round(settings.targets.gold * 1000) / 10} />
       </Field>
-      <Field label="Acciones/momentum %">
+      <Field label="Momentum %">
         <Input name="momentum" inputMode="decimal" defaultValue={Math.round(settings.targets.momentum * 1000) / 10} />
       </Field>
-      <Field label="Banda absoluta (pp)" hint="Desviación tolerada">
+      <Field label="Cash %" hint="Optional, usually 0">
+        <Input name="cash" inputMode="decimal" defaultValue={Math.round((settings.targets.cash ?? 0) * 1000) / 10} />
+      </Field>
+      <Field label="Absolute band (pp)" hint="Tolerated drift">
         <Input name="band_abs" inputMode="decimal" defaultValue={Math.round(settings.band_abs * 1000) / 10} />
       </Field>
-      <Field label="Banda relativa (%)" hint="Sobre el peso objetivo">
+      <Field label="Relative band (%)" hint="Of the target weight">
         <Input name="band_rel" inputMode="decimal" defaultValue={Math.round(settings.band_rel * 1000) / 10} />
       </Field>
-      <Field label="Aportación mensual (€)">
+      <Field label="Monthly contribution (€)">
         <Input name="monthly_contribution" inputMode="decimal" defaultValue={settings.monthly_contribution} />
       </Field>
       <div className="col-span-2 flex items-center gap-3 sm:col-span-3">
         <Button type="submit" variant="primary" disabled={pending}>
-          Guardar
+          Save
         </Button>
         <Result state={state} />
       </div>
     </form>
-  );
-}
-
-const PLAN_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
-
-export function ContributionPlanner({
-  values,
-  other,
-  settings,
-  products,
-}: {
-  values: Record<"core" | "gold" | "momentum", number>;
-  other: number;
-  settings: Settings;
-  /** Optional "what to buy" line under each bucket (product name / ISIN). */
-  products?: Partial<Record<"core" | "gold" | "momentum", string>>;
-}) {
-  const [amount, setAmount] = useState(String(settings.monthly_contribution));
-  const a = Number(amount.replace(",", ".")) || 0;
-  const plan = contributionPlan(values, other, settings.targets, a);
-  return (
-    <div className="flex flex-col gap-4">
-      <label className="flex items-center justify-between gap-3 rounded-[14px] bg-surface-2 px-4 py-2">
-        <span className="text-[15px] text-ink-2">Importe</span>
-        <span className="flex items-center gap-1">
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            inputMode="decimal"
-            aria-label="Importe de la aportación"
-            className="num w-24 bg-transparent text-right text-[22px] font-bold outline-none"
-          />
-          <span className="text-[22px] font-bold">€</span>
-        </span>
-      </label>
-      <ul className="flex flex-col gap-3">
-        {(["core", "gold", "momentum"] as const).map((k) => (
-          <li key={k} className="flex items-start justify-between gap-3 text-[15px]">
-            <span className="flex min-w-0 items-start gap-2.5">
-              <span className={`mt-[7px] h-2.5 w-2.5 shrink-0 rounded-full ${PLAN_DOT[k]}`} />
-              <span className="min-w-0">
-                {BUCKET_LABELS[k]}
-                {products?.[k] && <span className="block break-words text-[13px] text-ink-2">{products[k]}</span>}
-              </span>
-            </span>
-            <span className="num shrink-0 whitespace-nowrap font-semibold">{money(plan[k], "EUR", 0)}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="text-[13px] text-ink-3">Reparto que te acerca a tu objetivo sin vender nada. Las compras las haces tú en tu bróker.</p>
-    </div>
   );
 }

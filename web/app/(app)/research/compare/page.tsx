@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Delta, ScoreCell, StatePill, Ticker } from "@/components/fin/fin";
+import { ActionPill, Delta, ScoreCell, StatePill, Ticker } from "@/components/fin/fin";
 import { CompareChart } from "@/components/research/compare-chart";
 import { PageHeader } from "@/components/shell/page-header";
 import { EmptyState, Panel } from "@/components/ui/primitives";
@@ -8,7 +8,7 @@ import { compactUsd, num, pct } from "@/lib/format";
 import { getAssets, loadMarket } from "@/lib/market/source";
 import type { RadarRow } from "@/lib/market/types";
 
-export const metadata = { title: "Comparar" };
+export const metadata = { title: "Compare" };
 
 type RowDef = [string, (r: RadarRow) => React.ReactNode];
 
@@ -16,34 +16,43 @@ const ROWS: { group: string; rows: RowDef[] }[] = [
   {
     group: "Ranking",
     rows: [
-      ["Estado", (r) => <StatePill state={r.st} short />],
+      ["What to do", (r) => <ActionPill action={r.act} />],
+      ["Trend status", (r) => <StatePill state={r.st} short />],
       ["Rank", (r) => <span className="num">#{r.rank}</span>],
-      ["Overall", (r) => <ScoreCell v={r.ov} />],
-      ["Momentum", (r) => <ScoreCell v={r.m} />],
-      ["Trend Quality", (r) => <ScoreCell v={r.tq} />],
+      ["Momentum score", (r) => <ScoreCell v={r.ov} />],
+      ["Trend strength", (r) => <ScoreCell v={r.m} />],
+      ["Trend quality", (r) => <ScoreCell v={r.tq} />],
       ["Acceleration", (r) => <ScoreCell v={r.a} />],
-      ["Risk (0 = menor)", (r) => <ScoreCell v={r.rk} invert />],
+      ["Risk (0 = calmest)", (r) => <ScoreCell v={r.rk} invert />],
     ],
   },
   {
-    group: "Rentabilidad",
+    group: "Returns",
     rows: [
-      ["1 mes", (r) => <Delta v={r.r1m} />],
-      ["3 meses", (r) => <Delta v={r.r3m} />],
-      ["6 meses", (r) => <Delta v={r.r6m} />],
-      ["12 meses", (r) => <Delta v={r.r12m} />],
-      ["12-1 meses", (r) => <Delta v={r.r12_1} />],
+      ["1 month", (r) => <Delta v={r.r1m} />],
+      ["3 months", (r) => <Delta v={r.r3m} />],
+      ["6 months", (r) => <Delta v={r.r6m} />],
+      ["12 months", (r) => <Delta v={r.r12m} />],
+      ["12 months skipping the last", (r) => <Delta v={r.r12_1} />],
     ],
   },
   {
-    group: "Riesgo y liquidez",
+    group: "Risk and trading",
     rows: [
-      ["Volatilidad 63d", (r) => <span className="num">{pct(r.vol, 0, false)}</span>],
-      ["Drawdown máx. 12m", (r) => <span className="num">{pct(r.mdd, 0, false)}</span>],
+      ["Volatility (3 months)", (r) => <span className="num">{pct(r.vol, 0, false)}</span>],
+      ["Worst fall (1 year)", (r) => <span className="num">{pct(r.mdd, 0, false)}</span>],
       ["Beta", (r) => <span className="num">{num(r.beta)}</span>],
-      ["Distancia a máx. 52s", (r) => <span className="num">{pct(r.d52, 1, false)}</span>],
-      ["Vol. monetario medio", (r) => <span className="num">{compactUsd(r.adv)}</span>],
-      ["Capitalización", (r) => <span className="num">{compactUsd(r.mcap)}</span>],
+      ["Below 1-year high", (r) => <span className="num">{pct(r.d52, 1, false)}</span>],
+      ["Average traded per day", (r) => <span className="num">{compactUsd(r.adv)}</span>],
+      ["Company value", (r) => <span className="num">{compactUsd(r.mcap)}</span>],
+    ],
+  },
+  {
+    group: "Fundamentals",
+    rows: [
+      ["Fundamentals score", (r) => <ScoreCell v={r.fund ?? null} />],
+      ["Piotroski F-Score", (r) => <span className="num">{r.fs === null || r.fs === undefined ? "—" : `${r.fs}/9`}</span>],
+      ["P/E", (r) => <span className="num">{r.prof === false ? "loss" : num(r.pe ?? null, 1)}</span>],
     ],
   },
 ];
@@ -56,14 +65,14 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   const found = tickers.filter((t) => assets[t]);
   return (
     <>
-      <PageHeader title="Comparar activos" sub="Hasta 4 activos. Selecciónalos con las casillas del Momentum Radar." />
+      <PageHeader title="Compare" sub="Up to 4 assets side by side." />
       {found.length < 1 || !meta ? (
-        <EmptyState title="Nada que comparar" action={<Link className="text-accent" href="/radar">Ir al Momentum Radar</Link>}>
-          Añade tickers a la URL (?t=AAA,BBB) o selecciónalos en el radar.
+        <EmptyState title="Nothing to compare" action={<Link className="text-accent" href="/radar">Open the radar</Link>}>
+          Add tickers to the address (?t=AAA,BBB) or use Compare on an asset page.
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-4">
-          <Panel title="Evolución relativa">
+          <Panel title="Relative performance">
             <CompareChart sessions={meta.sessions} series={found.map((t) => ({ t, c: assets[t].series?.c ?? [] }))} />
           </Panel>
           <Panel pad={false}>
@@ -94,7 +103,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
                         <td className="px-4 py-2 text-ink-2 md:px-5">{label}</td>
                         {found.map((t) => (
                           <td key={t} className="px-3 py-2 text-right">
-                            {assets[t].eligible || g.group !== "Ranking" ? fn(assets[t].row) : <span className="text-ink-3">no elegible</span>}
+                            {assets[t].eligible || g.group !== "Ranking" ? fn(assets[t].row) : <span className="text-ink-3">not scored</span>}
                           </td>
                         ))}
                       </tr>
@@ -104,7 +113,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
               </table>
             </div>
           </Panel>
-          {tickers.length > found.length && <p className="t-meta">No encontrados en la última ejecución: {tickers.filter((t) => !assets[t]).join(", ")}</p>}
+          {tickers.length > found.length && <p className="t-meta">Not found in the latest run: {tickers.filter((t) => !assets[t]).join(", ")}</p>}
         </div>
       )}
     </>

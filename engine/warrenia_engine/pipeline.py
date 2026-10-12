@@ -17,7 +17,9 @@ from .http import ProviderError
 from .lake import Lake
 from .panels import build_panels
 from .providers.base import DIVIDEND_COLUMNS, SPLIT_COLUMNS, empty
-from .publish import build_artifacts, new_run_id, previous_meta, previous_states, publish
+from .fundamentals import FACT_COLUMNS
+from .publish import build_artifacts, new_run_id, previous_actions, previous_meta, previous_states, publish
+from .signals import append_log as append_signal_log, diff as signal_diff
 from .storage import Storage, write_parquet
 from .universe import classify_assets
 
@@ -102,7 +104,7 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
     refreshed = st.setdefault("refreshed", {})
     warnings: list[str] = []
     if empty_sessions:
-        warnings.append(f"Sin datos del proveedor para {len(empty_sessions)} sesión(es): "
+        warnings.append(f"No provider data for {len(empty_sessions)} session(s): "
                         + ", ".join(d.isoformat() for d in sorted(empty_sessions)[-5:]))
 
     # Reference tickers: weekly.
@@ -113,7 +115,7 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
             refreshed["tickers"] = now.isoformat(timespec="seconds")
             log.info("ingest: %d reference tickers", len(tk))
         except ProviderError as e:
-            warnings.append(f"Lista de valores no actualizada ({e.status}); se usa la anterior.")
+            warnings.append(f"Ticker list not refreshed ({e.status}); using the previous one.")
             log.warning("ingest: tickers refresh failed: %s", e)
 
     # Corporate actions: incremental with a 10-day overlap. Dividends are large (hundreds of pages
@@ -127,7 +129,7 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
         st["splits_available"] = True
     except ProviderError as e:
         st["splits_available"] = False
-        warnings.append(f"splits: no disponible en el proveedor ({e.status}). Splits sin ajustar.")
+        warnings.append(f"Splits not available from the provider ({e.status}). Prices not adjusted for splits.")
         log.warning("ingest: splits unavailable: %s", e)
     warnings.extend(_ingest_dividends(provider, lake, st, first, last, budget_s=dividend_budget_s))
     if fundamentals_provider is not None and (_older_than(refreshed.get("fundamentals"), days=7, now=now)
@@ -138,9 +140,23 @@ def ingest(provider, lake: Lake, cfg: Config, now: datetime | None = None, max_s
             lake.write_ref("fundamentals", f)
             refreshed["fundamentals"] = now.isoformat(timespec="seconds")
             log.info("ingest: fundamentals for %d tickers", len(f))
+            if hasattr(fundamentals_provider, "facts"):
+                ciks = {int(c) for c in pd.to_numeric(f["cik"], errors="coerce").dropna()}
+                facts = fundamentals_provider.facts(ciks)
+                lake.write_ref("facts", facts)
+                if hasattr(fundamentals_provider, "companyfacts"):
+                    st["companyfacts"] = refresh_companyfacts(fundamentals_provider, lake, f, tickers, facts,
+                                                             st.get("companyfacts", {}), now)
+                if hasattr(fundamentals_provider, "fx_rates"):
+                    try:
+                        fx = fundamentals_provider.fx_rates()
+                        if fx:
+                            lake.write_ref("fx_usd", pd.DataFrame({"currency": list(fx), "usd_per_unit": list(fx.values())}))
+                    except Exception:  # noqa: BLE001 - IFRS valuation simply stays blank
+                        log.warning("ingest: ECB rates for IFRS reports not available")
         except Exception as e:  # never let fundamentals stop the daily publish
             log.exception("ingest: fundamentals failed")
-            warnings.append(f"Fundamentales (SEC) no disponibles: {type(e).__name__}")
+            warnings.append(f"Fundamentals (SEC) not available: {type(e).__name__}")
     st["refreshed"] = refreshed
     st["last_ingest_warnings"] = warnings
     lake.save_state(st)
@@ -188,12 +204,48 @@ def _ingest_dividends(provider, lake: Lake, st: dict, first: date, last: date, b
         log.warning("ingest: dividends: %s", e)
         if not st.get("dividends_from"):
             st["dividends_available"] = False
-            return [f"dividends: no disponible en el proveedor ({e.status}). Rentabilidades sin dividendos."]
+            return [f"Dividends not available from the provider ({e.status}). Returns exclude dividends."]
     frm = st.get("dividends_from")
     if frm and date.fromisoformat(frm) > first:
         log.info("ingest: dividends covered from %s (target %s)", frm, first)
-        return [f"Dividendos cargados desde el {frm}; el histórico se completa en las próximas actualizaciones."]
+        return [f"Dividends loaded from {frm}; older history fills in over the next updates."]
     return []
+
+
+def refresh_companyfacts(provider, lake: Lake, fund: pd.DataFrame, tickers: pd.DataFrame, facts: pd.DataFrame,
+                         fetched: dict[str, str], now: datetime, max_calls: int = 150, max_age_days: int = 45) -> dict[str, str]:
+    """Annual reports of filers missing from the US GAAP frames (IFRS filers: most European ADRs),
+    one SEC companyfacts file each, cached for `max_age_days`. Only stocks that matter are fetched:
+    ADRs and anything in the latest published ranking."""
+    from .storage import read_json
+
+    covered = set(pd.to_numeric(facts["cik"], errors="coerce").dropna().astype(int)) if facts is not None and len(facts) else set()
+    adr = set(tickers.loc[tickers["type"] == "ADRC", "ticker"]) if "type" in tickers else set()
+    latest = read_json(lake.s, "published/latest.json")
+    radar = read_json(lake.s, f"published/{latest['path']}/radar.json.gz") if latest else None
+    ranked = {r["t"] for r in (radar or {}).get("rows", []) if r.get("cls") == "stock"}
+    f = fund.dropna(subset=["cik"])
+    want = {int(c) for t, c in zip(f["ticker"], pd.to_numeric(f["cik"], errors="coerce")) if pd.notna(c) and (t in adr or t in ranked)}
+    want -= covered
+    old = lake.read_ref("facts_cf")
+    cutoff = (now - timedelta(days=max_age_days)).isoformat()
+    todo = sorted(c for c in want if fetched.get(str(c), "") < cutoff)[:max_calls]
+    rows, done = [], []
+    for cik in todo:
+        try:
+            rows.extend(provider.companyfacts(cik))
+            done.append(cik)
+        except ProviderError as e:
+            log.warning("companyfacts %s: %s", cik, e)
+            if e.status in (403, 429):
+                break
+    if done:
+        keep = old[~old["cik"].isin(done)] if old is not None and len(old) else None
+        new = pd.DataFrame(rows, columns=FACT_COLUMNS)
+        lake.write_ref("facts_cf", new if keep is None else pd.concat([keep, new], ignore_index=True))
+    stamp = now.isoformat(timespec="seconds")
+    log.info("companyfacts: %d filers fetched (%d facts), %d still pending", len(done), len(rows), len(want) - len(todo))
+    return {**fetched, **{str(c): stamp for c in done}}
 
 
 def _older_than(ts: str | None, days: int, now: datetime) -> bool:
@@ -239,7 +291,7 @@ def compute_and_publish(storage: Storage, cfg: Config, now: datetime | None = No
     missing_refs = [b for b in cfg.reference_tickers if not P.has(b)]
     if cfg.primary_benchmark in missing_refs:
         raise RuntimeError(f"primary benchmark {cfg.primary_benchmark} has no data")
-    ctx = build_context(cfg, P, tickers, lake.read_ref("fundamentals"))
+    ctx = build_context(cfg, P, tickers, lake.read_ref("fundamentals"), all_facts(lake), fx=fx_table(lake))
     t = P.t_index(asof)
     log.info("compute: asof=%s sessions=%d tickers=%d (stocks %d, etfs %d)", asof, len(P.dates), len(P.tickers),
              len(ctx.cols["stock"]), len(ctx.cols["etf"]))
@@ -252,21 +304,21 @@ def compute_and_publish(storage: Storage, cfg: Config, now: datetime | None = No
     min_needed = cfg.universe["stocks"]["min_history_sessions"] + cfg.windows["accel_lookback"]
     if len(P.dates) < min_needed:
         status = "degraded"
-        warnings.append(f"Historial incompleto ({len(P.dates)} sesiones; se necesitan {min_needed}). "
+        warnings.append(f"Incomplete history ({len(P.dates)} sessions; {min_needed} needed). "
                         "La descarga inicial sigue en curso.")
     expected = last_closed
     if asof < expected:
         status = "degraded"
-        warnings.append(f"Los datos más recientes son del {asof}; la última sesión cerrada es {expected}.")
+        warnings.append(f"Latest data is from {asof}; the last closed session is {expected}.")
     prev = previous_meta(storage)
     n_elig = len(res["stock"].scores)
     if prev and prev.get("coverage", {}).get("stock", {}).get("eligible"):
         prev_n = prev["coverage"]["stock"]["eligible"]
         if n_elig < cfg.universe["data_quality"]["min_universe_coverage"] * prev_n:
             status = "degraded"
-            warnings.append(f"Cobertura anómala: {n_elig} acciones elegibles frente a {prev_n} en la ejecución anterior.")
+            warnings.append(f"Unusual coverage: {n_elig} eligible stocks versus {prev_n} in the previous run.")
     if missing_refs:
-        warnings.append("Benchmarks/ETFs sectoriales sin datos: " + ", ".join(missing_refs))
+        warnings.append("Benchmarks/sector ETFs without data: " + ", ".join(missing_refs))
     warnings.extend(P.adjustment_notes[:20])
 
     run_id = new_run_id(asof, now)
@@ -279,7 +331,7 @@ def compute_and_publish(storage: Storage, cfg: Config, now: datetime | None = No
         "data_window": {"first_session": P.dates[0].date().isoformat(), "last_session": asof.isoformat(),
                         "sessions": int(len(P.dates)), "plan_limited_before": st.get("plan_limited_before")},
         "lake": {"refreshed": st.get("refreshed", {}), "ingested_sessions": len(sessions)},
-        "data_type": "EOD (cierre diario). Sin datos intradía.",
+        "data_type": "End of day (daily close). No intraday data.",
     }
     prev_st, prev_asof = previous_states(storage)
     if prev_asof == asof.isoformat():
@@ -287,10 +339,20 @@ def compute_and_publish(storage: Storage, cfg: Config, now: datetime | None = No
         prev_st = {k: v for k, v in (previous_meta(storage) or {}).get("prev_states", {}).items()} or prev_st
     meta_extra["prev_states_asof"] = prev_asof
     meta_extra["calendar"] = upcoming_calendar(asof)
-    art = build_artifacts(ctx, t, res, hist, meta_extra, prev_states=prev_st)
+    art = build_artifacts(ctx, t, res, hist, meta_extra, prev_states=prev_st, profiles=lake.read_ref("profiles"))
     art["meta"]["prev_states"] = prev_st
+    # Signal changes vs the previous published session (same-session recompute: vs the one before it).
+    prev_act = previous_actions(storage)
+    same_session = prev_asof == asof.isoformat()
+    if same_session:
+        prev_act = (previous_meta(storage) or {}).get("prev_actions") or {}
+    art["meta"]["prev_actions"] = prev_act
+    events = signal_diff(prev_act, art["radar"]["rows"], asof.isoformat())
+    keep_log = same_session and not prev_act  # recompute without a baseline: keep the events already logged
     art["meta"]["compute_seconds"] = round(time.monotonic() - t0, 1)
     publish(storage, art, run_id)
+    if not keep_log:
+        append_signal_log(storage, events, asof.isoformat())
     snap = pd.DataFrame([{"ticker": r["t"], "cls": r["cls"], "rank": r["rank"], "overall": r["ov"], "momentum": r["m"],
                           "trend_quality": r["tq"], "acceleration": r["a"], "risk": r["rk"], "state": r["st"]}
                          for r in art["radar"]["rows"]])
@@ -298,7 +360,19 @@ def compute_and_publish(storage: Storage, cfg: Config, now: datetime | None = No
     log.info("published run %s (%s) in %.1fs: %d stocks, %d etfs eligible", run_id, status,
              time.monotonic() - t0, len(res["stock"].scores), len(res["etf"].scores))
     return {"run_id": run_id, "asof": asof.isoformat(), "status": status, "warnings": warnings,
+            "signal_changes": len(events),
             "eligible": {c: len(res[c].scores) for c in res}}
+
+
+def all_facts(lake: Lake) -> pd.DataFrame | None:
+    """US GAAP frames plus the companyfacts of filers missing from them (IFRS)."""
+    parts = [x for x in (lake.read_ref("facts"), lake.read_ref("facts_cf")) if x is not None and len(x)]
+    return pd.concat(parts, ignore_index=True) if parts else None
+
+
+def fx_table(lake: Lake) -> dict[str, float]:
+    fx = lake.read_ref("fx_usd")
+    return {} if fx is None else dict(zip(fx["currency"], fx["usd_per_unit"].astype(float)))
 
 
 def upcoming_calendar(asof: date, days: int = 400) -> dict:
@@ -311,3 +385,43 @@ def upcoming_calendar(asof: date, days: int = 400) -> dict:
     closes = cal.closes[sess]
     return {"exchange": "XNYS", "sessions": [[d.date().isoformat(), c.tz_convert("UTC").isoformat() if c.tzinfo else c.tz_localize("UTC").isoformat()]
                                              for d, c in zip(sess, closes)]}
+
+
+PROFILE_COLUMNS = ["ticker", "name", "description", "homepage", "employees", "list_date", "industry", "fetched_at"]
+
+
+def refresh_profiles(provider, lake: Lake, storage: Storage, now: datetime | None = None, max_calls: int = 25,
+                     top_n: int = 80, max_age_days: int = 120) -> dict:
+    """Company profiles ("what does it do?") for the stocks the user is likely to open: the top of the
+    latest ranking plus every buy candidate / wait. One provider call per ticker, cached for months, so a
+    5-calls-per-minute plan stays within a few minutes per run."""
+    if not hasattr(provider, "ticker_details"):
+        return {"skipped": "provider without profiles"}
+    now = now or datetime.now(timezone.utc)
+    from .storage import read_json
+    latest = read_json(storage, "published/latest.json")
+    radar = read_json(storage, f"published/{latest['path']}/radar.json.gz") if latest else None
+    if not radar:
+        return {"skipped": "no ranking yet"}
+    stocks = sorted((r for r in radar["rows"] if r.get("cls") == "stock"), key=lambda r: r["rank"])
+    want = [r["t"] for r in stocks[:top_n]] + [r["t"] for r in stocks if r.get("act") in ("candidate", "wait")]
+    old = lake.read_ref("profiles")
+    have = {} if old is None or old.empty else {r.ticker: r for r in old.itertuples(index=False)}
+    fresh = lambda tk: tk in have and pd.Timestamp(have[tk].fetched_at) > pd.Timestamp(now) - pd.Timedelta(days=max_age_days)  # noqa: E731
+    todo = [tk for tk in dict.fromkeys(want) if not fresh(tk)][:max_calls]
+    rows = [] if old is None else old.to_dict("records")
+    done = 0
+    for tk in todo:
+        try:
+            d = provider.ticker_details(tk)
+        except ProviderError as e:
+            log.warning("profiles: %s: %s", tk, e)
+            if e.status in (401, 403, 429):
+                break
+            continue
+        d["fetched_at"] = now.isoformat(timespec="seconds")
+        rows = [r for r in rows if r["ticker"] != tk] + [d]
+        done += 1
+    if done:
+        lake.write_ref("profiles", pd.DataFrame(rows, columns=PROFILE_COLUMNS))
+    return {"fetched": done, "pending": max(0, len([t for t in dict.fromkeys(want) if not fresh(t)]) - done)}

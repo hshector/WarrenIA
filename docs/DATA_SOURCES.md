@@ -10,6 +10,8 @@ cambian con frecuencia.
 | Splits y dividendos | Massive `/v3/reference/splits` y `/v3/reference/dividends` | igual | Paginado (1.000 por página) | Si el plan no los incluye, la ejecución lo indica y las rentabilidades pasan a ser de precio (sin dividendos). |
 | Universo (tipos, nombres, bolsa) | Massive `/v3/reference/tickers` | igual | ~30 páginas por semana | Incluye tickers inactivos, para no perder empresas que dejan de cotizar en la historia. |
 | Capitalización y sector | **SEC EDGAR** (oficial) | Gratuito; `User-Agent` con e-mail obligatorio | 10 peticiones/s | XBRL *frames* `dei:EntityCommonStockSharesOutstanding` (una llamada por trimestre para todas las empresas) y SIC desde `submissions` (en caché). |
+| Cuentas anuales (fundamentales) | **SEC EDGAR** (oficial) | Gratuito | 10 peticiones/s | US GAAP: XBRL *frames* (~230 llamadas a la semana). IFRS (ADR europeos): `companyfacts` de cada empresa, hasta 150 a la semana, en caché 45 días. |
+| Tipos de cambio para IFRS | **BCE** (oficial) | Gratuito | — | Tipos de referencia más recientes de todas las monedas (una llamada a la semana). |
 | Tipos de cambio | **BCE**, tipos de referencia del euro (oficiales) | Gratuito | Diario, ~16:00 CET | Para valorar en EUR. |
 | Precios en EUR de ETF/ETC (Xetra) | **EODHD**, plan gratuito | API key gratuita | ~20 llamadas/día, ~1 año de historia | 1 llamada por instrumento y día. El histórico se acumula en el almacenamiento. Se usa el cierre **sin ajustar**, porque las distribuciones se registran como operaciones. |
 | Benchmarks y sectores | Massive (SPY, RSP, QQQ, MDY y ETFs SPDR sectoriales) | igual | — | Decisión documentada en `config/benchmarks.yaml`. |

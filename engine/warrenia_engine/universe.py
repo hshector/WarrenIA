@@ -8,17 +8,17 @@ import numpy as np
 import pandas as pd
 
 REASONS = {
-    "type": "Tipo de instrumento fuera del universo",
-    "stale": "Sin cotización en la última sesión (precio obsoleto)",
-    "price": "Precio inferior al mínimo",
-    "adv": "Liquidez (volumen monetario medio) insuficiente",
-    "mcap": "Capitalización inferior al mínimo",
-    "mcap_unknown": "Capitalización no disponible y liquidez insuficiente para compensar",
-    "history": "Historial insuficiente",
-    "missing": "Demasiadas sesiones sin datos",
-    "bad_tick": "Precio anómalo detectado (pico que revierte al día siguiente)",
-    "leveraged": "ETF apalancado o inverso",
-    "metrics": "Métricas incompletas para puntuar",
+    "type": "Not a covered instrument type",
+    "stale": "Did not trade in the last session (stale price)",
+    "price": "Price below the minimum",
+    "adv": "Too little trading (average daily value)",
+    "mcap": "Company too small",
+    "mcap_unknown": "Company size unknown and not liquid enough to compensate",
+    "history": "Not enough price history",
+    "missing": "Too many days without data",
+    "bad_tick": "Bad price detected (a spike that reverses the next day)",
+    "leveraged": "Leveraged or inverse ETF",
+    "metrics": "Not enough data to score",
 }
 
 

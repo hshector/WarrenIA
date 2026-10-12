@@ -6,9 +6,9 @@ import type { ActionKey, BenchReturns, RadarRow, StateKey } from "./types";
 /** Plain-language risk bucket from the Risk percentile. */
 export function riskLabel(rk: number | null | undefined): { text: string; cls: string } {
   if (rk === null || rk === undefined || !Number.isFinite(rk)) return { text: "—", cls: "text-ink-3" };
-  if (rk < 34) return { text: "Bajo", cls: "text-pos" };
-  if (rk < 67) return { text: "Medio", cls: "text-ink-2" };
-  return { text: "Alto", cls: "text-neg" };
+  if (rk < 34) return { text: "Low", cls: "text-pos" };
+  if (rk < 67) return { text: "Medium", cls: "text-ink-2" };
+  return { text: "High", cls: "text-neg" };
 }
 
 
@@ -29,57 +29,57 @@ export type SortKey = keyof RadarRow | "ret" | "rel";
 export const PRESETS: Preset[] = [
   {
     key: "buy",
-    label: "Para comprar",
-    question: "Candidatas: entre el 20 % más fuerte, con tendencia ordenada y sin haberse disparado a corto plazo",
+    label: "Buy now",
+    question: "Buy candidates: the strongest 20%, rising steadily, not overheated, with solid finances",
     filter: (r) => r.act === "candidate",
     sort: { key: "rank", dir: "asc" },
   },
-  { key: "all", label: "Ranking completo", question: "Todas, ordenadas por puntuación de momentum (incluye las que no conviene comprar ahora)", sort: { key: "rank", dir: "asc" } },
+  { key: "all", label: "Full ranking", question: "Everything, ordered by momentum score (including what is not a buy now)", sort: { key: "rank", dir: "asc" } },
   {
     key: "wait",
-    label: "Esperar retroceso",
-    question: "Líderes que se han disparado a corto plazo: comprarlas ahora es comprar el pico",
+    label: "Wait for a dip",
+    question: "Leaders that shot up recently: buying now means buying the spike",
     filter: (r) => r.act === "wait",
     sort: { key: "rank", dir: "asc" },
   },
-  { key: "strongest", label: "Más fuertes", question: "¿Qué acciones tienen el momentum más fuerte ahora?", sort: { key: "m", dir: "desc" } },
+  { key: "strongest", label: "Strongest trend", question: "Which stocks have the strongest trend right now?", sort: { key: "m", dir: "desc" } },
   {
     key: "accel",
-    label: "Acelerando",
-    question: "¿Cuáles están acelerando más durante las últimas semanas?",
+    label: "Speeding up",
+    question: "Which are speeding up the most in recent weeks?",
     filter: (r) => r.m >= 50,
     sort: { key: "a", dir: "desc" },
   },
   {
     key: "lowvol",
-    label: "Fuertes y estables",
-    question: "¿Qué acciones combinan momentum fuerte con volatilidad relativamente baja?",
+    label: "Strong and calm",
+    question: "Which combine a strong trend with relatively calm prices?",
     filter: (r) => r.m >= 80,
     sort: { key: "rk", dir: "asc" },
   },
   {
     key: "fading",
-    label: "Perdiendo fuerza",
-    question: "¿Qué líderes están empezando a perder impulso?",
+    label: "Losing steam",
+    question: "Which leaders are starting to lose steam?",
     filter: (r) => r.m >= 70 && (r.st === "weakening" || (r.dm !== null && r.dm <= -15)),
     sort: { key: "dm", dir: "asc" },
   },
   {
     key: "breakouts",
-    label: "Rupturas",
-    question: "¿Qué empresas están rompiendo máximos con confirmación de volumen?",
-    note: "Con datos diarios (cierre): la confirmación es de volumen diario, no intradía.",
+    label: "New highs",
+    question: "Which are breaking to new highs on strong volume?",
+    note: "Daily closing data: volume is confirmed per day, not intraday.",
     filter: (r) => r.bo || (r.h52 && (r.rvol ?? 0) >= 1.5),
     sort: { key: "ov", dir: "desc" },
   },
   {
     key: "improvers",
-    label: "Más mejoradas",
-    question: "¿Cuáles han mejorado más su posición en el ranking durante el último mes?",
+    label: "Most improved",
+    question: "Which climbed the ranking the most in the last month?",
     filter: (r) => r.dr !== null,
     sort: { key: "dr", dir: "desc" },
   },
-  { key: "watch", label: "Siguiendo", question: "Activos que sigues", sort: { key: "rank", dir: "asc" } },
+  { key: "watch", label: "Following", question: "Assets you follow", sort: { key: "rank", dir: "asc" } },
 ];
 
 export interface Filters {
@@ -174,6 +174,6 @@ export function hasActions(rows: RadarRow[]): boolean {
 
 /** Plain-language verdict for an asset you already own (buffer rule of the engine). */
 export function holdLabel(r: { hold: boolean }): { text: string; cls: string } {
-  if (r.hold) return { text: "Mantener", cls: "text-pos" };
-  return { text: "Revisar venta", cls: "text-neg" };
+  if (r.hold) return { text: "Keep", cls: "text-pos" };
+  return { text: "Consider selling", cls: "text-neg" };
 }

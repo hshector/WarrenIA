@@ -52,7 +52,7 @@ export async function loadPortfolio(store: UserStore, latest: Latest | null, met
     const m = manual.filter((p) => p.instrument_id === ins.id);
     if (m.length && !prices[ins.id]) {
       prices[ins.id] = { currency: ins.currency, source: "precio manual", points: m.map((p) => ({ date: p.price_date, price: p.price })).sort((a, b) => a.date.localeCompare(b.date)) };
-      priceInfo[ins.id] = { source: "Precio manual", asof: m[m.length - 1].price_date };
+      priceInfo[ins.id] = { source: "Manual price", asof: m[m.length - 1].price_date };
     }
   }
   const fx: FxTable = fxFile?.rates ?? {};

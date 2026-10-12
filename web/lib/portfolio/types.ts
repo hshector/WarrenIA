@@ -1,4 +1,7 @@
-export type Bucket = "core" | "gold" | "momentum" | "other";
+export type Bucket = "core" | "gold" | "momentum" | "cash" | "other";
+/** The blocks of the plan (targets add up to 100%). Cash is optional: 0% unless you choose otherwise. */
+export type PlanKey = "core" | "gold" | "momentum" | "cash";
+export const PLAN_KEYS: PlanKey[] = ["core", "gold", "momentum", "cash"];
 export type InstrumentKind = "etf" | "stock" | "etc" | "fund" | "other";
 export type PriceSource = "us_market" | "eodhd" | "manual";
 export type TxType = "buy" | "sell" | "deposit" | "withdrawal" | "dividend" | "interest" | "fee" | "tax" | "split";
@@ -42,35 +45,45 @@ export interface ManualPrice {
 }
 
 export interface Settings {
-  targets: Record<"core" | "gold" | "momentum", number>;
+  targets: Record<PlanKey, number>;
+  /** Products chosen for each block (lib/plan/catalog.ts); missing = recommended defaults. */
+  choices?: Partial<Record<PlanKey, { isin: string; weight: number }[]>>;
   band_abs: number;
   band_rel: number;
   monthly_contribution: number;
+  /** Signal-change notifications: what to be told about (migration 0003). */
+  notify?: { holdings: boolean; watchlist: boolean; candidates: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  targets: { core: 0.75, gold: 0.1, momentum: 0.15 },
+  targets: { core: 0.75, gold: 0.1, momentum: 0.15, cash: 0 },
   band_abs: 0.05,
   band_rel: 0.25,
   monthly_contribution: 450,
 };
 
-export const BUCKET_LABELS: Record<Bucket | "cash", string> = {
-  core: "Núcleo global",
-  gold: "Oro",
-  momentum: "Acciones / momentum",
-  other: "Otros",
-  cash: "Efectivo",
+/** Settings saved before the cash block existed have no `cash` target: it is 0. */
+export function normTargets(t: Partial<Record<PlanKey, number>> | null | undefined): Record<PlanKey, number> {
+  if (!t || typeof t.core !== "number") return { ...DEFAULT_SETTINGS.targets };
+  return { core: t.core, gold: t.gold ?? 0, momentum: t.momentum ?? 0, cash: t.cash ?? 0 };
+}
+
+export const BUCKET_LABELS: Record<Bucket, string> = {
+  core: "Core",
+  gold: "Diversifiers",
+  momentum: "Momentum",
+  other: "Other",
+  cash: "Cash",
 };
 
 export const TX_LABELS: Record<TxType, string> = {
-  buy: "Compra",
-  sell: "Venta",
-  deposit: "Aportación",
-  withdrawal: "Retirada",
-  dividend: "Dividendo",
-  interest: "Intereses",
-  fee: "Comisión",
-  tax: "Impuesto",
+  buy: "Buy",
+  sell: "Sell",
+  deposit: "Deposit",
+  withdrawal: "Withdrawal",
+  dividend: "Dividend",
+  interest: "Interest",
+  fee: "Fee",
+  tax: "Tax",
   split: "Split",
 };

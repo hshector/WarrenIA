@@ -41,7 +41,7 @@ def test_absurd_dividend_is_ignored_and_noted(dates):
     divs = pd.DataFrame([{"ticker": "D", "ex_date": dates[100].date(), "cash_amount": 9.0, "currency": "USD"}])
     P = build_panels(bars, None, divs)
     assert P.close[0, 0] == 10.0
-    assert any("ignorado" in n for n in P.adjustment_notes)
+    assert any("ignored" in n for n in P.adjustment_notes)
 
 
 def test_missing_bars_are_nan_and_ffilled_limited(dates):

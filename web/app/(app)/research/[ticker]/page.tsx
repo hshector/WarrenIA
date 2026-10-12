@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ActionPill, AssetAvatar, Delta, Meter, StatePill } from "@/components/fin/fin";
 import { AssetCharts, RankChart } from "@/components/research/asset-charts";
+import { FundamentalsCard } from "@/components/research/fundamentals";
 import { RuleTrace } from "@/components/research/report";
 import { WatchButton } from "@/components/research/watch-button";
 import { IconChevronDown } from "@/components/ui/icons";
@@ -21,9 +22,9 @@ export async function generateMetadata({ params }: { params: Promise<{ ticker: s
 }
 
 const SCORES = [
-  { key: "momentum", field: "m", label: "Fuerza de tendencia", help: "Cuánto ha subido en 6 y 12 meses, ajustado por su volatilidad." },
-  { key: "trend_quality", field: "tq", label: "Calidad de la tendencia", help: "Si sube de forma constante y ordenada." },
-  { key: "acceleration", field: "a", label: "Aceleración", help: "Si el impulso está creciendo en las últimas semanas." },
+  { key: "momentum", field: "m", label: "Trend strength", help: "How much it rose over 6 and 12 months, adjusted for how much it swings." },
+  { key: "trend_quality", field: "tq", label: "Trend quality", help: "Whether it rises steadily and in an orderly way." },
+  { key: "acceleration", field: "a", label: "Acceleration", help: "Whether the trend has been speeding up in recent weeks." },
 ] as const;
 
 function Bullets({ items }: { items: string[] }) {
@@ -75,8 +76,8 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   const [asset, radar] = await Promise.all([getAsset(latest, ticker), getRadar(latest)]);
   if (!meta)
     return (
-      <EmptyState title="Todavía no hay datos de mercado">
-        <p>Aparecerán cuando termine la primera descarga diaria.</p>
+      <EmptyState title="No market data yet">
+        <p>It appears when the first daily download finishes.</p>
       </EmptyState>
     );
   if (!asset) notFound();
@@ -103,7 +104,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
           <div className="min-w-0">
             <h1 className="line-clamp-3 text-[22px] font-bold leading-tight tracking-[-0.02em] sm:text-[24px]">{r.n}</h1>
             <p className="text-[14px] text-ink-2">
-              {ticker} · {r.cls === "etf" ? "ETF" : (r.sec ?? "Acción")}
+              {ticker} · {r.cls === "etf" ? "US-listed ETF" : (r.sec ?? "Stock")}
             </p>
           </div>
         </div>
@@ -111,16 +112,55 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
       </div>
 
       <div>
-        <div className="num text-[40px] font-bold leading-tight tracking-[-0.03em]">{num(r.px)} $</div>
+        <div className="num text-[40px] font-bold leading-tight tracking-[-0.03em]">${num(r.px)}</div>
         <p className="text-[14px] text-ink-2">
-          <Delta v={r.d1} className="font-semibold" /> hoy · cierre del {dateLabel(latest?.data_asof)}
+          <Delta v={r.d1} className="font-semibold" /> today · close of {dateLabel(latest?.data_asof)}
         </p>
       </div>
+
+      <Card title="What it is">
+        {asset.profile ? (
+          <>
+            <p className="text-[15px] leading-relaxed">{asset.profile.description}</p>
+            <p className="mt-2 text-[13px] text-ink-2">
+              {[
+                asset.profile.industry,
+                asset.profile.employees ? `${asset.profile.employees.toLocaleString("en-GB")} employees` : null,
+                asset.profile.list_date ? `listed since ${asset.profile.list_date.slice(0, 4)}` : null,
+                r.mcap ? `company value ${compactUsd(r.mcap)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              {asset.profile.homepage && (
+                <>
+                  {" · "}
+                  <a href={asset.profile.homepage} target="_blank" rel="noreferrer" className="text-accent">
+                    website
+                  </a>
+                </>
+              )}
+            </p>
+          </>
+        ) : r.cls === "etf" ? (
+          <p className="text-[15px] leading-relaxed">
+            A US-listed ETF. EU retail investors cannot buy it (PRIIPs); it is shown to see what is leading the market. For a European equivalent see the{" "}
+            <Link href="/plan" className="font-semibold text-accent">
+              Plan
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className="text-[15px] leading-relaxed text-ink-2">
+            {r.sec ? `${r.sec} company` : "Company"}
+            {r.mcap ? ` worth about ${compactUsd(r.mcap)}` : ""}. A description is loaded for the top of the ranking; this one is not in it yet.
+          </p>
+        )}
+      </Card>
 
       {asset.eligible && act && (
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[14px] text-ink-2">Qué hacer ahora</p>
+            <p className="text-[14px] text-ink-2">What to do now</p>
             <ActionPill action={act.action} className="h-8 px-3.5 text-[14px]" />
           </div>
           <p className="mt-3 text-[15px] leading-relaxed">{ACTION_EXPLAIN[act.action]}</p>
@@ -132,48 +172,33 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
           {act.entry && <p className="mt-3 rounded-[14px] bg-warn-soft px-4 py-3 text-[14.5px]">{act.entry}</p>}
           {hold && (
             <p className="mt-3 text-[14.5px] text-ink-2">
-              {owned ? "La tienes en cartera: " : "Si la tuvieras: "}
+              {owned ? "You own it: " : "If you owned it: "}
               <span className={`font-semibold ${hold.cls}`}>{hold.text}</span>
-              {act.hold
-                ? " (sigue en la mitad más fuerte del universo y sin señal de evitar)."
-                : " (ha salido de la mitad más fuerte del universo o tiene señal de evitar)."}
-            </p>
-          )}
-          {r.cls === "stock" && (
-            <p className="mt-3 text-[14px] text-ink-2">
-              Valoración:{" "}
-              {r.prof === false ? (
-                <span className="font-semibold text-neg">pérdidas en el último ejercicio</span>
-              ) : r.pe !== null && r.pe !== undefined ? (
-                <span className={`font-semibold ${r.pe >= 60 ? "text-warn" : "text-ink"}`}>PER {num(r.pe, 1)}</span>
-              ) : (
-                <span className="font-semibold">beneficio no disponible</span>
-              )}
-              <span className="text-ink-3"> · informativo, no entra en la puntuación</span>
+              {act.hold ? " (still in the stronger half of the market, no avoid signal)." : " (it left the stronger half of the market or has an avoid signal)."}
             </p>
           )}
         </Card>
       )}
 
       <Card>
-        {asset.series ? <AssetCharts sessions={meta.sessions} close={asset.series.c} bench={bench?.series?.c} benchName={meta.primary_benchmark} /> : <p className="text-ink-3">Sin serie de precios.</p>}
+        {asset.series ? <AssetCharts sessions={meta.sessions} close={asset.series.c} bench={bench?.series?.c} benchName={meta.primary_benchmark} /> : <p className="text-ink-3">No price history.</p>}
       </Card>
 
       {!asset.eligible ? (
-        <Callout tone="warn" title="Sin puntuación">
-          No entra en el universo analizado: {asset.excluded?.join(" · ").toLowerCase() || "no cumple los filtros"}.
+        <Callout tone="warn" title="Not scored">
+          Outside the analysed market: {asset.excluded?.join(" · ").toLowerCase() || "it does not pass the filters"}.
         </Callout>
       ) : (
         <Card>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[14px] text-ink-2">Puntuación de momentum</p>
+              <p className="text-[14px] text-ink-2">Momentum score</p>
               <p className="num mt-1 text-[44px] font-bold leading-none tracking-[-0.03em]">
                 {Math.round(r.ov)}
                 <span className="text-[18px] font-semibold text-ink-3">/100</span>
               </p>
               <p className="mt-2 text-[14px] text-ink-2">
-                Puesto {r.rank} de {total}
+                Rank {r.rank} of {total}
               </p>
             </div>
             <StatePill state={r.st} className="mt-1" />
@@ -193,7 +218,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
             ))}
             <div>
               <div className="mb-1.5 flex items-baseline justify-between">
-                <span className="text-[15px]">Riesgo</span>
+                <span className="text-[15px]">Risk</span>
                 <span className={`text-[15px] font-semibold ${risk.cls}`}>{risk.text}</span>
               </div>
               <Meter v={r.rk} invert />
@@ -202,14 +227,20 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
         </Card>
       )}
 
-      <Card title="Rentabilidad">
+      {r.cls === "stock" && asset.eligible && (
+        <Card title="Fundamentals" sub="Is the business behind the trend solid? From its last annual report.">
+          <FundamentalsCard f={asset.fundamentals} />
+        </Card>
+      )}
+
+      <Card title="Returns">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(
             [
-              ["1 mes", r.r1m],
-              ["3 meses", r.r3m],
-              ["6 meses", r.r6m],
-              ["1 año", r.r12m],
+              ["1 month", r.r1m],
+              ["3 months", r.r3m],
+              ["6 months", r.r6m],
+              ["1 year", r.r12m],
             ] as const
           ).map(([l, v]) => (
             <div key={l} className="rounded-[14px] bg-surface-2 px-3 py-3 text-center">
@@ -220,7 +251,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
         </div>
         {radar?.bench[meta.primary_benchmark] && (
           <p className="mt-3 text-[13.5px] text-ink-2">
-            Frente a {meta.primary_benchmark} en 6 meses:{" "}
+            Versus {meta.primary_benchmark} over 6 months:{" "}
             <Delta
               v={r.r6m !== null && radar.bench[meta.primary_benchmark].r6m !== null ? (1 + r.r6m) / (1 + (radar.bench[meta.primary_benchmark].r6m as number)) - 1 : null}
               className="font-semibold"
@@ -231,35 +262,35 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
 
       {rep && (
         <>
-          <Card title="Por qué destaca">
+          <Card title="Why it stands out">
             <Bullets items={rep.thesis.slice(0, 1)} />
           </Card>
-          <Card title="Riesgos">
+          <Card title="Risks">
             <Bullets items={rep.risks} />
           </Card>
-          <Card title="Qué vigilar" sub="Señales que debilitarían la tendencia">
+          <Card title="What to watch" sub="Signs that would weaken the trend">
             <Bullets items={rep.invalidation} />
           </Card>
-          <Card title="En tu cartera">
+          <Card title="In your portfolio">
             <Bullets items={portfolioRelevance(r, pf.result, pf.instruments, pf.settings)} />
           </Card>
         </>
       )}
 
       <section className="card overflow-hidden">
-        <h2 className="px-5 pb-1 pt-5 text-[17px] font-semibold">Detalle técnico</h2>
-        <p className="px-5 pb-2 text-[13.5px] text-ink-2">Para quien quiera ver cómo se calcula todo.</p>
+        <h2 className="px-5 pb-1 pt-5 text-[17px] font-semibold">Technical detail</h2>
+        <p className="px-5 pb-2 text-[13.5px] text-ink-2">For anyone who wants to see how everything is calculated.</p>
         {asset.state && (
-          <Fold title="Por qué tiene este estado">
+          <Fold title="Why it has this status">
             <RuleTrace trace={asset.state.trace} state={asset.state.state} />
           </Fold>
         )}
         {asset.components && (
-          <Fold title="Componentes de cada puntuación">
+          <Fold title="What each score is made of">
             <div className="flex flex-col gap-5">
               {(["momentum", "trend_quality", "acceleration", "risk"] as const).map((k) => (
                 <div key={k}>
-                  <p className="mb-1 text-[14px] font-semibold">{{ momentum: "Fuerza de tendencia", trend_quality: "Calidad de la tendencia", acceleration: "Aceleración", risk: "Riesgo (0 = menor)" }[k]}</p>
+                  <p className="mb-1 text-[14px] font-semibold">{{ momentum: "Trend strength", trend_quality: "Trend quality", acceleration: "Acceleration", risk: "Risk (0 = calmest)" }[k]}</p>
                   <ComponentsTable list={asset.components![k]} />
                 </div>
               ))}
@@ -267,7 +298,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
           </Fold>
         )}
         {rep && (
-          <Fold title="Todos los datos">
+          <Fold title="All the data">
             <dl className="divide-y divide-line">
               {rep.evidence.map((e) => (
                 <div key={e.label} className="flex flex-col gap-0.5 py-2.5 sm:flex-row sm:justify-between sm:gap-4">
@@ -279,32 +310,32 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
                 </div>
               ))}
               <div className="flex justify-between py-2.5 text-[14px]">
-                <dt className="text-ink-2">Capitalización</dt>
+                <dt className="text-ink-2">Company value</dt>
                 <dd className="num">{compactUsd(r.mcap)}</dd>
               </div>
               <div className="flex justify-between py-2.5 text-[14px]">
-                <dt className="text-ink-2">Volatilidad 63 días</dt>
+                <dt className="text-ink-2">Volatility (3 months)</dt>
                 <dd className="num">{pct(r.vol, 0, false)}</dd>
               </div>
             </dl>
           </Fold>
         )}
         {asset.hist && asset.hist.d.length > 1 && (
-          <Fold title="Evolución en el ranking">
+          <Fold title="Rank over time">
             <RankChart hist={asset.hist} />
           </Fold>
         )}
         {rep && (
-          <Fold title="Calidad de los datos">
+          <Fold title="Data quality">
             <ul className="flex flex-col gap-1.5 text-[14px] text-ink-2">
-              <li>Fuente: {rep.data_quality.source} · cierre del {dateLabel(rep.data_quality.asof)}</li>
-              <li>{rep.data_quality.history_sessions} sesiones de historia</li>
+              <li>Source: {rep.data_quality.source} · close of {dateLabel(rep.data_quality.asof)}</li>
+              <li>{rep.data_quality.history_sessions} days of history</li>
               {rep.data_quality.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
               {(asset.events ?? []).slice(-5).map(([d, , kind, detail]) => (
                 <li key={d + kind}>
-                  {kind === "split" ? `Split ${detail}` : `Dividendo ${detail} $`} el {dateLabel(d)}
+                  {kind === "split" ? `Split ${detail}` : `Dividend $${detail}`} on {dateLabel(d)}
                 </li>
               ))}
             </ul>
@@ -313,9 +344,9 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
       </section>
 
       <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-[12.5px] text-ink-3">Análisis cuantitativo de precios. No es una recomendación.</p>
+        <p className="text-[12.5px] text-ink-3">Quantitative analysis of prices and annual reports. Not personal advice.</p>
         <Link href={`/research/compare?t=${ticker},${meta.primary_benchmark}`} className="shrink-0 text-[14px] font-medium text-accent">
-          Comparar
+          Compare
         </Link>
       </div>
     </div>

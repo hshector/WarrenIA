@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { DEFAULT_SETTINGS, type Instrument, type ManualPrice, type Settings, type Transaction } from "@/lib/portfolio/types";
+import { DEFAULT_SETTINGS, normTargets, type Instrument, type ManualPrice, type Settings, type Transaction } from "@/lib/portfolio/types";
 import { appMode, isAllowedEmail } from "@/lib/supabase/env";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -12,6 +12,14 @@ export interface WatchItem {
   ticker: string;
   note: string | null;
   added_at: string;
+}
+
+export interface PushSub {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  device: string | null;
+  created_at?: string;
 }
 
 export interface UserStore {
@@ -29,6 +37,11 @@ export interface UserStore {
   setWatch(ticker: string, on: boolean, note?: string | null): Promise<void>;
   settings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
+  saveChoices(c: NonNullable<Settings["choices"]>): Promise<void>;
+  saveNotify(n: NonNullable<Settings["notify"]>): Promise<void>;
+  pushSubscriptions(): Promise<PushSub[]>;
+  savePushSubscription(p: PushSub): Promise<void>;
+  deletePushSubscription(endpoint: string): Promise<void>;
 }
 
 export class AuthError extends Error {}
@@ -37,7 +50,7 @@ export class AuthError extends Error {}
 export async function requireStore(): Promise<UserStore> {
   const mode = appMode();
   if (mode === "local") return new LocalStore();
-  if (mode === "misconfigured") throw new AuthError("Aplicación sin configurar");
+  if (mode === "misconfigured") throw new AuthError("App not configured");
   const sb = await supabaseServer();
   const { data } = await sb.auth.getUser();
   if (!data.user || !isAllowedEmail(data.user.email)) throw new AuthError("No autorizado");
@@ -53,9 +66,10 @@ function check<T>(res: { data: T | null; error: { message: string; code?: string
     const c = res.error.code;
     console.error("db:", c, res.error.message);
     // Message is shown by app/(app)/error.tsx: say what to do, not the raw Postgres text.
-    if (c === "PGRST205" || c === "42P01") throw new Error("Faltan las tablas de la base de datos: ejecuta supabase/migrations/0001_init.sql en Supabase → SQL Editor.");
-    if (c === "42501") throw new Error("La base de datos no da permisos a tu usuario: vuelve a ejecutar supabase/migrations/0001_init.sql.");
-    throw new Error("Error de la base de datos. Inténtalo de nuevo.");
+    if (c === "PGRST205" || c === "42P01") throw new Error("Database tables are missing: run the files in supabase/migrations in Supabase → SQL Editor.");
+    if (c === "PGRST204" || c === "42703") throw new Error("Database update missing: run the newest files in supabase/migrations in Supabase → SQL Editor.");
+    if (c === "42501") throw new Error("The database denies access to your user: run supabase/migrations/0001_init.sql again.");
+    throw new Error("Database error. Please try again.");
   }
   return res.data as T;
 }
@@ -127,14 +141,35 @@ class SupabaseStore implements UserStore {
     if (!rows.length) return DEFAULT_SETTINGS;
     const r = rows[0];
     return {
-      targets: (r.targets as Settings["targets"]) ?? DEFAULT_SETTINGS.targets,
+      targets: normTargets(r.targets as Settings["targets"]),
       band_abs: Number(r.band_abs),
       band_rel: Number(r.band_rel),
       monthly_contribution: Number(r.monthly_contribution),
+      choices: (r.choices as Settings["choices"]) ?? undefined,
+      notify: (r.notify as Settings["notify"]) ?? undefined,
     };
   }
   async saveSettings(s: Settings) {
-    check(await this.sb.from("settings").upsert({ ...s, updated_at: new Date().toISOString() }));
+    // choices and notify are saved on their own: this keeps working before migrations 0002/0003 are applied.
+    const { choices: _c, notify: _n, ...rest } = s;
+    void _c;
+    void _n;
+    check(await this.sb.from("settings").upsert({ ...rest, updated_at: new Date().toISOString() }));
+  }
+  async saveChoices(c: NonNullable<Settings["choices"]>) {
+    check(await this.sb.from("settings").upsert({ choices: c, updated_at: new Date().toISOString() }));
+  }
+  async saveNotify(n: NonNullable<Settings["notify"]>) {
+    check(await this.sb.from("settings").upsert({ notify: n, updated_at: new Date().toISOString() }));
+  }
+  async pushSubscriptions() {
+    return check(await this.sb.from("push_subscriptions").select("endpoint,p256dh,auth,device,created_at").order("created_at")) as PushSub[];
+  }
+  async savePushSubscription(p: PushSub) {
+    check(await this.sb.from("push_subscriptions").upsert({ endpoint: p.endpoint, p256dh: p.p256dh, auth: p.auth, device: p.device }, { onConflict: "endpoint" }));
+  }
+  async deletePushSubscription(endpoint: string) {
+    check(await this.sb.from("push_subscriptions").delete().eq("endpoint", endpoint));
   }
 }
 
@@ -146,6 +181,7 @@ interface LocalData {
   manual_prices: ManualPrice[];
   watchlist: WatchItem[];
   settings: Settings;
+  push: PushSub[];
 }
 
 const LOCAL_FILE = () => process.env.WARRENIA_LOCAL_STORE || path.resolve(process.cwd(), ".data", "user.json");
@@ -164,10 +200,11 @@ class LocalStore implements UserStore {
         transactions: d.transactions ?? [],
         manual_prices: d.manual_prices ?? [],
         watchlist: d.watchlist ?? [],
-        settings: d.settings ?? DEFAULT_SETTINGS,
+        settings: d.settings ? { ...d.settings, targets: normTargets(d.settings.targets) } : DEFAULT_SETTINGS,
+        push: d.push ?? [],
       };
     } catch {
-      return { instruments: [], transactions: [], manual_prices: [], watchlist: [], settings: DEFAULT_SETTINGS };
+      return { instruments: [], transactions: [], manual_prices: [], watchlist: [], settings: DEFAULT_SETTINGS, push: [] };
     }
   }
 
@@ -248,7 +285,30 @@ class LocalStore implements UserStore {
   }
   async saveSettings(s: Settings) {
     await this.mutate((d) => {
-      d.settings = s;
+      d.settings = { ...s, choices: s.choices ?? d.settings.choices, notify: s.notify ?? d.settings.notify };
+    });
+  }
+  async saveChoices(c: NonNullable<Settings["choices"]>) {
+    await this.mutate((d) => {
+      d.settings = { ...d.settings, choices: c };
+    });
+  }
+  async saveNotify(n: NonNullable<Settings["notify"]>) {
+    await this.mutate((d) => {
+      d.settings = { ...d.settings, notify: n };
+    });
+  }
+  async pushSubscriptions() {
+    return (await this.load()).push;
+  }
+  async savePushSubscription(p: PushSub) {
+    await this.mutate((d) => {
+      d.push = [...d.push.filter((x) => x.endpoint !== p.endpoint), { ...p, created_at: new Date().toISOString() }];
+    });
+  }
+  async deletePushSubscription(endpoint: string) {
+    await this.mutate((d) => {
+      d.push = d.push.filter((x) => x.endpoint !== endpoint);
     });
   }
 }

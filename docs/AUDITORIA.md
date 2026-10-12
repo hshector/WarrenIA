@@ -67,6 +67,35 @@ La pregunta está bien planteada. Esta es la respuesta, que ahora también refle
 
 La cartera calcula ahora las ganancias por año y por tipo, y avisa de las pérdidas no computables por recompra.
 
+## 4 bis. Fase 2: fundamentales, productos a elegir y app en inglés
+
+- **Fundamentales estrictos** (ver METHODOLOGY §3 bis): F‑Score, Altman Z'', rentabilidad bruta, devengos, EBIT/EV, FCF,
+  dilución. Z'' < 1,1 → *Avoid*; cualquier bandera amarilla impide *Buy candidate*. Comprobado a mano con un ejercicio
+  que cierra en junio (`tests/test_fundamentals.py`). Los bancos no reciben F‑Score ni Z'' inventados.
+- **Diversificadores** (antes «oro»): oro físico, bonos euro 1‑3 años, materias primas, plata y bitcoin, cada uno con su
+  comportamiento medido (volatilidad, peor caída, correlación con la bolsa, qué hizo en los meses en que la bolsa cayó)
+  sobre fondos estadounidenses equivalentes. Fiscalidad: los ETC/ETP tributan como rendimiento del capital mobiliario
+  (DGT V0267‑25), no como ganancia patrimonial.
+- **Núcleo**: tres preguntas (emergentes, pequeñas, traspaso sin impuestos) → VWCE, SPYI, XDWD o el fondo indexado de
+  Fidelity. Se muestra qué hay dentro (número de empresas, peso de EE. UU., 10 mayores).
+- **Qué es cada activo**: descripción de la empresa (Massive, caché de 120 días) o texto del ETF.
+- **Limitación**: las comprobaciones usan US GAAP; las empresas IFRS quedan «sin datos». El parser de la SEC solo está
+  probado con respuestas simuladas, porque el entorno de desarrollo no llega a sec.gov: la primera ejecución real es la
+  prueba.
+
+## 4 ter. Fase 3: avisos, Trade Republic, IFRS, liquidez y proyección
+
+- **Avisos de cambio de señal:** el motor registra cada cambio y el proceso diario envía Web Push (VAPID) una vez
+  por sesión. La web tiene página *Alerts*, preferencias y botón de prueba. Probado con un servicio de push
+  simulado y comprobando que una clave generada en el navegador la acepta `pywebpush`.
+- **CSV de Trade Republic:** se lee su exportación oficial (23 columnas, desde abril de 2026). No hay especificación
+  pública: el formato se tomó de importadores abiertos (Portfolio Performance y otros), y lo que no se puede asignar
+  con seguridad se rechaza con una explicación. **Hay que validarlo con tu primera exportación real.**
+- **IFRS:** fundamentales de empresas extranjeras desde *companyfacts*. Además se corrige un error que ya existía:
+  en los ADR, los ratios de precio mezclaban acciones ordinarias con el precio por ADR.
+- **Liquidez:** bloque opcional (0 % por defecto) que cuenta el efectivo del bróker y los fondos monetarios.
+- **Proyección:** simulación reproducible con supuestos citados; no es una previsión.
+
 ## 5. Lo que queda fuera (limitaciones conocidas)
 
 - Con el plan gratuito hay ~2 años de datos: el backtest sigue sin ser concluyente.

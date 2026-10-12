@@ -30,7 +30,7 @@ async function guard() {
     await requireStore();
     return null;
   } catch (e) {
-    if (e instanceof AuthError) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
+    if (e instanceof AuthError) return NextResponse.json({ message: "Not authorised" }, { status: 401 });
     throw e;
   }
 }
@@ -52,19 +52,19 @@ export async function POST() {
   const denied = await guard();
   if (denied) return denied;
   const g = gh();
-  if (!g) return NextResponse.json({ message: "Actualización manual no configurada (GITHUB_DISPATCH_TOKEN)" }, { status: 501 });
+  if (!g) return NextResponse.json({ message: "Manual refresh not configured (GITHUB_DISPATCH_TOKEN)" }, { status: 501 });
   const run = await lastRun(g).catch(() => null);
   if (run && (run.status === "queued" || run.status === "in_progress")) {
-    return NextResponse.json({ message: "Ya hay una actualización en curso" }, { status: 409 });
+    return NextResponse.json({ message: "An update is already running" }, { status: 409 });
   }
   if (run && Date.now() - Date.parse(run.created_at) < COOLDOWN_MIN * 60_000) {
-    return NextResponse.json({ message: `Espera ${COOLDOWN_MIN} min entre actualizaciones (límites del proveedor de datos)` }, { status: 429 });
+    return NextResponse.json({ message: `Wait ${COOLDOWN_MIN} min between updates (data provider limits)` }, { status: 429 });
   }
   const r = await fetch(`https://api.github.com/repos/${g.repo}/actions/workflows/${g.workflow}/dispatches`, {
     method: "POST",
     headers: { ...g.headers, "Content-Type": "application/json" },
     body: JSON.stringify({ ref: g.ref, inputs: { mode: "update" } }),
   });
-  if (!r.ok) return NextResponse.json({ message: `GitHub rechazó la petición (${r.status})` }, { status: 502 });
+  if (!r.ok) return NextResponse.json({ message: `GitHub rejected the request (${r.status})` }, { status: 502 });
   return NextResponse.json({ ok: true });
 }
