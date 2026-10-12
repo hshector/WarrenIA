@@ -7,7 +7,7 @@ import { FundamentalsCard } from "@/components/research/fundamentals";
 import { RuleTrace } from "@/components/research/report";
 import { WatchButton } from "@/components/research/watch-button";
 import { IconChevronDown } from "@/components/ui/icons";
-import { Callout, Card, EmptyState } from "@/components/ui/primitives";
+import { Callout, Card, Disclosure, EmptyState } from "@/components/ui/primitives";
 import { compactUsd, dateLabel, num, pct } from "@/lib/format";
 import { holdLabel, riskLabel } from "@/lib/market/radar";
 import { getAsset, getRadar, loadMarket } from "@/lib/market/source";
@@ -91,6 +91,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   const act = asset.action;
   const owned = pf.result?.positions.some((p) => p.instrument.market_ticker === ticker && p.qty > 0) ?? false;
   const hold = act ? holdLabel(act) : null;
+  const BENCH = radar?.bench[meta.primary_benchmark];
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
@@ -118,7 +119,124 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
         </p>
       </div>
 
-      <Card title="What it is">
+      <Card pad={false} className="px-3 py-4 sm:px-5">
+        {asset.series ? <AssetCharts sessions={meta.sessions} close={asset.series.c} bench={bench?.series?.c} benchName={meta.primary_benchmark} /> : <p className="px-2 text-ink-3">No price history.</p>}
+      </Card>
+
+      {!asset.eligible ? (
+        <Callout tone="warn" title="Not scored">
+          Outside the analysed market: {asset.excluded?.join(" · ").toLowerCase() || "it does not pass the filters"}.
+        </Callout>
+      ) : (
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <div className="shrink-0">
+              <p className="text-[14px] text-ink-2">Momentum score</p>
+              <p className="num mt-1 text-[44px] font-bold leading-none tracking-[-0.03em]">
+                {Math.round(r.ov)}
+                <span className="text-[18px] font-semibold text-ink-3">/100</span>
+              </p>
+              <p className="mt-2 text-[14px] text-ink-2">
+                Rank {r.rank} of {total}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              {act && <ActionPill action={act.action} className="h-8 px-3.5 text-[14px]" />}
+              <StatePill state={r.st} />
+            </div>
+          </div>
+          {act?.entry && <p className="mt-4 rounded-[14px] bg-warn-soft px-4 py-3 text-[14.5px]">{act.entry}</p>}
+          {hold && (
+            <p className="mt-4 text-[14.5px] text-ink-2">
+              {owned ? "You own it: " : "If you owned it: "}
+              <span className={`font-semibold ${hold.cls}`}>{hold.text}</span>
+            </p>
+          )}
+          <div className="mt-5 flex flex-col gap-4">
+            {SCORES.map((s) => (
+              <div key={s.key}>
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <span className="text-[15px]" title={s.help}>
+                    {s.label}
+                  </span>
+                  <span className="num text-[15px] font-semibold">{Math.round(r[s.field])}</span>
+                </div>
+                <Meter v={r[s.field]} />
+              </div>
+            ))}
+            <div>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-[15px]">Risk</span>
+                <span className={`text-[15px] font-semibold ${risk.cls}`}>{risk.text}</span>
+              </div>
+              <Meter v={r.rk} invert />
+            </div>
+          </div>
+          {act && (
+            <Disclosure card={false} title="What to do now" className="mt-5">
+              <p className="text-[15px] leading-relaxed">{ACTION_EXPLAIN[act.action]}</p>
+              <p className="mt-2 text-[14.5px] text-ink-2">{STATE_EXPLAIN[r.st]}</p>
+              {act.why.length > 0 && (
+                <div className="mt-3">
+                  <Bullets items={act.why} />
+                </div>
+              )}
+            </Disclosure>
+          )}
+        </Card>
+      )}
+
+      <Card title="Returns">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(
+            [
+              ["1 month", r.r1m],
+              ["3 months", r.r3m],
+              ["6 months", r.r6m],
+              ["1 year", r.r12m],
+            ] as const
+          ).map(([l, v]) => (
+            <div key={l} className="rounded-[14px] bg-surface-2 px-3 py-3 text-center">
+              <p className="text-[12.5px] text-ink-2">{l}</p>
+              <Delta v={v} className="whitespace-nowrap text-[17px] font-semibold" />
+            </div>
+          ))}
+        </div>
+        {BENCH && (
+          <p className="mt-3 flex justify-between gap-3 text-[14px] text-ink-2">
+            <span>vs {meta.primary_benchmark}, 6 months</span>
+            <Delta v={r.r6m !== null && BENCH.r6m !== null ? (1 + r.r6m) / (1 + (BENCH.r6m as number)) - 1 : null} className="font-semibold" />
+          </p>
+        )}
+      </Card>
+
+      {r.cls === "stock" && asset.eligible && (
+        <Disclosure title="Fundamentals" meta={r.fund === null || r.fund === undefined ? undefined : `${Math.round(r.fund)}/100`}>
+          <FundamentalsCard f={asset.fundamentals} />
+        </Disclosure>
+      )}
+
+      {rep && (
+        <Disclosure title="Analysis">
+          <div className="flex flex-col gap-5">
+            {(
+              [
+                ["Why it stands out", rep.thesis.slice(0, 1)],
+                ["Risks", rep.risks],
+                ["What to watch", rep.invalidation],
+                ["In your portfolio", portfolioRelevance(r, pf.result, pf.instruments, pf.settings)],
+              ] as const
+            ).map(([h, items]) => (
+              <div key={h}>
+                <h3 className="mb-2 text-[14px] font-semibold text-ink-2">{h}</h3>
+                <Bullets items={[...items]} />
+              </div>
+            ))}
+          </div>
+        </Disclosure>
+      )}
+
+      <Disclosure title="About">
         {asset.profile ? (
           <>
             <p className="text-[15px] leading-relaxed">{asset.profile.description}</p>
@@ -143,7 +261,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
           </>
         ) : r.cls === "etf" ? (
           <p className="text-[15px] leading-relaxed">
-            A US-listed ETF. EU retail investors cannot buy it (PRIIPs); it is shown to see what is leading the market. For a European equivalent see the{" "}
+            US-listed: EU retail investors cannot buy it (PRIIPs). European equivalents are in the{" "}
             <Link href="/plan" className="font-semibold text-accent">
               Plan
             </Link>
@@ -152,134 +270,13 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
         ) : (
           <p className="text-[15px] leading-relaxed text-ink-2">
             {r.sec ? `${r.sec} company` : "Company"}
-            {r.mcap ? ` worth about ${compactUsd(r.mcap)}` : ""}. A description is loaded for the top of the ranking; this one is not in it yet.
+            {r.mcap ? ` worth about ${compactUsd(r.mcap)}` : ""}.
           </p>
         )}
-      </Card>
-
-      {asset.eligible && act && (
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[14px] text-ink-2">What to do now</p>
-            <ActionPill action={act.action} className="h-8 px-3.5 text-[14px]" />
-          </div>
-          <p className="mt-3 text-[15px] leading-relaxed">{ACTION_EXPLAIN[act.action]}</p>
-          {act.why.length > 0 && (
-            <div className="mt-3">
-              <Bullets items={act.why} />
-            </div>
-          )}
-          {act.entry && <p className="mt-3 rounded-[14px] bg-warn-soft px-4 py-3 text-[14.5px]">{act.entry}</p>}
-          {hold && (
-            <p className="mt-3 text-[14.5px] text-ink-2">
-              {owned ? "You own it: " : "If you owned it: "}
-              <span className={`font-semibold ${hold.cls}`}>{hold.text}</span>
-              {act.hold ? " (still in the stronger half of the market, no avoid signal)." : " (it left the stronger half of the market or has an avoid signal)."}
-            </p>
-          )}
-        </Card>
-      )}
-
-      <Card>
-        {asset.series ? <AssetCharts sessions={meta.sessions} close={asset.series.c} bench={bench?.series?.c} benchName={meta.primary_benchmark} /> : <p className="text-ink-3">No price history.</p>}
-      </Card>
-
-      {!asset.eligible ? (
-        <Callout tone="warn" title="Not scored">
-          Outside the analysed market: {asset.excluded?.join(" · ").toLowerCase() || "it does not pass the filters"}.
-        </Callout>
-      ) : (
-        <Card>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[14px] text-ink-2">Momentum score</p>
-              <p className="num mt-1 text-[44px] font-bold leading-none tracking-[-0.03em]">
-                {Math.round(r.ov)}
-                <span className="text-[18px] font-semibold text-ink-3">/100</span>
-              </p>
-              <p className="mt-2 text-[14px] text-ink-2">
-                Rank {r.rank} of {total}
-              </p>
-            </div>
-            <StatePill state={r.st} className="mt-1" />
-          </div>
-          <p className="mt-4 rounded-[14px] bg-surface-2 px-4 py-3 text-[14.5px] text-ink">{STATE_EXPLAIN[r.st]}</p>
-          <div className="mt-5 flex flex-col gap-4">
-            {SCORES.map((s) => (
-              <div key={s.key}>
-                <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="text-[15px]" title={s.help}>
-                    {s.label}
-                  </span>
-                  <span className="num text-[15px] font-semibold">{Math.round(r[s.field])}</span>
-                </div>
-                <Meter v={r[s.field]} />
-              </div>
-            ))}
-            <div>
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <span className="text-[15px]">Risk</span>
-                <span className={`text-[15px] font-semibold ${risk.cls}`}>{risk.text}</span>
-              </div>
-              <Meter v={r.rk} invert />
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {r.cls === "stock" && asset.eligible && (
-        <Card title="Fundamentals" sub="Is the business behind the trend solid? From its last annual report.">
-          <FundamentalsCard f={asset.fundamentals} />
-        </Card>
-      )}
-
-      <Card title="Returns">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(
-            [
-              ["1 month", r.r1m],
-              ["3 months", r.r3m],
-              ["6 months", r.r6m],
-              ["1 year", r.r12m],
-            ] as const
-          ).map(([l, v]) => (
-            <div key={l} className="rounded-[14px] bg-surface-2 px-3 py-3 text-center">
-              <p className="text-[12.5px] text-ink-2">{l}</p>
-              <Delta v={v} className="whitespace-nowrap text-[17px] font-semibold" />
-            </div>
-          ))}
-        </div>
-        {radar?.bench[meta.primary_benchmark] && (
-          <p className="mt-3 text-[13.5px] text-ink-2">
-            Versus {meta.primary_benchmark} over 6 months:{" "}
-            <Delta
-              v={r.r6m !== null && radar.bench[meta.primary_benchmark].r6m !== null ? (1 + r.r6m) / (1 + (radar.bench[meta.primary_benchmark].r6m as number)) - 1 : null}
-              className="font-semibold"
-            />
-          </p>
-        )}
-      </Card>
-
-      {rep && (
-        <>
-          <Card title="Why it stands out">
-            <Bullets items={rep.thesis.slice(0, 1)} />
-          </Card>
-          <Card title="Risks">
-            <Bullets items={rep.risks} />
-          </Card>
-          <Card title="What to watch" sub="Signs that would weaken the trend">
-            <Bullets items={rep.invalidation} />
-          </Card>
-          <Card title="In your portfolio">
-            <Bullets items={portfolioRelevance(r, pf.result, pf.instruments, pf.settings)} />
-          </Card>
-        </>
-      )}
+      </Disclosure>
 
       <section className="card overflow-hidden">
         <h2 className="px-5 pb-1 pt-5 text-[17px] font-semibold">Technical detail</h2>
-        <p className="px-5 pb-2 text-[13.5px] text-ink-2">For anyone who wants to see how everything is calculated.</p>
         {asset.state && (
           <Fold title="Why it has this status">
             <RuleTrace trace={asset.state.trace} state={asset.state.state} />
@@ -344,7 +341,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
       </section>
 
       <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-[12.5px] text-ink-3">Quantitative analysis of prices and annual reports. Not personal advice.</p>
+        <p className="text-[12.5px] text-ink-3">Not personal advice.</p>
         <Link href={`/research/compare?t=${ticker},${meta.primary_benchmark}`} className="shrink-0 text-[14px] font-medium text-accent">
           Compare
         </Link>

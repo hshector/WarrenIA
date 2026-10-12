@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { applyRadar, DEFAULT_FILTERS, hasActions, holdLabel, PRESETS, relReturn } from "./radar";
+import { applyRadar, DEFAULT_FILTERS, etfGroup, hasActions, holdLabel, PRESETS, relReturn } from "./radar";
 import type { RadarRow } from "./types";
 
 function row(p: Partial<RadarRow>): RadarRow {
@@ -57,5 +57,16 @@ describe("radar queries", () => {
   it("relative return vs benchmark is geometric", () => {
     expect(relReturn(row({ r6m: 0.155 }), "r6m", ctx.bench, "SPY")).toBeCloseTo(0.1);
     expect(relReturn(row({ r6m: null }), "r6m", ctx.bench, "SPY")).toBeNull();
+  });
+});
+
+describe("etfGroup", () => {
+  it("puts gold, oil and broad commodities together, by ticker or name", () => {
+    expect(etfGroup({ t: "GLD", n: "SPDR Gold Trust" })).toBe("Commodities");
+    expect(etfGroup({ t: "XYZ", n: "United States Oil Fund" })).toBe("Commodities");
+    expect(etfGroup({ t: "DBC", n: "Demo Proxy DBC" })).toBe("Commodities");
+    expect(etfGroup({ t: "SHY", n: "iShares 1-3 Year Treasury Bond ETF" })).toBe("Bonds");
+    expect(etfGroup({ t: "XLK", n: "Technology Select Sector SPDR" })).toBe("Equity");
+    expect(etfGroup({ t: "BOIL", n: "Boiling Point Equity ETF" })).toBe("Equity");
   });
 });

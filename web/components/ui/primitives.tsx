@@ -224,3 +224,38 @@ export function Row({ href, children, right, className }: { href?: string; child
     <div className={cls}>{inner}</div>
   );
 }
+
+/** Folded detail: a tappable row that opens in place. Use it for explanations, method
+ *  notes and secondary figures so the first screen shows numbers, not paragraphs.
+ *  `card` renders it as its own card; otherwise it sits inside another card. */
+export function Disclosure({
+  title,
+  meta,
+  children,
+  card = true,
+  defaultOpen = false,
+  className,
+  id,
+}: {
+  title: ReactNode;
+  meta?: ReactNode;
+  children: ReactNode;
+  card?: boolean;
+  defaultOpen?: boolean;
+  className?: string;
+  id?: string;
+}) {
+  return (
+    <details id={id} open={defaultOpen} className={cx("group min-w-0", card ? "card" : "rounded-[16px] bg-surface-2", className)}>
+      <summary className="tap flex cursor-pointer list-none items-center gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 flex-1 text-[15.5px] font-semibold">{title}</span>
+        {meta !== undefined && <span className="num shrink-0 text-[14px] text-ink-2">{meta}</span>}
+        <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-ink-3 transition-transform duration-200 group-open:rotate-180">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
+      <div className="min-w-0 px-5 pb-5">{children}</div>
+    </details>
+  );
+}
+

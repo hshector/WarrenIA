@@ -5,9 +5,10 @@ import { CashPicker, CoreChooser, DiversifierPicker, PlanSplit } from "@/compone
 import { ProductCard } from "@/components/plan/product";
 import { WealthProjection } from "@/components/plan/projection";
 import { PageHeader } from "@/components/shell/page-header";
-import { Callout, Card } from "@/components/ui/primitives";
+import { Callout, Card, Disclosure } from "@/components/ui/primitives";
 import { dateLabel, money, pct } from "@/lib/format";
 import { hasActions } from "@/lib/market/radar";
+import type { RadarRow } from "@/lib/market/types";
 import { getMarket, getRadar, loadMarket } from "@/lib/market/source";
 import { BUCKET_NAME, byIsin, MIN_SLEEVE_FOR_STOCKS_EUR, momentumRoute, normaliseChoices, recommended, STOCK_POSITIONS, VERIFIED_ON } from "@/lib/plan/catalog";
 import { activeKeys, blockValues, targetDeviation } from "@/lib/portfolio/engine";
@@ -47,7 +48,7 @@ export default async function PlanPage() {
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
-      <PageHeader title="Your plan" sub="What to buy each month, with which product and why. Built for a Spanish tax resident." />
+      <PageHeader title="Your plan" sub="What to buy each month." />
 
       <Card
         title="This month"
@@ -60,173 +61,164 @@ export default async function PlanPage() {
           other={res?.allocation.find((a) => a.bucket === "other")?.value ?? 0}
           settings={pf.settings}
           choices={choices}
-          momentumLabel={route === "etf" ? undefined : `Buy candidates from the radar (up to ${STOCK_POSITIONS}, equal amounts)`}
+          momentumLabel={route === "etf" ? undefined : `Radar candidates (up to ${STOCK_POSITIONS}, equal amounts)`}
         />
       </Card>
 
-      <Card title="How to buy">
-        <Bullets
-          items={[
-            <>
-              Set up a <b>monthly savings plan</b> in your broker for each product (free on Trade Republic). A one-off order costs €1: on €50 that is 2%.
-            </>,
-            <>Come back once a month. The split above changes so the block that is behind gets more. That is rebalancing without selling.</>,
-            <>Don&apos;t check the portfolio every day. The plan works by being consistent, not by timing the market.</>,
-          ]}
-        />
-      </Card>
-
-      <Card id="projection" title="Where this could take you" sub="A range of outcomes for your plan, not a promise. Stocks can fall by half along the way.">
+      <Card id="projection" title="Where this could take you" sub="A range, not a promise.">
         <WealthProjection start={res?.totals.value ?? 0} monthly={pf.settings.monthly_contribution} targets={t} choices={choices} />
       </Card>
 
-      <Card id="core" title={`1. ${BUCKET_NAME.core} (${pct(t.core, 0, false)})`} sub="The base: the world stock market at the lowest cost. No stock picking here.">
+      <h2 className="px-1 pt-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-ink-3">Blocks</h2>
+
+      <Disclosure id="core" title={`1. ${BUCKET_NAME.core}`} meta={pct(t.core, 0, false)}>
         <CoreChooser current={core.isin} stats={stats} />
         <div className="mt-4">
           <Bullets
             items={[
               <>
-                <b>Pick one and stay.</b> The options differ by tenths of a percent. In Spain an ETF cannot be switched without paying tax, so changing ETF later means selling and paying tax on
-                the gains.
+                <b>Pick one and stay:</b> switching ETF in Spain means selling and paying tax.
               </>,
               <>
-                <b>Always the accumulating class:</b> it reinvests dividends inside the fund, so you pay no tax until you sell.
+                <b>Accumulating class:</b> no tax on dividends until you sell.
               </>,
             ]}
           />
         </div>
-      </Card>
+      </Disclosure>
 
-      <Card id="diversifiers" title={`2. ${BUCKET_NAME.gold} (${pct(t.gold, 0, false)})`} sub="Assets that behave differently from stocks. Pick one or mix them; the numbers show how each has really behaved.">
-        <Callout tone="info" title="What actually protects you">
-          Gold is the asset with the best record of holding up when stocks crash, but over decades it barely beats inflation. Short euro government bonds barely move at all: they are the
-          steadiest option. Broad commodities help in an inflation shock. Silver and bitcoin swing far more than stocks: they are bets, not protection. Oil is not offered: it is only
-          available through futures, whose rolling costs have destroyed long-term returns.
-        </Callout>
+      <Disclosure id="diversifiers" title={`2. ${BUCKET_NAME.gold}`} meta={pct(t.gold, 0, false)}>
+        <DiversifierPicker current={choices.gold} stats={stats} />
         <div className="mt-4">
-          <DiversifierPicker current={choices.gold} stats={stats} />
+          <Callout tone="info" title="What actually protects you">
+            Gold holds up best when stocks crash. Short euro bonds are the steadiest. Commodities help with inflation. Silver and bitcoin are bets, not protection.
+          </Callout>
+          <Link href="/radar?cls=etf&preset=all&group=Commodities" className="mt-3 block text-[14px] font-medium text-accent">
+            Gold and commodities on the radar ›
+          </Link>
         </div>
-      </Card>
+      </Disclosure>
 
-      <Card id="momentum" title={`3. ${BUCKET_NAME.momentum} (${pct(t.momentum, 0, false)})`} sub="The active part: companies with the strongest trend and solid finances. The riskiest, so the smallest.">
-        <Callout tone="info" title="Isn't buying what went up buying expensive?">
-          Momentum means buying what has risen, and decades of data show that recent winners tend to keep beating the market for several months. What does not work is buying the spike of a
-          sudden jump, so the radar marks those as <b>Wait for a dip</b>. On top of that, every buy candidate must pass strict checks on its last annual report: profitable, earnings backed by
-          cash, no risk of financial distress, no heavy dilution and not absurdly expensive.
-        </Callout>
-        <div className="mt-4 flex flex-col gap-3">
+      <Disclosure id="momentum" title={`3. ${BUCKET_NAME.momentum}`} meta={pct(t.momentum, 0, false)}>
+        <div className="flex flex-col gap-3">
+          {candidates.length > 0 && route !== "etf" && <Candidates rows={candidates} asof={latest?.data_asof} />}
           <p className="text-[15px] font-semibold">
-            {route === "etf" ? `Recommended now (under ${money(MIN_SLEEVE_FOR_STOCKS_EUR, "EUR", 0)} in this block): a momentum ETF` : "Simple option: a momentum ETF"}
+            {route === "etf" ? `Now (under ${money(MIN_SLEEVE_FOR_STOCKS_EUR, "EUR", 0)}): a momentum ETF` : "Simple option: a momentum ETF"}
           </p>
           <ProductCard p={momEtf} />
-          <p className="mt-2 text-[15px] font-semibold">{route === "stocks" ? "Recommended now: stocks from the radar" : "Later, with more money: stocks from the radar"}</p>
-          <Bullets
-            items={[
-              <>
-                <b>Buy</b> only <ActionPill action="candidate" />, in equal amounts, up to {STOCK_POSITIONS}. Never more than 10% of the block in one company.
-              </>,
-              <>
-                <b>Not yet:</b> <ActionPill action="wait" /> (it just jumped) and <ActionPill action="watch" /> (something is missing: often a weak annual report).
-              </>,
-              <>
-                <b>Sell</b> when a holding shows &ldquo;Consider selling&rdquo;: it left the top half of the market or turned <ActionPill action="avoid" />. Do not sell just because it stopped being a
-                candidate; that slack avoids buying and selling all the time (and paying tax for it).
-              </>,
-              <>
-                <b>Losses and buying back:</b> if you sell at a loss and buy the same share again within 2 months (1 year for shares listed only in the US), Spain does not let you use that loss
-                this year. The portfolio warns you.
-              </>,
-            ]}
-          />
-          {candidates.length > 0 && (
-            <div className="mt-2 overflow-hidden rounded-[18px] bg-surface-2">
-              <p className="px-4 pt-3 text-[13.5px] text-ink-2">Buy candidates today (close of {dateLabel(latest?.data_asof)})</p>
-              <ul className="divide-y divide-line">
-                {candidates.map((r) => (
-                  <li key={r.t}>
-                    <Link href={`/research/${r.t}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-3 active:bg-surface-3">
-                      <AssetAvatar t={r.t} size={34} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-semibold">{r.n}</span>
-                        <span className="block truncate text-[12.5px] text-ink-2">
-                          {r.t} · momentum {Math.round(r.ov)} · fundamentals {r.fund === null || r.fund === undefined ? "n/a" : Math.round(r.fund)}
-                          {r.pe ? ` · P/E ${Math.round(r.pe)}` : ""}
-                        </span>
-                      </span>
-                      <DeltaPill v={r.r6m} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <Link href="/radar?preset=buy" className="block px-4 py-3 text-[14px] font-medium text-accent">
-                See all on the radar
-              </Link>
-            </div>
-          )}
+          {candidates.length > 0 && route === "etf" && <Candidates rows={candidates} asof={latest?.data_asof} later />}
+          <Disclosure card={false} title="Rules for stocks">
+            <Bullets
+              items={[
+                <>
+                  <b>Buy</b> only <ActionPill action="candidate" />, equal amounts, up to {STOCK_POSITIONS}. Max 10% of the block in one company.
+                </>,
+                <>
+                  <b>Wait</b> on <ActionPill action="wait" /> (just jumped) and <ActionPill action="watch" /> (weak annual report).
+                </>,
+                <>
+                  <b>Sell</b> on &ldquo;Consider selling&rdquo;, not just because it stopped being a candidate.
+                </>,
+                <>
+                  <b>Loss + buy back</b> within 2 months (1 year for US-only shares): Spain defers that loss.
+                </>,
+              ]}
+            />
+          </Disclosure>
         </div>
-      </Card>
+      </Disclosure>
 
-      <Card id="cash" title={`4. ${BUCKET_NAME.cash} (${pct(t.cash ?? 0, 0, false)}, optional)`} sub="Money you may need in the next few years, kept safe. Not an investment: after inflation it barely grows.">
+      <Disclosure id="cash" title={`4. ${BUCKET_NAME.cash}`} meta={pct(t.cash ?? 0, 0, false)}>
         <Bullets
           items={[
             <>
-              <b>Usually 0%.</b> Over long periods cash loses to inflation, and the diversifiers already soften falls. Keep cash for an emergency fund (3-6 months of spending) or for
-              something you will pay within ~3 years: that money should not be in stocks.
+              <b>Usually 0%.</b> Keep cash for an emergency fund or money you need within ~3 years.
             </>,
             <>
-              To hold it as part of the plan, set a <b>Cash %</b> in{" "}
+              Set it in{" "}
               <Link href="/settings?tab=portfolio" className="text-accent">
                 Settings → Target mix
               </Link>
-              . Then the cash in your broker account (and any money-market ETF you mark as Cash) counts towards it, and the monthly split tops it up when it falls behind.
-            </>,
-            <>
-              <b>Tax:</b> account interest is taxed every year (Trade Republic&apos;s Spanish branch withholds 19%). A money-market ETF that reinvests is taxed only when you sell, as a capital
-              gain.
+              .
             </>,
           ]}
         />
         <div className="mt-4">
           <CashPicker current={choices.cash} />
         </div>
-      </Card>
+      </Disclosure>
 
-      <Card id="taxes" title="Taxes in Spain (summary)" sub="General information as of today. Not a substitute for a tax adviser.">
+      <h2 className="px-1 pt-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-ink-3">Good to know</h2>
+
+      <Disclosure id="how" title="How to buy">
         <Bullets
           items={[
             <>
-              All investment income goes to the <b>savings base</b> of IRPF: 19% up to €6,000, 21% to €50,000, 23% to €200,000, 27% to €300,000 and 30% above (rates since 2025).
+              A <b>monthly savings plan</b> per product (free on Trade Republic; a one-off order costs €1).
+            </>,
+            <>Come back once a month: the split tops up the block that is behind.</>,
+            <>No need to check daily.</>,
+          ]}
+        />
+      </Disclosure>
+
+      <Disclosure id="taxes" title="Taxes in Spain">
+        <Bullets
+          items={[
+            <>
+              <b>Savings base:</b> 19% to €6k · 21% to €50k · 23% to €200k · 27% to €300k · 30% above.
             </>,
             <>
-              <b>ETFs, index funds and shares:</b> you pay tax only when you sell, on the difference between what you get and what you paid (fees included). If you bought in several goes,
-              the oldest shares count as sold first (FIFO); the portfolio does this for you. No tax is withheld on sales: you declare it.
+              <b>ETFs and shares:</b> taxed only when you sell, FIFO. Declared by you.
             </>,
             <>
-              <b>Gold and silver ETCs:</b> Spain&apos;s tax authority (binding ruling V0267-25, 13 Mar 2025) treats them as <b>capital income</b> (rendimientos del capital mobiliario), not
-              capital gains, because they are debt securities. Same rates; the difference is that losses of one kind only offset up to 25% of gains of the other. Crypto ETPs are very likely
-              treated the same way.
+              <b>Gold/silver ETCs:</b> capital income, not gains (ruling V0267-25). Crypto ETPs likely the same.
             </>,
             <>
-              <b>Index funds</b> (not ETFs) can be switched to another fund without paying tax (traspaso). That is their main advantage in Spain.
+              <b>Index funds</b> can be switched tax-free (traspaso).
             </>,
             <>
-              <b>US dividends:</b> the US withholds 15% (with the W-8BEN form your broker handles) and you deduct that in your tax return. Trade Republic&apos;s Spanish branch also withholds 19% on
-              interest and dividends.
+              <b>US dividends:</b> 15% withheld in the US, deductible.
             </>,
             <>
-              <b>US-listed ETFs (SPY, QQQ…):</b> EU retail investors cannot buy them (PRIIPs). That is why only European UCITS products appear here.
+              <b>US-listed ETFs</b> can&apos;t be bought from the EU (PRIIPs).
             </>,
             <>
-              <b>Modelo 720:</b> if your securities held abroad exceed €50,000 on 31 December you must report them. Ask your broker whether yours count as held outside Spain.
+              <b>Modelo 720:</b> report securities abroad above €50,000.
             </>,
           ]}
         />
-      </Card>
+        <p className="mt-4 text-[12.5px] text-ink-3">
+          Products checked {dateLabel(VERIFIED_ON)}. Read the KID before buying. Not financial or tax advice.
+        </p>
+      </Disclosure>
+    </div>
+  );
+}
 
-      <p className="px-1 text-[12.5px] text-ink-3">
-        Product data checked on {dateLabel(VERIFIED_ON)} on issuer sites and data providers (justETF, extraETF, Finanzfluss). Fees change: read the KID before buying and check the product is
-        available at your broker. Behaviour figures use US-listed funds as a measuring stick (you cannot buy those). WarrenIA is an analysis tool, not a financial adviser.
+function Candidates({ rows, asof, later }: { rows: RadarRow[]; asof?: string | null; later?: boolean }) {
+  return (
+    <div className="overflow-hidden rounded-[18px] bg-surface-2">
+      <p className="px-4 pt-3 text-[13.5px] text-ink-2">
+        {later ? "Later, with more money" : "Buy candidates"} · {dateLabel(asof)}
       </p>
+      <ul className="divide-y divide-line">
+        {rows.map((r) => (
+          <li key={r.t}>
+            <Link href={`/research/${r.t}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-3 active:bg-surface-3">
+              <AssetAvatar t={r.t} size={34} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-semibold">{r.n}</span>
+                <span className="block truncate text-[12.5px] text-ink-2">{r.t}</span>
+              </span>
+              <DeltaPill v={r.r6m} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link href="/radar?preset=buy" className="block px-4 py-3 text-[14px] font-medium text-accent">
+        See all on the radar
+      </Link>
     </div>
   );
 }

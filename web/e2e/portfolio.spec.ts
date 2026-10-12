@@ -12,7 +12,7 @@ test("empty portfolio offers onboarding; home shows the contribution split", asy
   await page.goto("/portfolio");
   await expect(page.getByText("Your portfolio is empty")).toBeVisible();
   await page.goto("/");
-  await expect(page.getByText("Your next contribution")).toBeVisible();
+  await expect(page.getByText("This month", { exact: true })).toBeVisible();
 });
 
 test("register instrument, deposit and buy; oversell is rejected", async ({ page }) => {
@@ -61,7 +61,7 @@ test("register instrument, deposit and buy; oversell is rejected", async ({ page
   await page.reload();
   await expect(page.getByText("Total value")).toBeVisible();
   await expect(page.getByText("Núcleo de prueba (SPY)", { exact: true })).toBeVisible();
-  await expect(page.getByText("Return on your money")).toBeVisible();
+  await expect(page.getByText("Your IRR")).toBeVisible();
 });
 
 test("CSV import: preview, validation errors, idempotent re-import", async ({ page }) => {
@@ -76,7 +76,7 @@ test("CSV import: preview, validation errors, idempotent re-import", async ({ pa
   await page.getByRole("button", { name: /Import 2 valid rows/ }).click();
   await expect(page.getByText(/0 transactions imported · 2 already existed/)).toBeVisible();
   await page.goto("/portfolio/transactions");
-  await expect(page.getByText("Transactions (4)")).toBeVisible();
+  await expect(page.getByText("History (4)")).toBeVisible();
 });
 
 test("Trade Republic CSV is recognised: catalog ETF and US stock found by name", async ({ page }) => {

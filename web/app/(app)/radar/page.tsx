@@ -7,7 +7,7 @@ import { requireStore } from "@/lib/user/store";
 
 export const metadata = { title: "Radar" };
 
-export default async function RadarPage({ searchParams }: { searchParams: Promise<{ cls?: string; preset?: string }> }) {
+export default async function RadarPage({ searchParams }: { searchParams: Promise<{ cls?: string; preset?: string; group?: string }> }) {
   const sp = await searchParams;
   const { latest, meta } = await loadMarket();
   const radar = await getRadar(latest);
@@ -24,7 +24,7 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
   }
   return (
     <>
-      <PageHeader title="Radar" sub="Which stocks have the strongest trend, and whether to buy now, wait or avoid them." />
+      <PageHeader title="Radar" sub="Strongest trends, and whether to buy, wait or avoid." />
       <RadarView
         rows={radar.rows}
         bench={radar.bench}
@@ -32,7 +32,7 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
         primary={meta.primary_benchmark}
         held={held.tickers}
         watch={watch.map((w) => w.ticker)}
-        initial={{ cls: sp.cls, preset: sp.preset }}
+        initial={{ cls: sp.cls, preset: sp.preset, group: sp.group }}
       />
     </>
   );

@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/shell/page-header";
 import { RefreshButton } from "@/components/shell/refresh-button";
 import { ThemePicker } from "@/components/shell/theme";
 import { IconChevronRight, IconLogout } from "@/components/ui/icons";
-import { Badge, Button, Callout, EmptyState, Panel } from "@/components/ui/primitives";
+import { MiniStat } from "@/components/portfolio/mix";
+import { Badge, Button, Callout, Disclosure, EmptyState, Panel } from "@/components/ui/primitives";
 import { dateLabel, dateTimeLabel, int, num, pct } from "@/lib/format";
 import { computeFreshness } from "@/lib/market/freshness";
 import { getBacktest, getExcluded, loadMarket } from "@/lib/market/source";
@@ -58,32 +59,70 @@ const FUND_LABEL: Record<string, string> = {
   min_ebit_ev: "…and operating profit / value of at least",
 };
 
-const MENU: { group: string; items: { href: string; label: string; sub: string }[] }[] = [
+const MENU: {
+  group: string;
+  items: { href: string; label: string; sub: string }[];
+}[] = [
   {
     group: "Data",
     items: [
-      { href: "/settings?tab=data", label: "Data status", sub: "Date, sources and coverage" },
-      { href: "/settings?tab=method", label: "How it is calculated", sub: "Radar and fundamentals method" },
-      { href: "/settings?tab=backtest", label: "Historical test", sub: "Backtest and its limits" },
+      {
+        href: "/settings?tab=data",
+        label: "Data status",
+        sub: "Date, sources and coverage",
+      },
+      {
+        href: "/settings?tab=method",
+        label: "How it is calculated",
+        sub: "Radar and fundamentals method",
+      },
+      {
+        href: "/settings?tab=backtest",
+        label: "Historical test",
+        sub: "Backtest and its limits",
+      },
     ],
   },
   {
     group: "Portfolio",
     items: [
-      { href: "/settings?tab=portfolio", label: "Target mix and monthly amount", sub: "Core / diversifiers / momentum and bands" },
-      { href: "/plan", label: "Products in each block", sub: "Core fund, diversifiers, momentum" },
-      { href: "/portfolio/transactions", label: "Transactions and instruments", sub: "Edit or delete" },
+      {
+        href: "/settings?tab=portfolio",
+        label: "Target mix and monthly amount",
+        sub: "Core / diversifiers / momentum and bands",
+      },
+      {
+        href: "/plan",
+        label: "Products in each block",
+        sub: "Core fund, diversifiers, momentum",
+      },
+      {
+        href: "/portfolio/transactions",
+        label: "Transactions",
+        sub: "Edit or delete",
+      },
       { href: "/portfolio/import", label: "Import CSV", sub: "With preview" },
     ],
   },
   {
     group: "Alerts",
     items: [
-      { href: "/settings?tab=notifications", label: "Notifications", sub: "Signal changes on your phone" },
-      { href: "/alerts", label: "Recent signal changes", sub: "What changed after each update" },
+      {
+        href: "/settings?tab=notifications",
+        label: "Notifications",
+        sub: "Signal changes on your phone",
+      },
+      {
+        href: "/alerts",
+        label: "Recent signal changes",
+        sub: "What changed after each update",
+      },
     ],
   },
-  { group: "Account", items: [{ href: "/settings?tab=account", label: "Account", sub: "Session" }] },
+  {
+    group: "Account",
+    items: [{ href: "/settings?tab=account", label: "Account", sub: "Session" }],
+  },
 ];
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string }> }) {
@@ -99,7 +138,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p className="mb-2 px-5 text-[13px] font-medium text-ink-2">Appearance</p>
             <div className="card px-4 py-4">
               <ThemePicker />
-              <p className="mt-2.5 px-1 text-[13px] text-ink-3">Automatic follows your phone&apos;s light or dark mode.</p>
             </div>
           </div>
           {MENU.map((g) => (
@@ -108,19 +146,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <div className="card divide-y divide-line overflow-hidden">
                 {g.items.map((it) => (
                   <Link key={it.href} href={it.href} className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2 active:bg-surface-3">
-                    <span>
-                      <span className="block text-[15.5px]">{it.label}</span>
-                      <span className="block text-[13px] text-ink-3">{it.sub}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15.5px]">{it.label}</span>
+                      <span className="block truncate text-[13px] text-ink-3">{it.sub}</span>
                     </span>
-                    <IconChevronRight size={18} className="text-ink-3" />
+                    <IconChevronRight size={18} className="shrink-0 text-ink-3" />
                   </Link>
                 ))}
               </div>
             </div>
           ))}
-          <p className="px-5 text-[12.5px] text-ink-3">WarrenIA is an analysis tool: it never places trades and is not personal financial advice.</p>
-          <p className="-mt-4 px-5 text-[12.5px] text-ink-3">
-            Company logos provided by{" "}
+          <p className="px-5 text-[12.5px] text-ink-3">
+            Not financial advice · Logos by{" "}
             <a href="https://logo.dev" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
               Logo.dev
             </a>
@@ -153,7 +190,8 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
   if (!latest || !meta) {
     return (
       <EmptyState title="No data published yet">
-        Set the repository secrets and run the <code className="font-mono">market-data</code> workflow (see docs/DEPLOY.md). Locally: <code className="font-mono">python -m warrenia_engine demo</code>.
+        Set the repository secrets and run the <code className="font-mono">market-data</code> workflow (see docs/DEPLOY.md). Locally:{" "}
+        <code className="font-mono">python -m warrenia_engine demo</code>.
       </EmptyState>
     );
   }
@@ -163,15 +201,21 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <Panel title="Last run" actions={<RefreshButton />}>
-        <dl className="grid grid-cols-[150px_1fr] gap-y-2 text-[13px]">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]">
           <dt className="text-ink-3">Data (close)</dt>
-          <dd>{dateLabel(meta.data_asof)} · NYSE · {meta.data_type}</dd>
+          <dd>
+            {dateLabel(meta.data_asof)} · NYSE · {meta.data_type}
+          </dd>
           <dt className="text-ink-3">Calculated</dt>
-          <dd>{dateTimeLabel(meta.computed_at)} {meta.compute_seconds ? <span className="t-meta">({num(meta.compute_seconds, 0)} s)</span> : null}</dd>
+          <dd>
+            {dateTimeLabel(meta.computed_at)} {meta.compute_seconds ? <span className="t-meta">({num(meta.compute_seconds, 0)} s)</span> : null}
+          </dd>
           <dt className="text-ink-3">Freshness</dt>
           <dd className={fresh.status === "stale" ? "text-warn" : fresh.status === "fresh" ? "text-pos" : "text-ink-2"}>{latest.demo ? "Demo data" : fresh.label}</dd>
           <dt className="text-ink-3">Status</dt>
-          <dd>{meta.status === "ok" ? <Badge tone="pos">OK</Badge> : <Badge tone="warn">With warnings</Badge>} {meta.demo && <Badge tone="accent">DEMO</Badge>}</dd>
+          <dd>
+            {meta.status === "ok" ? <Badge tone="pos">OK</Badge> : <Badge tone="warn">With warnings</Badge>} {meta.demo && <Badge tone="accent">DEMO</Badge>}
+          </dd>
           <dt className="text-ink-3">Provider</dt>
           <dd>{meta.provider}</dd>
           <dt className="text-ink-3">Data window</dt>
@@ -181,7 +225,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
           <dt className="text-ink-3">Total return</dt>
           <dd>{meta.total_return ? "Yes (splits and dividends)" : "No: splits only (dividends not available)"}</dd>
           <dt className="text-ink-3">Run</dt>
-          <dd className="font-mono text-[12px] text-ink-2">
+          <dd className="break-all font-mono text-[12px] text-ink-2">
             {meta.run_id} · cfg {meta.methodology.config_hash}
             {meta.git_sha ? ` · ${meta.git_sha.slice(0, 7)}` : ""}
           </dd>
@@ -196,7 +240,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
           </div>
         )}
       </Panel>
-      <Panel title="Market coverage" meta={meta.methodology.universe}>
+      <Panel title="Market coverage">
         <div className="grid gap-4 sm:grid-cols-2">
           {(["stock", "etf"] as const).map((c) => (
             <div key={c} className="flex flex-col gap-2">
@@ -216,41 +260,65 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
           ))}
         </div>
       </Panel>
-      <Panel title="Sources, cost and frequency" className="xl:col-span-2">
+      <Disclosure title="Sources, cost and frequency" className="xl:col-span-2">
+        <p className="mb-3 text-[13px] text-ink-2">{meta.methodology.universe}</p>
         <div className="grid gap-4 text-[13px] text-ink-2 md:grid-cols-2">
           <ul className="flex flex-col gap-2">
-            <li><span className="text-ink">US prices (stocks and ETFs):</span> Massive (formerly Polygon.io), free plan: end of day, ~2 years of history, 5 requests/min. One request returns the whole market for a day. Company descriptions come from the same provider.</li>
-            <li><span className="text-ink">Company size, sector and annual reports:</span> SEC EDGAR (official, free): shares outstanding × price; sector approximated from the SIC code (not GICS); financial statements from XBRL filings (US GAAP frames; IFRS filers such as European ADRs from each company&apos;s own file, converted to USD at ECB rates).</li>
-            <li><span className="text-ink">Exchange rates:</span> ECB reference rates (official, daily).</li>
-            <li><span className="text-ink">EUR prices of ETFs/ETCs:</span> EODHD free plan (~20 calls/day): enough for a handful of portfolio instruments.</li>
+            <li>
+              <span className="text-ink">US prices (stocks and ETFs):</span> Massive (formerly Polygon.io), free plan: end of day, ~2 years of history, 5 requests/min. One request
+              returns the whole market for a day. Company descriptions come from the same provider.
+            </li>
+            <li>
+              <span className="text-ink">Company size, sector and annual reports:</span> SEC EDGAR (official, free): shares outstanding × price; sector approximated from the SIC
+              code (not GICS); financial statements from XBRL filings (US GAAP frames; IFRS filers such as European ADRs from each company&apos;s own file, converted to USD at ECB
+              rates).
+            </li>
+            <li>
+              <span className="text-ink">Exchange rates:</span> ECB reference rates (official, daily).
+            </li>
+            <li>
+              <span className="text-ink">EUR prices of ETFs/ETCs:</span> EODHD free plan (~20 calls/day): enough for a handful of portfolio instruments.
+            </li>
           </ul>
           <ul className="flex flex-col gap-2">
-            <li><span className="text-ink">Frequency:</span> a scheduled GitHub Actions job after each NYSE close (≈ 05:15 UTC, retry 11:05 UTC) and on demand with &ldquo;Refresh&rdquo; (at most every 15 min). Annual reports weekly.</li>
-            <li><span className="text-ink">Data type:</span> daily close. No real time or intraday.</li>
-            <li><span className="text-ink">Cost:</span> €0/month as configured. A longer history (a robust backtest) needs a paid plan.</li>
-            <li><span className="text-ink">Use:</span> personal and private; data is not redistributed (the app requires sign-in).</li>
+            <li>
+              <span className="text-ink">Frequency:</span> a scheduled GitHub Actions job after each NYSE close (≈ 05:15 UTC, retry 11:05 UTC) and on demand with
+              &ldquo;Refresh&rdquo; (at most every 15 min). Annual reports weekly.
+            </li>
+            <li>
+              <span className="text-ink">Data type:</span> daily close. No real time or intraday.
+            </li>
+            <li>
+              <span className="text-ink">Cost:</span> €0/month as configured. A longer history (a robust backtest) needs a paid plan.
+            </li>
+            <li>
+              <span className="text-ink">Use:</span> personal and private; data is not redistributed (the app requires sign-in).
+            </li>
           </ul>
         </div>
-      </Panel>
-      <Panel title={`Excluded assets (${int(excluded.length)})`} meta="Each exclusion keeps its reason" className="xl:col-span-2" pad={false}>
+      </Disclosure>
+      <Panel title={`Excluded assets (${int(excluded.length)})`} className="xl:col-span-2" pad={false}>
         <form className="px-4 pb-3 md:px-5">
           <input type="hidden" name="tab" value="data" />
-          <input name="q" defaultValue={q} placeholder="Search ticker or name" className="h-8 w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none pointer-coarse:text-[16px]" />
+          <input
+            name="q"
+            defaultValue={q}
+            placeholder="Search ticker or name"
+            className="h-8 w-full max-w-56 rounded-[8px] border border-line-2 bg-canvas-2 px-2.5 text-[13px] outline-none pointer-coarse:text-[16px]"
+          />
         </form>
-        <div className="max-h-[420px] overflow-auto">
-          <table className="w-full min-w-[640px] text-[12.5px]">
-            <tbody>
-              {filt.slice(0, 300).map((e) => (
-                <tr key={e.t + e.cls} className="border-t border-line">
-                  <td className="px-4 py-1.5 font-mono text-ink md:px-5">{e.t}</td>
-                  <td className="max-w-[260px] truncate px-3 py-1.5 text-ink-3">{e.n}</td>
-                  <td className="px-3 py-1.5 text-ink-2">{e.reasons.join(" · ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filt.length > 300 && <p className="t-meta px-5 py-2">Showing 300 of {int(filt.length)}. Use the search.</p>}
-        </div>
+        <ul className="max-h-[420px] overflow-y-auto">
+          {filt.slice(0, 300).map((e) => (
+            <li key={e.t + e.cls} className="border-t border-line px-4 py-2 text-[12.5px] md:px-5">
+              <p className="flex min-w-0 gap-2">
+                <span className="shrink-0 font-mono text-ink">{e.t}</span>
+                <span className="min-w-0 truncate text-ink-3">{e.n}</span>
+              </p>
+              <p className="text-ink-2">{e.reasons.join(" · ")}</p>
+            </li>
+          ))}
+          {filt.length > 300 && <li className="t-meta px-5 py-2">Showing 300 of {int(filt.length)}. Use the search.</li>}
+        </ul>
       </Panel>
     </div>
   );
@@ -262,11 +330,11 @@ function MethodTab({ meta }: { meta: Meta }) {
   const sens = meta.sensitivity;
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <Panel title="Overall momentum score" meta={`Method v${m.version} · weights fixed in advance, not tuned on the backtest`}>
+      <Panel title="Overall momentum score" meta={`Method v${m.version} · fixed weights`}>
         <ul className="flex flex-col gap-2">
           {Object.entries(m.overall).map(([k, w]) => (
             <li key={k} className="flex items-center gap-3 text-[13px]">
-              <span className="w-44 text-ink-2">{SCORE_LABEL[k] ?? k}</span>
+              <span className="w-32 shrink-0 truncate text-ink-2 sm:w-44">{SCORE_LABEL[k] ?? k}</span>
               <span className="h-1.5 flex-1 rounded-full bg-surface-3">
                 <span className="block h-1.5 rounded-full bg-accent" style={{ width: `${w * 100}%` }} />
               </span>
@@ -274,10 +342,12 @@ function MethodTab({ meta }: { meta: Meta }) {
             </li>
           ))}
         </ul>
-        <p className="t-meta mt-4">
-          Each score is the weighted average of its components&apos; percentiles across the market, expressed again as a percentile (0-100) within its class (stocks or ETFs). Return versus a single
-          benchmark is not a ranking factor: subtracting the same reference from every asset does not change the order (it is shown as context).
-        </p>
+        <Disclosure card={false} title="How the score is built" className="mt-4">
+          <p className="t-meta">
+            Each score is the weighted average of its components&apos; percentiles across the market, expressed again as a percentile (0-100) within its class (stocks or ETFs).
+            Return versus a single benchmark is not a ranking factor: subtracting the same reference from every asset does not change the order (it is shown as context).
+          </p>
+        </Disclosure>
       </Panel>
       <Panel title="Components">
         <div className="flex flex-col gap-4">
@@ -296,19 +366,30 @@ function MethodTab({ meta }: { meta: Meta }) {
           ))}
         </div>
       </Panel>
-      <Panel title="Weight sensitivity" meta="Random (Dirichlet) changes to the overall weights">
+      <Panel title="Weight sensitivity">
         {sens ? (
           <div className="flex flex-col gap-3 text-[13px]">
-            <p className="text-ink-2">
-              {sens.samples} weight variations around the current ones. Spearman correlation with the base ranking: median <span className="num text-ink">{num(sens.spearman.median, 3)}</span> (p5 {num(sens.spearman.p05, 3)}). Top-{sens.top_n} overlap: median <span className="num text-ink">{pct(sens.topn_overlap.median, 0, false)}</span>, p5 {pct(sens.topn_overlap.p05, 0, false)}, minimum {pct(sens.topn_overlap.min, 0, false)}.
+            <dl className="grid grid-cols-3 gap-3">
+              <MiniStat label="Spearman" value={num(sens.spearman.median, 2)} />
+              <MiniStat label={`Top-${sens.top_n} overlap`} value={pct(sens.topn_overlap.median, 0, false)} />
+              <MiniStat label="Worst" value={pct(sens.topn_overlap.min, 0, false)} />
+            </dl>
+            <p className="text-[12.5px] text-ink-3">
+              {sens.samples} weight variations around the current ones. Spearman correlation with the base ranking: median{" "}
+              <span className="num text-ink">{num(sens.spearman.median, 3)}</span> (p5 {num(sens.spearman.p05, 3)}). Top-{sens.top_n} overlap: median{" "}
+              <span className="num text-ink">{pct(sens.topn_overlap.median, 0, false)}</span>, p5 {pct(sens.topn_overlap.p05, 0, false)}, minimum{" "}
+              {pct(sens.topn_overlap.min, 0, false)}.
             </p>
-            <p>{sens.passes_target ? <Badge tone="pos">Meets the target</Badge> : <Badge tone="warn">Misses the target</Badge>} <span className="t-meta">declared target: median overlap ≥ {pct(sens.target_median_topn_overlap, 0, false)}</span></p>
+            <p>
+              {sens.passes_target ? <Badge tone="pos">Meets the target</Badge> : <Badge tone="warn">Misses the target</Badge>}{" "}
+              <span className="t-meta">declared target: median overlap ≥ {pct(sens.target_median_topn_overlap, 0, false)}</span>
+            </p>
           </div>
         ) : (
           <p className="t-body">Market too small for this analysis.</p>
         )}
       </Panel>
-      <Panel title="Correlation between components" meta="Rank correlation in today&apos;s market (double-counting check)">
+      <Panel title="Correlation between components">
         {corr ? (
           <>
             {corr.high_pairs.length > 0 ? (
@@ -318,32 +399,41 @@ function MethodTab({ meta }: { meta: Meta }) {
             ) : (
               <p className="text-[13px] text-pos">No pair exceeds {corr.threshold}.</p>
             )}
-            <div className="mt-3 overflow-x-auto">
-              <table className="text-[10.5px]">
-                <tbody>
-                  {corr.labels.map((a, i) => (
-                    <tr key={a}>
-                      <td className="whitespace-nowrap pr-2 text-ink-3">{a}</td>
-                      {corr.matrix[i].map((v, j) => {
-                        const x = v ?? 0;
-                        return (
-                          <td key={j} title={`${a} · ${corr.labels[j]}: ${v === null ? "n/a" : v.toFixed(2)}`} className="num h-5 w-7 text-center" style={{ background: x >= 0 ? `rgb(82 127 98 / ${Math.abs(x) * 0.55})` : `rgb(90 110 148 / ${Math.abs(x) * 0.55})` }}>
-                            {i === j ? "" : v === null ? "·" : Math.round(x * 10)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="t-meta mt-2">Values × 10. Green = positive correlation, blue = negative.</p>
-            </div>
+            <Disclosure card={false} title="Matrix" className="mt-3">
+              <div className="overflow-x-auto">
+                <table className="text-[10.5px]">
+                  <tbody>
+                    {corr.labels.map((a, i) => (
+                      <tr key={a}>
+                        <td className="whitespace-nowrap pr-2 text-ink-3">{a}</td>
+                        {corr.matrix[i].map((v, j) => {
+                          const x = v ?? 0;
+                          return (
+                            <td
+                              key={j}
+                              title={`${a} · ${corr.labels[j]}: ${v === null ? "n/a" : v.toFixed(2)}`}
+                              className="num h-5 w-7 text-center"
+                              style={{
+                                background: x >= 0 ? `rgb(82 127 98 / ${Math.abs(x) * 0.55})` : `rgb(90 110 148 / ${Math.abs(x) * 0.55})`,
+                              }}
+                            >
+                              {i === j ? "" : v === null ? "·" : Math.round(x * 10)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="t-meta mt-2">Values × 10. Green = positive correlation, blue = negative.</p>
+              </div>
+            </Disclosure>
           </>
         ) : (
           <p className="t-body">Not available.</p>
         )}
       </Panel>
-      <Panel title="Fundamentals" meta="From the last annual report (SEC, US GAAP or IFRS) · percentiles among stocks · config/momentum.yaml" className="xl:col-span-2">
+      <Panel title="Fundamentals" meta="Last annual report · percentiles among stocks" className="xl:col-span-2">
         {m.fundamentals ? (
           <div className="grid gap-4 text-[12.5px] md:grid-cols-4">
             {Object.entries(m.fundamentals.scores).map(([s, comps]) => (
@@ -377,7 +467,7 @@ function MethodTab({ meta }: { meta: Meta }) {
           <p className="t-body">Not published by this run.</p>
         )}
       </Panel>
-      <Panel title="Status rules" meta="Explicit thresholds (config/momentum.yaml)" className="xl:col-span-2">
+      <Disclosure title="Status rules" className="xl:col-span-2">
         <div className="grid gap-4 text-[12.5px] md:grid-cols-3">
           {Object.entries(m.classification).map(([k, v]) => (
             <div key={k}>
@@ -393,7 +483,7 @@ function MethodTab({ meta }: { meta: Meta }) {
             </div>
           ))}
         </div>
-      </Panel>
+      </Disclosure>
     </div>
   );
 }
@@ -422,48 +512,34 @@ async function BacktestTab() {
       </Callout>
       {bt.results.overall && bt.results.candidates_buffer && (
         <Panel title="Does waiting for a dip pay off?">
-          <p className="text-[14px] leading-relaxed text-ink-2">
-            Full ranking (buying the strongest even after a spike): <b className="text-ink">{pct(bt.results.overall.cagr as number | null)}</b> a year · Buy candidates only, with the keep
-            rule (how the app suggests using it): <b className="text-ink">{pct(bt.results.candidates_buffer.cagr as number | null)}</b> a year, with turnover of{" "}
-            {num(bt.results.candidates_buffer.annual_turnover as number | null, 1)}x versus {num(bt.results.overall.annual_turnover as number | null, 1)}x. &ldquo;Wait for a dip&rdquo; is a
-            prudence rule (avoid buying the top of a sudden jump), not a promise of higher returns: with real data and more history, this comparison will show what it costs or adds.{" "}
-            {bt.demo && "With synthetic data it means nothing: the demo market has no short-term reversals by construction."}
-          </p>
+          <dl className="grid grid-cols-2 gap-3">
+            <MiniStat label="Full ranking / yr" value={pct(bt.results.overall.cagr as number | null)} />
+            <MiniStat label="Candidates only / yr" value={pct(bt.results.candidates_buffer.cagr as number | null)} />
+            <MiniStat label="Turnover" value={`${num(bt.results.overall.annual_turnover as number | null, 1)}x`} />
+            <MiniStat label="Turnover" value={`${num(bt.results.candidates_buffer.annual_turnover as number | null, 1)}x`} />
+          </dl>
+          {bt.demo && <p className="mt-3 text-[12.5px] text-ink-3">Synthetic data: this comparison means nothing yet.</p>}
         </Panel>
       )}
-      <Panel title="Growth of 1 unit" meta={`${bt.period?.first_signal} → ${bt.period?.end} · ${bt.period?.rebalances} monthly rebalances · executed at the next open · ${bt.settings?.cost_bps_per_side} bp per side`}>
+      <Panel title="Growth of 1 unit" meta={`${bt.period?.first_signal} → ${bt.period?.end} · ${bt.settings?.cost_bps_per_side} bp per side`}>
         {bt.curves && <BacktestChart dates={bt.curves.dates} series={bt.curves.series} labels={labels} />}
       </Panel>
       <Panel title="Metrics" pad={false}>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-[13px]">
-            <thead>
-              <tr className="border-b border-line text-right text-[11px] uppercase tracking-[0.05em] text-ink-3">
-                <th className="px-4 py-2 text-left font-medium md:px-5">Strategy</th>
-                {cols.map(([, l]) => (
-                  <th key={l} className="px-3 py-2 font-medium">
-                    {l}
-                  </th>
+        <ul className="divide-y divide-line">
+          {keys.map((k) => (
+            <li key={k} className="px-4 py-3 md:px-5">
+              <p className="text-[14px] font-medium">{labels[k] ?? k}</p>
+              <dl className="mt-2 grid grid-cols-3 gap-x-3 gap-y-2 sm:grid-cols-7">
+                {cols.map(([c, l, f]) => (
+                  <MiniStat key={c} label={l} value={f((bt.results![k][c] as number | null) ?? null)} />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {keys.map((k) => (
-                <tr key={k} className="border-b border-line">
-                  <td className="px-4 py-2 text-ink-2 md:px-5">{labels[k] ?? k}</td>
-                  {cols.map(([c]) => (
-                    <td key={c} className="num px-3 py-2 text-right">
-                      {cols.find((x) => x[0] === c)![2]((bt.results![k][c] as number | null) ?? null)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </dl>
+            </li>
+          ))}
+        </ul>
       </Panel>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="By market regime" meta="Annualised return of the full method (overall score)">
+        <Panel title="By market regime" meta="Yearly return">
           <ul className="flex flex-col gap-1.5 text-[13px]">
             {Object.entries((bt.results.overall?.regimes as Record<string, { days: number; ann_return: number | null }>) ?? {}).map(([k, v]) => (
               <li key={k} className="flex justify-between text-ink-2">
@@ -475,13 +551,17 @@ async function BacktestTab() {
             ))}
           </ul>
         </Panel>
-        <Panel title="Limitations">
+        <Disclosure title="Limitations">
           <ul className="flex list-disc flex-col gap-1.5 pl-4 text-[13px] text-ink-2 marker:text-ink-3">
-            {bt.limitations?.map((l) => <li key={l}>{l}</li>)}
+            {bt.limitations?.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
           </ul>
-        </Panel>
+        </Disclosure>
       </div>
-      <p className="t-meta">Simulated historical results. They do not guarantee future results. Calculated {dateTimeLabel(bt.computed_at)} with data to {dateLabel(bt.data_asof)}.</p>
+      <p className="t-meta">
+        Simulated historical results. They do not guarantee future results. Calculated {dateTimeLabel(bt.computed_at)} with data to {dateLabel(bt.data_asof)}.
+      </p>
     </div>
   );
 }
@@ -490,7 +570,7 @@ async function PortfolioTab() {
   const store = await requireStore();
   const s = await store.settings();
   return (
-    <Panel title="Target weights and bands" meta="Guidance: you do not have to hit them exactly. Products are chosen in the Plan.">
+    <Panel title="Target weights and bands">
       <SettingsForm settings={s} />
     </Panel>
   );
@@ -514,9 +594,13 @@ async function AccountTab() {
       <div className="flex flex-col gap-3 text-[13px]">
         <p className="text-ink-2">
           {mode === "supabase" ? (
-            <>Signed in as <span className="text-ink">{store.email}</span>. Your data is isolated per user (Row Level Security).</>
+            <>
+              Signed in as <span className="text-ink">{store.email}</span>. Your data is isolated per user (Row Level Security).
+            </>
           ) : (
-            <>Local development mode: data stored in <code className="font-mono">web/.data/user.json</code>, no sign-in. Not available on Vercel.</>
+            <>
+              Local development mode: data stored in <code className="font-mono">web/.data/user.json</code>, no sign-in. Not available on Vercel.
+            </>
           )}
         </p>
         {mode === "supabase" && (

@@ -58,31 +58,30 @@ export function PlanSplit({
         </span>
       </label>
       <ul className="flex flex-col gap-3">
-        {activeKeys(settings.targets).map((b) => (
-          <li key={b}>
-            <div className="flex items-center justify-between gap-3 text-[15px]">
-              <span className="flex items-center gap-2.5 font-medium">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_DOT[b]}`} />
-                {BUCKET_NAME[b]}
-              </span>
-              <span className="num shrink-0 whitespace-nowrap font-semibold">{money(plan[b], "EUR", 0)}</span>
-            </div>
-            <ul className="mt-1 flex flex-col gap-0.5 pl-5">
-              {lines
-                .filter((l) => l.bucket === b)
-                .map((l) => (
-                  <li key={l.product.isin} className="flex justify-between gap-3 text-[13px] text-ink-2">
-                    <span className="min-w-0 break-words">
-                      {b === "momentum" && momentumLabel ? momentumLabel : l.product.short} · <span className="num select-all">{l.product.isin}</span>
+        {activeKeys(settings.targets).map((b) => {
+          const mine = lines.filter((l) => l.bucket === b);
+          const name = (l: (typeof lines)[number]) => (b === "momentum" && momentumLabel ? momentumLabel : l.product.short);
+          return (
+            <li key={b} className="flex items-center gap-3">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_DOT[b]}`} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-medium">{BUCKET_NAME[b]}</span>
+                {mine.length === 1 ? (
+                  <span className="block truncate text-[13px] text-ink-2">{name(mine[0])}</span>
+                ) : (
+                  mine.map((l) => (
+                    <span key={l.product.isin} className="flex justify-between gap-3 text-[13px] text-ink-2">
+                      <span className="truncate">{name(l)}</span>
+                      <span className="num shrink-0">{money(l.amount, "EUR", 0)}</span>
                     </span>
-                    <span className="num shrink-0 whitespace-nowrap">{money(l.amount, "EUR", 0)}</span>
-                  </li>
-                ))}
-            </ul>
-          </li>
-        ))}
+                  ))
+                )}
+              </span>
+              <span className="num shrink-0 whitespace-nowrap text-[17px] font-semibold">{money(plan[b], "EUR", 0)}</span>
+            </li>
+          );
+        })}
       </ul>
-      <p className="text-[13px] text-ink-3">The block below its target gets more, so you rebalance without selling (and without paying tax). You buy in your broker.</p>
     </div>
   );
 }
