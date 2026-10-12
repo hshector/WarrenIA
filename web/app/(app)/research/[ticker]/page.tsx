@@ -104,7 +104,8 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   const rep = asset.report;
   const risk = riskLabel(r.rk);
   const act = asset.action;
-  const owned = pf.result?.positions.some((p) => p.instrument.market_ticker === ticker && p.qty > 0) ?? false;
+  const ownedPos = pf.result?.positions.find((p) => p.instrument.market_ticker === ticker && p.qty > 1e-9);
+  const owned = !!ownedPos;
   const hold = act ? holdLabel(act) : null;
   const BENCH = radar?.bench[meta.primary_benchmark];
 
@@ -165,6 +166,11 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
             <p className="mt-4 text-[14.5px] text-ink-2">
               {owned ? "You own it: " : "If you owned it: "}
               <span className={`font-semibold ${hold.cls}`}>{hold.text}</span>
+              {ownedPos && (
+                <Link href={`/portfolio?sell=${encodeURIComponent(ownedPos.instrument.id)}#sell`} className="ml-2 whitespace-nowrap font-medium text-accent">
+                  Tax if you sell ›
+                </Link>
+              )}
             </p>
           )}
           <div className="mt-5 flex flex-col gap-4">

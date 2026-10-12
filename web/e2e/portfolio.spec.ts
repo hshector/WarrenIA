@@ -104,3 +104,29 @@ test("Trade Republic CSV is recognised: catalog ETF and US stock found by name",
   await page.goto("/portfolio/transactions");
   await expect(page.getByText("Vanguard FTSE All-World UCITS ETF (USD) Accumulating").first()).toBeVisible();
 });
+
+test("before you sell: Spanish tax on a sale, FIFO lots, nothing saved", async ({ page }) => {
+  const csv = ["date,type,isin,quantity,price,amount,fees", "2026-01-05,deposit,,,,1000,", "2026-01-05,buy,IE00B4ND3602,10,50,,"].join("\n");
+  await page.goto("/portfolio/import");
+  await page.locator("textarea").fill(csv);
+  await page.getByRole("button", { name: "Preview and check" }).click();
+  await page.getByRole("button", { name: /Import 2 valid rows/ }).click();
+  await expect(page.getByText(/2 transactions imported/)).toBeVisible();
+
+  await page.goto("/portfolio");
+  await page.getByText("Before you sell").click();
+  await page.getByLabel("What").selectOption({ label: "iShares Physical Gold ETC" });
+  await page.getByLabel("Units").fill("10");
+  await page.getByLabel(/^Price/).fill("70");
+  await page.getByLabel("Fee (€)").fill("1,00");
+  // 10 × 70 − 1 = 699 proceeds, cost 500: 199 of capital income (gold ETC) at 19 %.
+  await expect(page.getByText("Gain €199.00")).toBeVisible();
+  await expect(page.getByText(/capital income \(gold ETC\)/)).toBeVisible();
+  await expect(page.getByText("€37.81")).toBeVisible();
+  await expect(page.getByText("€661.19")).toBeVisible();
+
+  await page.getByLabel("Units").fill("11");
+  await expect(page.getByText(/You hold 10 units/).last()).toBeVisible();
+  await page.goto("/portfolio/transactions");
+  await expect(page.getByText(/^Sell/)).toHaveCount(0);
+});

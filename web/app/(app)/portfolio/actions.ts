@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { computePortfolio, PortfolioError } from "@/lib/portfolio/engine";
+import { computePortfolio, fxRate, PortfolioError } from "@/lib/portfolio/engine";
+import { loadPortfolio } from "@/lib/portfolio/load";
+import { estimateSale, SaleError, type SaleEstimate } from "@/lib/portfolio/tax";
 import { parseTransactionsCsv, type CsvFormat, type ParsedRow } from "@/lib/portfolio/csv";
 import { matchTicker } from "@/lib/portfolio/tr";
 import { getRadar, loadMarket } from "@/lib/market/source";
@@ -285,5 +287,39 @@ export async function saveChoices(input: { bucket: PlanKey; items: { isin: strin
   } catch (e) {
     const m = msg(e);
     return { ok: false, message: /choices/.test(m) ? "Your database needs migration 0002_settings_choices.sql (see docs/DEPLOY.md)." : m };
+  }
+}
+
+// ------------------------------------------------------------- sale estimate
+
+const SaleSchema = z.object({
+  instrumentId: z.string().min(1).max(64),
+  qty: z.number().positive().finite(),
+  price: z.number().nonnegative().finite(),
+  feeEur: z.number().min(0).max(10_000),
+});
+
+/** Spanish tax on a sale you are thinking about, on today's portfolio. Nothing is saved. */
+export async function estimateSaleAction(raw: z.input<typeof SaleSchema>): Promise<{ ok: true; estimate: SaleEstimate } | { ok: false; message: string }> {
+  const p = SaleSchema.safeParse(raw);
+  if (!p.success) return { ok: false, message: "Enter the units and the price" };
+  try {
+    const { latest, meta } = await loadMarket();
+    const store = await requireStore();
+    const pf = await loadPortfolio(store, latest, meta);
+    if (pf.error) return { ok: false, message: pf.error };
+    const ins = pf.instruments.find((i) => i.id === p.data.instrumentId);
+    if (!ins) return { ok: false, message: "Unknown instrument" };
+    // The price is in the currency the instrument is valued in (USD for US shares).
+    const currency = pf.result?.positions.find((x) => x.instrument.id === ins.id)?.priceCurrency ?? ins.currency;
+    const rate = fxRate(pf.fx, currency, pf.asOf);
+    if (!rate) return { ok: false, message: `No ${currency} exchange rate published yet` };
+    const estimate = estimateSale(pf.instruments, pf.transactions, pf.prices, pf.fx, {
+      instrumentId: ins.id, qty: p.data.qty, price: p.data.price, currency, fxEurPerUnit: 1 / rate, feeEur: p.data.feeEur, date: pf.asOf,
+    });
+    return { ok: true, estimate };
+  } catch (e) {
+    if (e instanceof SaleError || e instanceof PortfolioError) return { ok: false, message: e.message };
+    return { ok: false, message: msg(e) };
   }
 }

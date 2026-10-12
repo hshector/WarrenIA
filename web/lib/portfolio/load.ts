@@ -17,6 +17,10 @@ export interface LoadedPortfolio {
   error: string | null;
   fxAsof: string | null;
   priceInfo: Record<string, { source: string; asof: string | null }>;
+  /** Server-side inputs of the valuation (for what-if calculations such as a sale estimate). */
+  prices: Record<string, PriceSeries>;
+  fx: FxTable;
+  asOf: string;
 }
 
 /** Valued on today's date in Spain, or on the latest trade if one is dated later (a trade
@@ -64,13 +68,14 @@ export async function loadPortfolio(store: UserStore, latest: Latest | null, met
     }
   }
   const fx: FxTable = fxFile?.rates ?? {};
+  const asOf = valuationDate(transactions);
   let result: PortfolioResult | null = null;
   let error: string | null = null;
   try {
-    result = transactions.length ? computePortfolio(instruments, transactions, prices, fx, valuationDate(transactions)) : null;
+    result = transactions.length ? computePortfolio(instruments, transactions, prices, fx, asOf) : null;
   } catch (e) {
     if (e instanceof PortfolioError) error = e.message;
     else throw e;
   }
-  return { instruments, transactions, settings, result, error, fxAsof: fxFile?.asof ?? null, priceInfo };
+  return { instruments, transactions, settings, result, error, fxAsof: fxFile?.asof ?? null, priceInfo, prices, fx, asOf };
 }
