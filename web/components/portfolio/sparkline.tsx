@@ -10,7 +10,12 @@ import type { DailyPoint } from "@/lib/portfolio/engine";
 export function Sparkline({ series, window = 0, className }: { series: DailyPoint[]; window?: number; className?: string }) {
   const first = series.findIndex((p) => p.value > 0.005);
   if (first < 0) return null;
-  const real = series.slice(first);
+  // A manually priced holding has no history: it sits flat at its purchase price
+  // until the next known price. Drop that flat run (keep its last day) so it shows
+  // as the dashed lead-in, not as a long line that jumps on the last pixel.
+  const v0 = series[first].value;
+  const moves = series.findIndex((p, i) => i > first && Math.abs(p.value - v0) > 0.01);
+  const real = series.slice(moves < 0 ? series.length - 1 : moves - 1);
   // ~120 points is plenty for a 360px-wide line and keeps the HTML small.
   const step = Math.max(1, Math.ceil(real.length / 120));
   const pts = real.filter((_, i) => i % step === 0 || i === real.length - 1).map((p) => p.value);
@@ -41,7 +46,7 @@ export function Sparkline({ series, window = 0, className }: { series: DailyPoin
           <stop offset="1" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {x0 > 0 && <path d={`M0,${y0.toFixed(2)}L${x0.toFixed(2)},${y0.toFixed(2)}`} stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.5" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
+      {x0 > 0 && <path d={`M0,${y0.toFixed(2)}L${x0.toFixed(2)},${y0.toFixed(2)}`} stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
       <path d={`${line}L${x1},${H}L${x0},${H}Z`} fill="url(#spark-fill)" />
       <path d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
