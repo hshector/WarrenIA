@@ -172,7 +172,7 @@ html {
 
 /* Installed PWA: no browser pull-to-refresh or rubber band behind the app chrome
    (the header has its own refresh button). In a browser tab the default stays. */
-@media (display-mode: standalone) {
+@media (display-mode: standalone), (display-mode: fullscreen) {
   html,
   body {
     overscroll-behavior-y: none;
