@@ -16,14 +16,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-line/60 bg-canvas/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-3 px-4 md:px-8">
-          <Link href="/" aria-label="Home">
+        <div className="mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-2 px-4 md:px-8">
+          <Link href="/" aria-label="Home" className="shrink-0">
             <Wordmark />
           </Link>
           <TopNav />
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
             <FreshnessStamp latest={latest} fresh={fresh} />
-            <Link href="/alerts" aria-label="Alerts" className="tap inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-3/70 text-ink-2 hover:text-ink">
+            <Link href="/alerts" aria-label="Alerts" className="tap inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-3/70 text-ink-2 hover:text-ink">
               <IconBell size={17} />
             </Link>
             <RefreshButton />

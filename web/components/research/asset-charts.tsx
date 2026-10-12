@@ -65,7 +65,7 @@ export function AssetCharts({
               { value: "price", label: "Price" },
               { value: "rel", label: `vs ${benchName}` },
             ]}
-            ariaLabel="Vista"
+            ariaLabel="View"
           />
         )}
       </div>
@@ -73,27 +73,32 @@ export function AssetCharts({
         <TimeSeriesChart series={specs} height={height} ariaLabel={mode === "rel" ? `Performance relative to ${benchName}` : "Price history"} />
       ) : (
         <div className="flex items-center justify-center text-[14px] text-ink-3" style={{ height }}>
-          Sin datos suficientes.
+          Not enough data.
         </div>
       )}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented
           value={range}
           onChange={setRange}
-          className="flex-1 sm:flex-none"
+          className="min-w-0 flex-1 sm:flex-none"
           options={[
             { value: "1m", label: "1M" },
             { value: "6m", label: "6M" },
-            { value: "1y", label: "1A" },
-            { value: "2y", label: "2A" },
+            { value: "1y", label: "1Y" },
+            { value: "2y", label: "2Y" },
           ]}
-          ariaLabel="Periodo"
+          ariaLabel="Period"
         />
         {mode === "price" && (
-          <label className="flex shrink-0 items-center gap-2 text-[13px] text-ink-2">
-            <input type="checkbox" checked={showMa} onChange={(e) => setShowMa(e.target.checked)} className="h-4 w-4 accent-[var(--accent)]" />
-            Medias 50/200
-          </label>
+          <button
+            type="button"
+            aria-pressed={showMa}
+            onClick={() => setShowMa(!showMa)}
+            title="50- and 200-day moving averages"
+            className={cx("tap h-8 shrink-0 whitespace-nowrap rounded-full px-3 text-[13px] font-medium", showMa ? "bg-accent-soft text-accent-2" : "bg-surface-2 text-ink-2")}
+          >
+            MA 50/200
+          </button>
         )}
       </div>
       {mode === "rel" && <p className="text-[13px] text-ink-3">If the line rises, the asset is doing better than {benchName}. 100 at the start of the period.</p>}
