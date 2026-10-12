@@ -4,7 +4,6 @@ import { signOut } from "@/app/login/actions";
 import { SettingsForm } from "@/components/portfolio/forms";
 import { BacktestChart } from "@/components/settings/backtest-chart";
 import { PageHeader } from "@/components/shell/page-header";
-import { RefreshButton } from "@/components/shell/refresh-button";
 import { ThemePicker } from "@/components/shell/theme";
 import { IconChevronRight, IconLogout } from "@/components/ui/icons";
 import { MiniStat } from "@/components/portfolio/mix";
@@ -200,7 +199,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
   const filt = q ? excluded.filter((e) => e.t.includes(q.toUpperCase()) || e.n.toLowerCase().includes(q.toLowerCase())) : excluded;
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <Panel title="Last run" actions={<RefreshButton />}>
+      <Panel title="Last run">
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]">
           <dt className="text-ink-3">Data (close)</dt>
           <dd>
@@ -282,8 +281,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
           </ul>
           <ul className="flex flex-col gap-2">
             <li>
-              <span className="text-ink">Frequency:</span> a scheduled GitHub Actions job after each NYSE close (≈ 05:15 UTC, retry 11:05 UTC) and on demand with
-              &ldquo;Refresh&rdquo; (at most every 15 min). Annual reports weekly.
+              <span className="text-ink">Frequency:</span> a scheduled GitHub Actions job after each NYSE close (≈ 05:15 UTC, retry 11:05 UTC). Annual reports weekly.
             </li>
             <li>
               <span className="text-ink">Data type:</span> daily close. No real time or intraday.
