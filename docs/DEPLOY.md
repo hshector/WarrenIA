@@ -2,8 +2,8 @@
 
 Tiempo estimado: unos 45 minutos de configuración, más ~2 horas de la primera descarga de datos, que se hace sola.
 
-Necesitas cuentas en: **GitHub** (ya la tienes), **Supabase**, **Vercel** y **Massive**. Son opcionales **EODHD**
-(precios en EUR de tus ETFs) y un token de GitHub (para el botón «Actualizar»).
+Necesitas cuentas en: **GitHub** (ya la tienes), **Supabase**, **Vercel** y **Massive**. Es opcional **EODHD**
+(precios en EUR de tus ETFs).
 
 > El código está en la rama `claude/wizardly-cori-baj0xo`. Vercel y los procesos programados de GitHub usan la rama
 > por defecto (`main`): fusiona la rama en `main` (Pull Request → Merge) antes del paso 4.
@@ -86,16 +86,6 @@ A partir de ahí se ejecuta solo de martes a sábado a las 05:15 UTC (pasada la 
 4. *Deploy*. Abre la URL, introduce tu correo y entra con el enlace que recibirás.
 
 Si falta la configuración de Supabase, la web **no muestra datos**: redirige a `/setup` y falla de forma segura.
-
-### Botón «Actualizar» (opcional)
-
-1. GitHub → *Settings → Developer settings → Fine‑grained tokens → Generate new token*.
-   - *Repository access*: solo `hshector/WarrenIA`.
-   - *Permissions*: **Actions: Read and write**.
-2. En Vercel añade `GITHUB_DISPATCH_TOKEN` (el token), `GITHUB_REPO=hshector/WarrenIA` y `GITHUB_REF_NAME=main`.
-3. Vuelve a desplegar.
-
-El servidor aplica un enfriamiento de 15 minutos entre actualizaciones.
 
 ## 5. Instalar en el móvil (PWA)
 

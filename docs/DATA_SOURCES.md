@@ -48,7 +48,7 @@ intercambiable que no afecta al resto del pipeline.
 - **Sesiones vacías** (el proveedor aún no ha publicado): no se marcan como descargadas y se reintentan en la
   siguiente ejecución.
 
-**Botón «Actualizar» de la web:** lanza el mismo workflow (`workflow_dispatch`), con un enfriamiento de 15 minutos.
+**Actualización manual:** pestaña *Actions → market-data → Run workflow* en GitHub.
 Con datos de cierre, solo cambia algo después de un nuevo cierre.
 
 **Frescura en la interfaz:**
@@ -61,4 +61,4 @@ Con datos de cierre, solo cambia algo después de un nuevo cierre.
 - **La PWA nunca sirve datos desde caché:** sin conexión muestra una página explícita.
 
 **Aviso sobre GitHub Actions:** GitHub desactiva los cron de los repositorios sin actividad durante 60 días. Si
-ocurre, la web mostrará los datos como desactualizados; se reactivan desde la pestaña *Actions* (o con «Actualizar»).
+ocurre, la web mostrará los datos como desactualizados; se reactivan desde la pestaña *Actions*.

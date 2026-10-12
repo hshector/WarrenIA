@@ -68,11 +68,6 @@ function pruneRuns(current: string) {
   for (const k of memo.keys()) if (k.startsWith("runs/") && !k.startsWith(current + "/")) memo.delete(k);
 }
 
-/** Forget latest.json so the next read sees a run that was just published. */
-export function forgetLatest() {
-  memo.delete("latest.json");
-}
-
 async function readRaw(p: string): Promise<Buffer | null> {
   const src = marketSource();
   if (src.kind === "none") return null;
