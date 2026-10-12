@@ -37,12 +37,15 @@ describe("csv import", () => {
     expect(rows[5].errors.join()).toMatch(/Unknown type/);
   });
 
-  it("flags duplicates within the file and produces stable hashes", () => {
+  it("keeps identical rows as separate trades with stable hashes", () => {
     const text = ["date,type,ticker,quantity,price", "2026-01-05,buy,NVDA,1,100", "2026-01-05,buy,NVDA,1,100"].join("\n");
     const a = parseTransactionsCsv(text, "2026-10-10");
     const b = parseTransactionsCsv(text, "2026-10-10");
-    expect(a.rows[1].ok).toBe(false);
-    expect(a.rows[0].tx?.import_hash).toBe(b.rows[0].tx?.import_hash);
+    const single = parseTransactionsCsv(text.split("\n").slice(0, 2).join("\n"), "2026-10-10");
+    expect(a.rows.map((r) => r.ok)).toEqual([true, true]);
+    expect(a.rows[0].tx?.import_hash).not.toBe(a.rows[1].tx?.import_hash);
+    expect(a.rows.map((r) => r.tx?.import_hash)).toEqual(b.rows.map((r) => r.tx?.import_hash)); // re-import: no duplicates
+    expect(single.rows[0].tx?.import_hash).toBe(a.rows[0].tx?.import_hash); // first copy keeps its hash
   });
 
   it("requires date and type columns", () => {

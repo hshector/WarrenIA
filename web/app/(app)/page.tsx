@@ -33,11 +33,12 @@ export default async function Home() {
   const values = blockValues(dev);
 
   // Only facts that matter to the user: their positions and the assets they follow.
-  const news: { t: string; text: string }[] = [];
+  const news: { t: string; text: string; href?: string }[] = [];
   for (const p of res?.positions ?? []) {
     const r = p.instrument.market_ticker ? byT.get(p.instrument.market_ticker) : undefined;
     if (!r || p.qty <= 0) continue;
-    if (withActions && !r.hold) news.push({ t: r.t, text: `${r.n}: consider selling (it lost its momentum)` });
+    // A sell signal on something you own goes straight to what selling would cost in tax.
+    if (withActions && !r.hold) news.push({ t: r.t, text: `${r.n}: consider selling (it lost its momentum)`, href: `/portfolio?sell=${encodeURIComponent(p.instrument.id)}#sell` });
     else if (r.st === "weakening") news.push({ t: r.t, text: `${r.n} is losing steam` });
   }
   for (const w of watch) {
@@ -117,7 +118,7 @@ export default async function Home() {
           <ul className="flex flex-col gap-3">
             {news.slice(0, 4).map((n, i) => (
               <li key={n.t + i}>
-                <Link href={`/research/${n.t}`} className="flex items-center gap-3 text-[15px]">
+                <Link href={n.href ?? `/research/${n.t}`} className="flex items-center gap-3 text-[15px]">
                   <AssetAvatar t={n.t} size={34} />
                   {n.text}
                 </Link>

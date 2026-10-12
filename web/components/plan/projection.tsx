@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { Segmented } from "@/components/ui/primitives";
-import { money, pct } from "@/lib/format";
+import { Segmented, Skeleton } from "@/components/ui/primitives";
+import { money, parseDecimal, pct } from "@/lib/format";
 import type { Choices } from "@/lib/plan/catalog";
 import { ASSUMPTIONS, planMix, portfolioStats, project } from "@/lib/plan/projection";
 import type { PlanKey } from "@/lib/portfolio/types";
@@ -30,11 +30,22 @@ export function WealthProjection({ start, monthly, targets, choices }: { start: 
   const [amount, setAmount] = useState(String(monthly));
   const [hover, setHover] = useState<number | null>(null);
   const svg = useRef<SVGSVGElement>(null);
-  const n = Number(years);
-  const m = Math.max(0, Number(amount.replace(",", ".")) || 0);
+  // The simulation (2,000 paths, month by month) runs only in the browser, after the page is
+  // on screen, and at low priority: typing the amount or switching years never blocks input,
+  // and the server does not spend ~70 ms of CPU on it for every Plan view.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const ready = useDeferredValue(mounted);
+  const n = useDeferredValue(Number(years));
+  const m = useDeferredValue(Math.max(0, Number(parseDecimal(amount)) || 0));
   const mix = useMemo(() => planMix(targets, choices), [targets, choices]);
   const stats = useMemo(() => portfolioStats(mix), [mix]);
-  const p = useMemo(() => project({ start: Math.max(0, start), monthly: m, years: n, real: stats.real, vol: stats.vol }), [start, m, n, stats]);
+  const proj = useMemo(() => (ready ? project({ start: Math.max(0, start), monthly: m, years: n, real: stats.real, vol: stats.vol }) : null), [ready, start, m, n, stats]);
+  if (!proj) return <ProjectionPlaceholder />;
+  const p = proj;
 
   const ymax = niceMax(p.p90[n]);
   const x = (y: number) => PAD.l + (y / n) * (W - PAD.l - PAD.r);
@@ -180,6 +191,21 @@ export function WealthProjection({ start, monthly, targets, choices }: { start: 
           forecast.
         </p>
       </details>
+    </div>
+  );
+}
+
+/** Same footprint as the projection while it is being simulated (no layout shift). */
+function ProjectionPlaceholder() {
+  return (
+    <div className="flex flex-col gap-4" aria-busy="true">
+      <Skeleton className="h-9 w-full max-w-[320px]" />
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-56" />
+        <Skeleton className="h-9 w-40" />
+        <Skeleton className="h-4 w-full" />
+      </div>
+      <Skeleton className="aspect-[640/240] w-full" />
     </div>
   );
 }

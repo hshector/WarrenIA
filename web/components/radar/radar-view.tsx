@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { Dialog } from "radix-ui";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import { ActionPill, AssetAvatar, Delta, DeltaPill, StatePill } from "@/components/fin/fin";
 import { IconFilter, IconSearch } from "@/components/ui/icons";
 import { Button, cx, Field, Input, Segmented, Select } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
-import { applyRadar, DEFAULT_FILTERS, ETF_GROUPS, groupOf, hasActions, PRESETS, riskLabel, type Filters, type Horizon, type PresetKey } from "@/lib/market/radar";
-import { ACTION_LABELS, STATE_SIMPLE, type ActionKey, type BenchReturns, type RadarRow, type StateKey } from "@/lib/market/types";
+import { applyRadar, DEFAULT_FILTERS, ETF_GROUPS, groupOf, hasActions, PRESETS, riskLabel, type Filters, type Horizon, type PresetKey, type RadarListRow } from "@/lib/market/radar";
+import { ACTION_LABELS, STATE_SIMPLE, type ActionKey, type BenchReturns, type StateKey } from "@/lib/market/types";
 
 const PAGE = 40;
 const H_LABEL: Record<Horizon, string> = { r1m: "1 month", r3m: "3 months", r6m: "6 months", r12m: "1 year" };
@@ -22,9 +23,8 @@ export function RadarView({
   watch,
   initial,
 }: {
-  rows: RadarRow[];
+  rows: RadarListRow[];
   bench: BenchReturns;
-  benchmarks: Record<string, string>;
   primary: string;
   held: string[];
   watch: string[];
@@ -42,10 +42,14 @@ export function RadarView({
   const preset = PRESETS.find((p) => p.key === presetKey)!;
   const heldSet = useMemo(() => new Set(held), [held]);
   const watchSet = useMemo(() => new Set(watch), [watch]);
+  // Filtering and sorting thousands of rows runs at low priority: typing in the search box
+  // and tapping a chip stay instant on a phone, the list catches up a moment later.
+  const listFilters = useDeferredValue(filters);
   const data = useMemo(
-    () => applyRadar(rows, filters, preset, preset.sort, { horizon, bench, benchmark: primary, held: heldSet, watch: watchSet }),
-    [rows, filters, preset, horizon, bench, primary, heldSet, watchSet],
+    () => applyRadar(rows, listFilters, preset, preset.sort, { horizon, bench, benchmark: primary, held: heldSet, watch: watchSet }),
+    [rows, listFilters, preset, horizon, bench, primary, heldSet, watchSet],
   );
+  const router = useRouter();
   const sectors = useMemo(() => [...new Set(rows.filter((r) => r.cls === filters.cls).map(groupOf))].sort(), [rows, filters.cls]);
   const active =
     filters.sectors.length +
@@ -155,9 +159,13 @@ export function RadarView({
             {data.slice(0, n).map((r) => {
               const risk = riskLabel(r.rk);
               return (
-                <li key={r.t}>
+                <li key={r.t} className="radar-row">
                   <Link
                     href={`/research/${encodeURIComponent(r.t)}`}
+                    // Prefetch on intent (finger down, mouse over), not on sight: a screenful of
+                    // rows used to fire a dozen page prefetches the moment the radar opened.
+                    prefetch={false}
+                    onPointerEnter={() => router.prefetch(`/research/${encodeURIComponent(r.t)}`)}
                     className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2 active:bg-surface-3 md:grid-cols-[36px_minmax(0,1fr)_150px_80px_100px_56px] md:px-5"
                   >
                     <span className="num hidden text-[14px] text-ink-3 md:block">{r.rank}</span>

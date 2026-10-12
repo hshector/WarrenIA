@@ -96,3 +96,48 @@ export function dateTimeLabel(iso: string | null | undefined, tz = "Europe/Madri
     timeZoneName: "short",
   }).format(d);
 }
+
+// ------------------------------------------------------------------ input
+
+function ymd(now: Date, timeZone?: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
+/** Today's date (YYYY-MM-DD) on this device's clock, not UTC: in Spain UTC is still
+ *  "yesterday" until 01:00 / 02:00. */
+export function localToday(now = new Date()): string {
+  return ymd(now);
+}
+
+/** Today in Spain, the date the portfolio is valued on. */
+export function todayMadrid(now = new Date()): string {
+  return ymd(now, "Europe/Madrid");
+}
+
+/** The latest date that is already "today" somewhere (UTC+14): a trade dated after it is in the future for everyone. */
+export function latestToday(now = new Date()): string {
+  return ymd(now, "Pacific/Kiritimati");
+}
+
+/**
+ * A typed amount as a plain decimal string ("1234.56"). Accepts what people type in Spain
+ * and in English: "1.500,50", "1,500.50", "1 500,5", "0,5". With both separators the last
+ * one is the decimal mark; repeated separators are thousands. Anything else is returned
+ * as is, for the validator to reject.
+ */
+export function parseDecimal(raw: string): string {
+  const s = raw.trim().replace(/[\s  ']/g, "");
+  if (!/^[+-]?[\d.,]+$/.test(s)) return s;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    const dec = lastComma > lastDot ? "," : ".";
+    const thousands = dec === "," ? "." : ",";
+    return s.split(thousands).join("").replace(dec, ".");
+  }
+  const sep = lastComma >= 0 ? "," : lastDot >= 0 ? "." : null;
+  if (!sep) return s;
+  const parts = s.split(sep);
+  if (parts.length > 2) return parts.join(""); // 1.500.000 or 1,500,000
+  return parts.join(".");
+}

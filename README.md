@@ -1,7 +1,7 @@
 # WarrenIA
 
 Sistema personal de inteligencia financiera: **Plan** (qué comprar cada mes: ETF global, diversificadores, momentum y liquidez opcional, con fiscalidad española y proyección de patrimonio), **Alertas** (avisos push de cambios de señal), **Momentum Radar** (screener cuantitativo de momentum, explicable y
-reproducible) y **Portfolio** (cartera con FIFO, TWR, TIR y desviación frente a objetivos). Es una web Next.js
+reproducible) y **Portfolio** (cartera con FIFO, TWR, TIR y desviación frente a objetivos, y **Antes de vender**: el IRPF de una venta estimado antes de hacerla, con lotes FIFO, tramos del ahorro y la regla de recompra de 2 meses / 1 año). Es una web Next.js
 desplegable en Vercel e instalable como PWA.
 
 > Herramienta de análisis y apoyo a decisiones. **No ejecuta operaciones**, no se conecta a ningún bróker y no
@@ -27,8 +27,8 @@ cd web && npm ci && WARRENIA_LOCAL_MODE=1 npm run dev                   # http:/
 
 ```bash
 cd engine && pytest -q                         # 100 tests: ajustes, indicadores, scores, reglas, señal de acción, fundamentales (US GAAP e IFRS), avisos, proveedores, look-ahead, backtest
-cd web && npm test                             # 77 tests: FIFO, TWR, XIRR, fiscalidad, CSV y Trade Republic, liquidez, proyección, avisos, radar, catálogo, formato, seguridad
-cd web && npm run build && npx playwright test # 68 E2E: plan (núcleo, diversificadores, liquidez, proyección), alertas y notificaciones, importación de Trade Republic, IFRS, radar, ficha, cartera, importación, responsive, PWA, móvil, modo oscuro, caso peor
+cd web && npm test                             # 90 tests: FIFO, TWR, XIRR, fiscalidad, simulador de venta, CSV y Trade Republic, liquidez, proyección, avisos, radar, catálogo, formato, seguridad
+cd web && npm run build && npx playwright test # 69 E2E: plan (núcleo, diversificadores, liquidez, proyección), alertas y notificaciones, importación de Trade Republic, IFRS, radar, ficha, cartera, antes de vender, importación, responsive, PWA, móvil, modo oscuro, caso peor
 ```
 
 Para ver la interfaz con datos extremos pero realistas (nombres muy largos, cifras de ocho dígitos, posiciones de

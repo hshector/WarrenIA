@@ -31,8 +31,10 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
+  // Verifies the session JWT locally (cached signing keys) and refreshes it when expired;
+  // only projects still on a shared JWT secret pay a round trip to Supabase Auth here.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ? { email: typeof data.claims.email === "string" ? data.claims.email : null } : null;
 
   // Redirects must carry any auth cookies Supabase just set or cleared.
   const redirect = (to: URL) => {

@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const fresh = latest ? computeFreshness(latest.data_asof, meta?.calendar?.sessions) : null;
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-30 border-b border-line/60 bg-canvas/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-line/60 bg-canvas/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
         <div className="mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-2 px-4 md:px-8">
           <Link href="/" aria-label="Home" className="shrink-0">
             <Wordmark />
