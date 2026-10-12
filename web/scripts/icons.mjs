@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Generates the app icons from the brand mark (a rounded double U, black on white).
+// Generates the app icons from the brand mark (a rounded double U, black on white,
+// with two sage squares over the outer stems).
 // Source of truth: MARK below, the same path as <BrandMark> in components/shell/brand.tsx.
 //
 //   node scripts/icons.mjs
@@ -11,8 +12,11 @@ import { chromium } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-const MARK = "M6 9v8.5a5 5 0 0 0 10 0a5 5 0 0 0 10 0V9";
+// Centred in a 32x32 box: content spans y 5.15 (top of the squares) to 26.85.
+const MARK = "M6 11.55v8.5a5 5 0 0 0 10 0a5 5 0 0 0 10 0V11.55";
 const STROKE = 3.6;
+const SAGE = "#527f62"; // --accent (light)
+const DOTS = [4.5, 24.5].map((x) => `<rect x="${x}" y="5.15" width="3" height="3" rx="0.6" fill="${SAGE}"/>`).join("");
 const out = path.resolve(process.cwd(), "public", "icons");
 
 /** `scale` = share of the canvas the 32-unit mark box takes (maskable keeps to the 80 % safe zone). */
@@ -22,7 +26,7 @@ const svg = (size, scale, rounded = false) => {
   const off = (size - box) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
 <rect width="${size}" height="${size}" ${rounded ? `rx="${size * 0.225}"` : ""} fill="#ffffff"/>
-<path transform="translate(${off} ${off + k * 0.25}) scale(${k})" d="${MARK}" fill="none" stroke="#111111" stroke-width="${STROKE}" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(${off} ${off}) scale(${k})"><path d="${MARK}" fill="none" stroke="#111111" stroke-width="${STROKE}" stroke-linecap="round" stroke-linejoin="round"/>${DOTS}</g>
 </svg>`;
 };
 
