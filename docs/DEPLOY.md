@@ -30,6 +30,8 @@ Necesitas cuentas en: **GitHub** (ya la tienes), **Supabase**, **Vercel** y **Ma
      `http://localhost:3000/auth/callback`.
    - Comprobación: abre `https://TU-APP.vercel.app/setup/check`. Revisa en vivo las variables de
      Vercel, las claves, las tablas y el almacén de datos, y dice qué falta sin mostrar ninguna clave.
+     Sin iniciar sesión solo muestra lo que necesita el inicio de sesión (URL, clave pública, lista de
+     correos y Supabase Auth); la clave secreta, las tablas y los datos se comprueban al entrar con tu correo.
 5. *Authentication → Sign In / Providers → Email*: activado. Cuando hayas entrado por primera vez, puedes desactivar
    *Allow new users to sign up*. Además, la app solo deja entrar a los correos de `ALLOWED_EMAILS`.
 
