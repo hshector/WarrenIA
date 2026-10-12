@@ -84,7 +84,7 @@ export default async function Home() {
 
       {dev && res && res.totals.value > 0 && (
         <Card title="Your mix">
-          <MixDonut dev={dev} />
+          <MixDonut dev={dev} other={res.allocation.find((a) => a.bucket === "other")?.value ?? 0} />
         </Card>
       )}
 
