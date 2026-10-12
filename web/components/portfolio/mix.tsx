@@ -48,3 +48,54 @@ export function MixBar({ dev }: { dev: TargetRow[] }) {
     </div>
   );
 }
+
+const BUCKET_VAR: Record<TargetRow["bucket"], string> = { core: "var(--accent)", gold: "var(--gold)", momentum: "var(--violet)", cash: "var(--info)" };
+
+/** Current mix as a donut with a short legend: weight now, target underneath. */
+export function MixDonut({ dev }: { dev: TargetRow[] }) {
+  const total = dev.reduce((t, d) => t + d.weight, 0);
+  const R = 15.915; // circumference 100, so dash lengths are percentages
+  const GAP = dev.filter((d) => d.weight > 0).length > 1 ? 1.2 : 0;
+  let offset = 25; // start at 12 o'clock
+  return (
+    <div className="flex items-center gap-5">
+      <svg viewBox="0 0 42 42" className="h-[112px] w-[112px] shrink-0" role="img" aria-label="Current mix">
+        <circle cx="21" cy="21" r={R} fill="none" stroke="var(--surface-3)" strokeWidth="6" />
+        {total > 0 &&
+          dev.map((d) => {
+            const len = (d.weight / total) * 100;
+            if (len <= 0) return null;
+            const el = (
+              <circle
+                key={d.bucket}
+                cx="21"
+                cy="21"
+                r={R}
+                fill="none"
+                stroke={BUCKET_VAR[d.bucket]}
+                strokeWidth="6"
+                strokeDasharray={`${Math.max(len - GAP, 0.01)} ${100 - Math.max(len - GAP, 0.01)}`}
+                strokeDashoffset={offset}
+              />
+            );
+            offset -= len;
+            return el;
+          })}
+      </svg>
+      <ul className="flex min-w-0 flex-1 flex-col gap-2">
+        {dev.map((d) => (
+          <li key={d.bucket} className="flex items-start gap-2">
+            <span className={cx("mt-[7px] h-2.5 w-2.5 shrink-0 rounded-full", BUCKET_DOT[d.bucket])} />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline justify-between gap-2 text-[15px]">
+                <span className="truncate">{BUCKET_LABELS[d.bucket]}</span>
+                <span className="num shrink-0 font-semibold">{pct(d.weight, 0, false)}</span>
+              </span>
+              <span className={cx("num block text-[12.5px]", d.outsideBand ? "text-warn" : "text-ink-3")}>target {pct(d.target, 0, false)}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

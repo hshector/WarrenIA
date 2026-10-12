@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { AssetAvatar, Delta, DeltaPill } from "@/components/fin/fin";
 import { PlanSplit } from "@/components/plan/choosers";
-import { MiniStat } from "@/components/portfolio/mix";
+import { MiniStat, MixDonut } from "@/components/portfolio/mix";
 import { Sparkline } from "@/components/portfolio/sparkline";
 import { Card } from "@/components/ui/primitives";
 import { money, moneyHeadline, pct } from "@/lib/format";
@@ -58,7 +58,7 @@ export default async function Home() {
               {res.totals.gain >= 0 ? "+" : ""}
               {money(res.totals.gain)} ({pct(gainPct)})
             </p>
-            <Sparkline series={res.series} className="-mx-6 -mb-6 mt-5 block h-[88px] w-[calc(100%+3rem)] text-hero-ink/70" />
+            <Sparkline series={res.series} window={30} className="-mx-6 -mb-6 mt-5 block h-[88px] w-[calc(100%+3rem)] text-hero-ink/70" />
           </>
         ) : (
           <>
@@ -80,6 +80,12 @@ export default async function Home() {
             Add transaction
           </Link>
         </div>
+      )}
+
+      {dev && res && res.totals.value > 0 && (
+        <Card title="Your mix">
+          <MixDonut dev={dev} />
+        </Card>
       )}
 
       <Card
