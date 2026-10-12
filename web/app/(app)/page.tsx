@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { AssetAvatar, Delta, DeltaPill } from "@/components/fin/fin";
 import { PlanSplit } from "@/components/plan/choosers";
-import { MiniStat } from "@/components/portfolio/mix";
+import { MiniStat, MixDonut } from "@/components/portfolio/mix";
+import { Sparkline } from "@/components/portfolio/sparkline";
 import { Card } from "@/components/ui/primitives";
 import { money, moneyHeadline, pct } from "@/lib/format";
 import { hasActions } from "@/lib/market/radar";
@@ -58,14 +59,7 @@ export default async function Home() {
               {res.totals.gain >= 0 ? "+" : ""}
               {money(res.totals.gain)} ({pct(gainPct)})
             </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              <Link href="/portfolio" className="tap whitespace-nowrap rounded-full bg-hero-btn px-5 py-2.5 text-[15px] font-semibold text-hero-btn-ink">
-                View portfolio
-              </Link>
-              <Link href="/portfolio?add=1" className="tap whitespace-nowrap rounded-full bg-hero-ink/10 px-5 py-2.5 text-[15px] font-semibold text-hero-ink">
-                Add transaction
-              </Link>
-            </div>
+            <Sparkline series={res.series} window={30} className="-mx-6 -mb-6 mt-5 block h-[88px] w-[calc(100%+3rem)] text-hero-ink/70" />
           </>
         ) : (
           <>
@@ -77,6 +71,23 @@ export default async function Home() {
           </>
         )}
       </section>
+
+      {res && (
+        <div className="grid grid-cols-2 gap-2">
+          <Link href="/portfolio" className="tap flex h-11 items-center justify-center whitespace-nowrap rounded-full bg-accent px-4 text-[15px] font-semibold text-accent-ink">
+            View portfolio
+          </Link>
+          <Link href="/portfolio?add=1" className="tap flex h-11 items-center justify-center whitespace-nowrap rounded-full bg-surface px-4 text-[15px] font-semibold text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06)]">
+            Add transaction
+          </Link>
+        </div>
+      )}
+
+      {dev && res && res.totals.value > 0 && (
+        <Card title="Your mix">
+          <MixDonut dev={dev} />
+        </Card>
+      )}
 
       <Card
         title="This month"

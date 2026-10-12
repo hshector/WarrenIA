@@ -7,7 +7,11 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Investment plan, momentum radar and personal portfolio tracking. Analysis only, never places orders.",
     start_url: "/",
     scope: "/",
+    // Android: full screen, with the status bar and the system navigation bar hidden
+    // (a swipe from the edge shows them for a moment). iOS ignores display_override
+    // and keeps "standalone".
     display: "standalone",
+    display_override: ["fullscreen", "standalone"],
     orientation: "portrait-primary",
     background_color: "#f3f4f1",
     theme_color: "#f3f4f1",

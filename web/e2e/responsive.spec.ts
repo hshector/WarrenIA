@@ -23,6 +23,7 @@ test("manifest and service worker are served", async ({ request }) => {
   expect(m.status()).toBe(200);
   const j = await m.json();
   expect(j.display).toBe("standalone");
+  expect(j.display_override).toEqual(["fullscreen", "standalone"]);
   const sw = await request.get("/sw.js");
   expect(sw.status()).toBe(200);
   expect(sw.headers()["cache-control"]).toContain("no-store");
