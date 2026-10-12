@@ -64,6 +64,9 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
     const el = ref.current;
     if (!el) return;
     const ink3 = cssVar("var(--ink-3)");
+    // Phones: no price axis and no last-value badges. At ~330px they collide with each
+    // other and with the axis; the figures are already printed above every chart.
+    const compact = window.matchMedia("(max-width: 639px)").matches;
     const nf = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
     const chart = createChart(el, {
       height,
@@ -71,7 +74,7 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
       autoSize: true,
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: ink3, fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 11, attributionLogo: false },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
+      rightPriceScale: { visible: !compact, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
       leftPriceScale: { visible: false, borderVisible: false },
       timeScale: {
         borderVisible: false,
@@ -84,7 +87,7 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
           return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
         },
       },
-      crosshair: { mode: CrosshairMode.Magnet, vertLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)") }, horzLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)") } },
+      crosshair: { mode: CrosshairMode.Magnet, vertLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)") }, horzLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)"), labelVisible: !compact } },
       handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
       handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: false },
     });
@@ -94,7 +97,7 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
       const common = {
         priceScaleId: s.scale === "volume" ? "volume" : s.scale === "left" ? "left" : "right",
         priceFormat: FORMATS[s.priceFormat ?? "price"],
-        lastValueVisible: s.kind !== "histogram",
+        lastValueVisible: !compact && s.kind !== "histogram",
         priceLineVisible: false,
         title: s.title,
       };

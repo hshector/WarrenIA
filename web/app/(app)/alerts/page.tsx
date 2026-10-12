@@ -55,7 +55,7 @@ export default async function AlertsPage() {
         title="Alerts"
         sub={
           <>
-            Signal changes after each daily update that concern you ·{" "}
+            What changed for you ·{" "}
             <Link href="/settings?tab=notifications" className="text-accent">
               Notifications
             </Link>
@@ -119,7 +119,7 @@ export default async function AlertsPage() {
           })}
           {!days.length && <EmptyState title="No changes yet">Signals did not change since the last update.</EmptyState>}
           <p className="px-5 text-[12.5px] text-ink-3">
-            {latest?.demo ? "Demo data: no notifications are sent. " : ""}Changes are kept for 120 days. Follow stocks with ☆ on their page to hear about them.
+            {latest?.demo ? "Demo data: no notifications sent · " : ""}Kept 120 days.
           </p>
         </div>
       )}

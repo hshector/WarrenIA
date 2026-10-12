@@ -37,6 +37,7 @@ test("worst case: headline amounts drop cents, tiny positions keep their precisi
   await page.goto("/portfolio");
   await expect(page.getByText(/^€\d{1,3}(,\d{3}){2,}$/).first()).toBeVisible(); // millions, no cents
   await expect(page.getByText("0.000123 units")).toBeVisible();
+  await page.locator("summary", { hasText: /\d+ notices?$/ }).click();
   await expect(page.getByText(/Deposits of €\d{1,3}(,\d{3})+\.\d{2} were inferred/)).toBeVisible(); // formatted, not 7565580.99
 });
 

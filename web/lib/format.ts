@@ -39,6 +39,13 @@ export function moneyHeadline(v: number | null | undefined, currency = "EUR"): s
   return money(v, currency, isNum(v) && Math.abs(v) >= 100_000 ? 0 : 2);
 }
 
+/** Amount in a small tile: whole euros, and €7.57M style from 100,000. Never truncated. */
+export function moneyShort(v: number | null | undefined, currency = "EUR"): string {
+  if (!isNum(v)) return DASH;
+  if (Math.abs(v) < 100_000) return money(v, currency, 0);
+  return new Intl.NumberFormat(LOCALE, { style: "currency", currency, notation: "compact", maximumFractionDigits: 2 }).format(v);
+}
+
 /** Units held: whole numbers stay whole; fractions keep broker precision (6 decimals below 1 unit), no trailing zeros. */
 export function units(v: number | null | undefined): string {
   if (!isNum(v)) return DASH;

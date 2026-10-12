@@ -8,7 +8,7 @@ import { ActionPill, AssetAvatar, Delta, DeltaPill, StatePill } from "@/componen
 import { IconFilter, IconSearch } from "@/components/ui/icons";
 import { Button, cx, Field, Input, Segmented, Select } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
-import { applyRadar, DEFAULT_FILTERS, hasActions, PRESETS, riskLabel, type Filters, type Horizon, type PresetKey } from "@/lib/market/radar";
+import { applyRadar, DEFAULT_FILTERS, ETF_GROUPS, groupOf, hasActions, PRESETS, riskLabel, type Filters, type Horizon, type PresetKey } from "@/lib/market/radar";
 import { ACTION_LABELS, STATE_SIMPLE, type ActionKey, type BenchReturns, type RadarRow, type StateKey } from "@/lib/market/types";
 
 const PAGE = 40;
@@ -28,9 +28,13 @@ export function RadarView({
   primary: string;
   held: string[];
   watch: string[];
-  initial: { cls?: string; preset?: string };
+  initial: { cls?: string; preset?: string; group?: string };
 }) {
-  const [filters, setFilters] = useState<Filters>({ ...DEFAULT_FILTERS, cls: initial.cls === "etf" ? "etf" : "stock" });
+  const [filters, setFilters] = useState<Filters>(() => {
+    const etf = initial.cls === "etf";
+    const group = etf && (ETF_GROUPS as readonly string[]).includes(initial.group ?? "") ? [initial.group!] : [];
+    return { ...DEFAULT_FILTERS, cls: etf ? "etf" : "stock", sectors: group };
+  });
   const withActions = hasActions(rows);
   const [presetKey, setPresetKey] = useState<PresetKey>((PRESETS.find((p) => p.key === initial.preset)?.key ?? (withActions ? "buy" : "all")) as PresetKey);
   const [horizon, setHorizon] = useState<Horizon>("r6m");
@@ -42,7 +46,7 @@ export function RadarView({
     () => applyRadar(rows, filters, preset, preset.sort, { horizon, bench, benchmark: primary, held: heldSet, watch: watchSet }),
     [rows, filters, preset, horizon, bench, primary, heldSet, watchSet],
   );
-  const sectors = useMemo(() => [...new Set(rows.filter((r) => r.cls === filters.cls).map((r) => r.sec ?? "—"))].sort(), [rows, filters.cls]);
+  const sectors = useMemo(() => [...new Set(rows.filter((r) => r.cls === filters.cls).map(groupOf))].sort(), [rows, filters.cls]);
   const active =
     filters.sectors.length +
     filters.states.length +
@@ -104,6 +108,20 @@ export function RadarView({
         ))}
       </div>
 
+      {filters.cls === "etf" && (
+        <Segmented
+          ariaLabel="ETF type"
+          size="sm"
+          value={filters.sectors.length === 1 ? filters.sectors[0] : "all"}
+          onChange={(v) => {
+            setFilters((f) => ({ ...f, sectors: v === "all" ? [] : [v] }));
+            setN(PAGE);
+          }}
+          options={[{ value: "all", label: "All" }, ...ETF_GROUPS.map((g) => ({ value: g as string, label: g }))]}
+          className="w-full sm:w-auto"
+        />
+      )}
+
       <p className="text-[13.5px] text-ink-2">
         {preset.question} · {data.length} results
         {preset.note && <span className="text-warn"> · {preset.note}</span>}
@@ -111,10 +129,9 @@ export function RadarView({
 
       {filters.cls === "etf" && (
         <p className="rounded-[14px] bg-warn-soft px-4 py-3 text-[13.5px] text-ink">
-          These ETFs are listed in the US and, as a retail investor in the EU, <b>you cannot buy them</b> (PRIIPs rules: they have no EU key information document).
-          Use them to see which markets, sectors or commodities are leading. To invest, use a European UCITS equivalent:{" "}
+          US-listed: <b>you can&apos;t buy them</b> from the EU. They show what&apos;s leading; to invest use the{" "}
           <Link href="/plan" className="font-semibold text-accent">
-            see Plan
+            Plan
           </Link>
           .
         </p>
@@ -180,10 +197,6 @@ export function RadarView({
           )}
         </div>
       )}
-      <p className="text-[12.5px] text-ink-3">
-        The score (0-100) compares each asset with the rest of the market using closing prices: trend strength, trend quality, acceleration and risk. &ldquo;What to do&rdquo; applies fixed
-        rules on top (overheating, volatility, losing steam and, for stocks, the last annual report). Quantitative analysis, not personal advice.
-      </p>
     </div>
   );
 }

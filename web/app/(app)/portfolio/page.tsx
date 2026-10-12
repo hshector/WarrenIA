@@ -1,13 +1,12 @@
 import Link from "next/link";
 
-import { BUCKET_DOT } from "@/components/plan/product";
 import { AssetAvatar, Delta } from "@/components/fin/fin";
 import { InstrumentForm, TransactionForm } from "@/components/portfolio/forms";
 import { ValueChart } from "@/components/portfolio/value-chart";
 import { PageHeader } from "@/components/shell/page-header";
-import { IconChevronDown } from "@/components/ui/icons";
-import { ButtonLink, Callout, Card, EmptyState } from "@/components/ui/primitives";
-import { dateLabel, money, moneyHeadline, pct, units } from "@/lib/format";
+import { MixBar, MiniStat } from "@/components/portfolio/mix";
+import { ButtonLink, Callout, Card, cx, Disclosure, EmptyState } from "@/components/ui/primitives";
+import { dateLabel, money, moneyHeadline, moneyShort, pct, units } from "@/lib/format";
 import { getRadar, loadMarket } from "@/lib/market/source";
 import { hasActions, holdLabel } from "@/lib/market/radar";
 import { STATE_SIMPLE } from "@/lib/market/types";
@@ -78,35 +77,29 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
       <Card>
         <p className="text-[14px] text-ink-2">Total value</p>
         <p className="num mt-0.5 whitespace-nowrap text-[clamp(30px,9.5vw,40px)] font-bold leading-tight tracking-[-0.03em]">{moneyHeadline(t.value)}</p>
-        <p className="num text-[15px]">
-          <span className={t.gain >= 0 ? "font-semibold text-pos" : "font-semibold text-neg"}>
-            {t.gain >= 0 ? "+" : ""}
-            {money(t.gain)} ({pct(gainPct)})
-          </span>{" "}
-          <span className="text-ink-3">on {money(t.netContributions, "EUR", 0)} invested</span>
+        <p className={cx("num text-[15px] font-semibold", t.gain >= 0 ? "text-pos" : "text-neg")}>
+          {t.gain >= 0 ? "+" : ""}
+          {money(t.gain)} ({pct(gainPct)})
         </p>
         <div className="mt-4">
           <ValueChart series={res.series} />
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-4">
-          <div>
-            <p className="text-[13px] text-ink-2">Return of your investments</p>
-            <Delta v={res.twr.annualized ?? res.twr.cumulative} className="text-[19px] font-bold" />
-            <p className="text-[12.5px] text-ink-3">{res.twr.annualized !== null ? "per year (time-weighted)" : "so far (time-weighted)"}</p>
-          </div>
-          <div>
-            <p className="text-[13px] text-ink-2">Return on your money</p>
-            <Delta v={res.mwr.xirr} className="text-[19px] font-bold" />
-            <p className="text-[12.5px] text-ink-3">per year (money-weighted, IRR)</p>
-          </div>
-        </div>
+        <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4">
+          <MiniStat label="Invested" value={moneyShort(t.netContributions)} />
+          <MiniStat label="Return / yr" value={<Delta v={res.twr.annualized ?? res.twr.cumulative} />} />
+          <MiniStat label="Your IRR" value={<Delta v={res.mwr.xirr} />} />
+        </dl>
       </Card>
 
-      {res.warnings.map((w) => (
-        <Callout key={w} tone="warn">
-          {w}
-        </Callout>
-      ))}
+      {res.warnings.length > 0 && (
+        <Disclosure title={<span className="text-warn">{res.warnings.length === 1 ? "1 notice" : `${res.warnings.length} notices`}</span>}>
+          <ul className="flex flex-col gap-2 text-[14px] text-ink-2">
+            {res.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </Disclosure>
+      )}
 
       <Card title="Holdings" pad={false}>
         <ul className="mt-2 divide-y divide-line">
@@ -154,38 +147,18 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
         </ul>
       </Card>
 
-      <Card title="Mix versus your target">
-        <ul className="flex flex-col gap-4">
-          {dev.map((d) => (
-            <li key={d.bucket}>
-              <div className="mb-1.5 flex items-center justify-between gap-3 text-[15px]">
-                <span className="flex items-center gap-2.5">
-                  <span className={`h-2.5 w-2.5 rounded-full ${BUCKET_DOT[d.bucket]}`} />
-                  {BUCKET_LABELS[d.bucket]}
-                </span>
-                <span className="num shrink-0 whitespace-nowrap">
-                  <span className="font-semibold">{pct(d.weight, 0, false)}</span>
-                  <span className="text-ink-3"> / {pct(d.target, 0, false)}</span>
-                </span>
-              </div>
-              <div className="relative h-1.5 rounded-full bg-surface-3">
-                <div className={`absolute inset-y-0 left-0 rounded-full ${BUCKET_DOT[d.bucket]}`} style={{ width: `${Math.min(100, d.weight * 100)}%` }} />
-                <div className="absolute -inset-y-1 w-0.5 rounded bg-ink/70" style={{ left: `${d.target * 100}%` }} />
-              </div>
-              {d.outsideBand && <p className="mt-1 text-[13px] text-warn">{d.deviation > 0 ? "Above" : "Below"} target: your next contribution corrects it (see Plan).</p>}
-            </li>
-          ))}
-        </ul>
+      <Card title="Mix" action={<Link href="/plan" className="text-accent">Plan</Link>}>
+        <MixBar dev={dev} />
       </Card>
 
       {res.taxByYear.length > 0 && (
-        <Card title="Tax on your sales (estimate)" sub="What you would declare in your Spanish tax return for what you sold. For reference: check it against your draft or an adviser.">
+        <Disclosure title="Tax on your sales" meta={`${res.taxByYear[res.taxByYear.length - 1].year}: ${money(res.taxByYear[res.taxByYear.length - 1].gp + res.taxByYear[res.taxByYear.length - 1].rcm, "EUR", 0)}`}>
           <table className="w-full text-[14.5px]">
             <thead>
               <tr className="text-left text-[12.5px] text-ink-3">
                 <th className="pb-2 font-medium">Year</th>
-                <th className="pb-2 text-right font-medium">Capital gains</th>
-                <th className="pb-2 text-right font-medium">Capital income (ETCs)</th>
+                <th className="pb-2 text-right font-medium">Gains</th>
+                <th className="pb-2 text-right font-medium">ETC income</th>
               </tr>
             </thead>
             <tbody>
@@ -198,45 +171,35 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
               ))}
             </tbody>
           </table>
-          {res.taxByYear.some((y) => y.deferred > 0) && (
-            <p className="mt-2 text-[13px] text-warn">Excludes losses you cannot use yet because you bought the same security back (see the warnings above).</p>
-          )}
-          <p className="mt-2 text-[12.5px] text-ink-3">
-            Cost and proceeds include fees, FIFO, and the exchange rate of each date. Gold ETCs are capital income (ruling V0267-25); both go to the savings base.
-          </p>
-        </Card>
+          {res.taxByYear.some((y) => y.deferred > 0) && <p className="mt-2 text-[13px] text-warn">Excludes losses you cannot use yet (you bought the same security back).</p>}
+          <p className="mt-2 text-[12.5px] text-ink-3">Estimate for your Spanish return: FIFO, fees included. Gold ETCs count as capital income (V0267-25).</p>
+        </Disclosure>
       )}
 
-      <section className="card overflow-hidden">
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-[15px] font-medium [&::-webkit-details-marker]:hidden">
-            More figures
-            <IconChevronDown size={18} className="text-ink-3 transition-transform group-open:rotate-180" />
-          </summary>
-          <dl className="divide-y divide-line px-5 pb-3 text-[15px]">
-            {[
-              ["Unrealised gain", money(t.unrealized)],
-              ["Realised gain (FIFO)", money(t.realized)],
-              ["Dividends", money(t.dividends)],
-              ["Interest", money(t.interest)],
-              ["Fees", money(t.fees)],
-              ["Taxes", money(t.taxes)],
-              ...res.byCurrency.map((c) => [`Exposure to ${c.currency}`, pct(c.weight, 1, false)] as [string, string]),
-              ["Valued on", dateLabel(res.asOf)],
-            ].map(([k, v]) => (
-              <div key={k} className="flex justify-between py-2.5">
-                <dt className="text-ink-2">{k}</dt>
-                <dd className="num font-medium">{v}</dd>
-              </div>
-            ))}
-          </dl>
-          {res.mwr.note && <p className="px-5 pb-4 text-[13px] text-ink-3">{res.mwr.note}</p>}
-        </details>
-      </section>
+      <Disclosure title="More figures">
+        <dl className="divide-y divide-line text-[15px]">
+          {[
+            ["Unrealised gain", money(t.unrealized)],
+            ["Realised gain (FIFO)", money(t.realized)],
+            ["Dividends", money(t.dividends)],
+            ["Interest", money(t.interest)],
+            ["Fees", money(t.fees)],
+            ["Taxes", money(t.taxes)],
+            ...res.byCurrency.map((c) => [`Exposure to ${c.currency}`, pct(c.weight, 1, false)] as [string, string]),
+            ["Valued on", dateLabel(res.asOf)],
+          ].map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-3 py-2.5">
+              <dt className="text-ink-2">{k}</dt>
+              <dd className="num whitespace-nowrap font-medium">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        {res.mwr.note && <p className="pt-2 text-[13px] text-ink-3">{res.mwr.note}</p>}
+      </Disclosure>
 
       <div className="flex flex-wrap gap-2">
         <ButtonLink href="/portfolio/transactions" size="sm">
-          Transactions and instruments
+          Transactions
         </ButtonLink>
         <ButtonLink href="/portfolio/import" size="sm">
           Import CSV

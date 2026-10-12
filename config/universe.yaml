@@ -24,7 +24,7 @@ stocks:
   include_adrs: true
 
 etfs:
-  types: [ETF]
+  types: [ETF, ETV]          # ETV: commodity trusts such as GLD, SLV, USO
   min_price: 5.0
   min_adv_usd: 10_000_000
   adv_window: 63

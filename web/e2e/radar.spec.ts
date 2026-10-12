@@ -5,7 +5,7 @@ test("home shows portfolio hero, data date and demo notice", async ({ page }) =>
   await expect(page.getByText(/Demo · Close \d{1,2} \w+/).first()).toBeVisible();
   await expect(page.getByText("Your portfolio", { exact: true })).toBeVisible();
   await expect(page.getByText("Buy candidates", { exact: true })).toBeVisible();
-  await expect(page.getByText("Your next contribution")).toBeVisible();
+  await expect(page.getByText("This month", { exact: true })).toBeVisible();
 });
 
 test("radar opens on «Buy now»: only candidates, overheated leaders apart", async ({ page }) => {
@@ -20,9 +20,12 @@ test("radar opens on «Buy now»: only candidates, overheated leaders apart", as
 
 test("plan: products with ISIN, core chooser, diversifier mix and Spanish taxes", async ({ page }) => {
   await page.goto("/plan");
+  // Explanations are folded: open the blocks and the tax summary.
+  await page.getByText(/^1\. Core/).click();
   await expect(page.getByText("ISIN IE00BK5BQT80").first()).toBeVisible();
+  await page.getByText("Taxes in Spain", { exact: true }).click();
   await expect(page.getByText(/V0267-25/).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Taxes in Spain/ })).toBeVisible();
+  await page.getByText(/^2\. Diversifiers/).click();
   // Core chooser: no emerging markets -> the cheapest MSCI World.
   await page.getByRole("tablist", { name: "Include emerging markets?" }).getByRole("tab", { name: "No" }).click();
   await expect(page.getByText("ISIN IE00BJ0KDQ92").first()).toBeVisible();
@@ -31,9 +34,10 @@ test("plan: products with ISIN, core chooser, diversifier mix and Spanish taxes"
   await page.getByRole("button", { name: "Save mix" }).click();
   await expect(page.getByText("Plan updated")).toBeVisible();
   await page.reload();
-  await expect(page.getByText(/Short euro government bonds · LU1650487413/).first()).toBeVisible();
+  await expect(page.getByText("Short euro government bonds", { exact: true }).first()).toBeVisible(); // in this month's split
+  await page.getByText(/^2\. Diversifiers/).click();
   // Behaviour figures come from the engine's proxies.
-  await expect(page.getByText("Yearly swings").first()).toBeVisible();
+  await expect(page.locator("#diversifiers").getByText("Yearly swings").first()).toBeVisible();
 });
 
 test("radar: presets, search and open an asset", async ({ page }) => {
@@ -63,16 +67,25 @@ test("ETF list is separate, excludes leveraged products and says they are not bu
   await page.goto("/radar?cls=etf");
   await expect(page.getByRole("tab", { name: "ETFs" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Demo Daily 3X Bull ETF")).toHaveCount(0);
-  await expect(page.getByText(/you cannot buy them/)).toBeVisible();
+  await expect(page.getByText(/can.t buy them/)).toBeVisible();
+  // Gold and commodities are one tap away.
+  await page.getByRole("tablist", { name: "ETF type" }).getByRole("tab", { name: "Commodities" }).click();
+  await page.getByRole("button", { name: "Full ranking" }).click();
+  await expect(page.getByText("Demo Proxy GLD")).toBeVisible();
 });
 
 test("asset page: what it is, what to do, fundamentals, technical detail folded", async ({ page }) => {
   await page.goto("/research/X412");
-  for (const h of ["What it is", "Fundamentals", "Why it stands out", "Risks", "What to watch", "In your portfolio", "Technical detail"]) {
+  await expect(page.getByText("Momentum score", { exact: true })).toBeVisible();
+  // Numbers first; explanations folded.
+  await page.getByText("What to do now", { exact: true }).click();
+  await page.getByText("Analysis", { exact: true }).click();
+  for (const h of ["Why it stands out", "Risks", "What to watch", "In your portfolio"]) {
     await expect(page.getByRole("heading", { name: h, exact: true })).toBeVisible();
   }
-  await expect(page.getByText("Momentum score", { exact: true })).toBeVisible();
-  await expect(page.getByText("What to do now", { exact: true })).toBeVisible();
+  await page.getByText("About", { exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Technical detail", exact: true })).toBeVisible();
+  await page.getByText("Fundamentals", { exact: true }).click();
   await expect(page.getByText("Piotroski F-Score", { exact: true })).toBeVisible();
   await page.getByText("The nine F-Score checks").click();
   await expect(page.getByText("Generated cash from its business")).toBeVisible();
@@ -113,7 +126,7 @@ test("plan: wealth projection and the optional cash block", async ({ page }) => 
   await expect(page.getByText(/Chance of ending with less than you put in/)).toBeVisible();
   await page.getByRole("tablist", { name: "Years" }).getByRole("tab", { name: "40 y" }).click();
   await expect(page.getByText("In 40 years, in today's euros (after inflation)")).toBeVisible();
-  await expect(page.getByRole("heading", { name: /4\. Cash/ })).toBeVisible();
+  await page.getByText(/^4\. Cash/).click();
   await expect(page.getByText("No ISIN: it is the balance of your account").first()).toBeVisible();
   await expect(page.getByText("ISIN LU0290358497").first()).toBeVisible();
 });
@@ -141,6 +154,7 @@ test("alerts page and notification settings", async ({ page }) => {
 
 test("IFRS filer with ADRs: fundamentals from its euro report, no price ratios", async ({ page }) => {
   await page.goto("/research/X023");
+  await page.getByText("Fundamentals", { exact: true }).click();
   await expect(page.getByText(/SEC annual report \(IFRS/)).toBeVisible();
   await expect(page.getByText(/reported in EUR/)).toBeVisible();
   await expect(page.getByText("n/a (ADR)").first()).toBeVisible();

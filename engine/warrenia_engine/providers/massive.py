@@ -93,7 +93,8 @@ class MassiveProvider:
 
     def tickers(self) -> pd.DataFrame:
         rows: list[dict] = []
-        for kind in ("CS", "ADRC", "ETF"):
+        # ETV: commodity trusts (GLD, SLV, USO…) are typed apart from ETFs.
+        for kind in ("CS", "ADRC", "ETF", "ETV"):
             for active in ("true", "false"):
                 res = self._paged("/v3/reference/tickers", market="stocks", type=kind, active=active, limit=1000)
                 rows.extend(res)

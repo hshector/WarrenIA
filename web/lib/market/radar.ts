@@ -128,6 +128,24 @@ export function sortValue(r: RadarRow, key: SortKey, h: Horizon, bench: BenchRet
   return typeof v === "number" || typeof v === "string" ? v : null;
 }
 
+// ETFs carry no sector: group them by what they hold, so gold and commodities are one tap away.
+const COMMODITY_T = new Set(["GLD", "IAU", "GLDM", "SGOL", "BAR", "AAAU", "SLV", "SIVR", "PPLT", "PALL", "DBC", "PDBC", "GSG", "COMT", "DBA", "DBB", "CPER", "USO", "BNO", "UNG", "COPX", "GDX", "GDXJ", "SIL", "URA"]);
+const COMMODITY_RE = /\b(gold|silver|platinum|palladium|precious|commodit\w*|oil|crude|natural gas|copper|metals?|miners?|uranium|agricultur\w*)\b/i;
+const BOND_RE = /\b(treasury|bonds?|t-bill|aggregate|fixed income|muni\w*|corporate|tips)\b/i;
+export const ETF_GROUPS = ["Commodities", "Bonds", "Equity"] as const;
+export type EtfGroup = (typeof ETF_GROUPS)[number];
+
+export function etfGroup(r: Pick<RadarRow, "t" | "n">): EtfGroup {
+  if (COMMODITY_T.has(r.t) || COMMODITY_RE.test(r.n)) return "Commodities";
+  if (BOND_RE.test(r.n)) return "Bonds";
+  return "Equity";
+}
+
+/** Sector for stocks, holding group for ETFs. */
+export function groupOf(r: RadarRow): string {
+  return r.cls === "etf" ? etfGroup(r) : (r.sec ?? "—");
+}
+
 export function applyRadar(
   rows: RadarRow[],
   f: Filters,
@@ -140,7 +158,7 @@ export function applyRadar(
     if (r.cls !== f.cls) return false;
     if (preset.filter && !preset.filter(r)) return false;
     if (q && !r.t.toLowerCase().includes(q) && !r.n.toLowerCase().includes(q)) return false;
-    if (f.sectors.length && !f.sectors.includes(r.sec ?? "—")) return false;
+    if (f.sectors.length && !f.sectors.includes(groupOf(r))) return false;
     if (f.states.length && !f.states.includes(r.st)) return false;
     if (f.actions.length && !f.actions.includes(r.act)) return false;
     if (f.onlyProfitable && r.prof !== true) return false;
