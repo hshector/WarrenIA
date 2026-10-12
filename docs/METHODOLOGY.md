@@ -1,4 +1,4 @@
-# Metodología de momentum (v1.2)
+# Metodología de momentum (v1.3)
 
 Toda la configuración vive en [`config/momentum.yaml`](../config/momentum.yaml),
 [`config/universe.yaml`](../config/universe.yaml) y [`config/benchmarks.yaml`](../config/benchmarks.yaml).
@@ -158,6 +158,30 @@ Safety y Value son percentiles entre las acciones del radar, combinadas 40/30/30
 QMJ). Pesos y umbrales en `fundamentals:` de `momentum.yaml`, fijados antes del backtest. Bancos y aseguradoras (SIC
 6000‑6799): el F‑Score y el Z'' no se aplican y no se inventan. Emisores IFRS (muchos ADR): «sin datos», nunca un
 suspenso. El PER sigue publicándose como dato informativo.
+
+**Empresas extranjeras (IFRS) y ADR (v1.3).** Las empresas que presentan sus cuentas en IFRS (la mayoría de los ADR
+europeos) no están en las tablas *frames* de US GAAP. Su informe anual (20‑F/40‑F) se lee del archivo *companyfacts*
+de cada empresa en la SEC, con las mismas medidas (equivalencias de la taxonomía `ifrs-full` en `fundamentals.py`;
+deuda corriente y no corriente separadas para no contarla dos veces). Los ratios no dependen de la moneda; los importes
+se pasan a USD con los tipos de referencia del BCE. En los **ADR** no se calculan ratios de precio (PER, EV/EBIT,
+rentabilidad FCF): el precio es por ADR, la SEC da acciones ordinarias y la relación ADR/acción no está en los datos,
+así que el ratio podría salir varias veces equivocado. Calidad y salud financiera sí se calculan.
+
+**Cambios de señal y avisos.** Cada cálculo compara la acción y el veredicto de mantener de cada valor con la
+publicación anterior y los guarda en `published/signals.json` (120 días). `python -m warrenia_engine notify` envía un
+aviso Web Push por usuario y sesión, como mucho, con lo que le afecta: valores que tiene (sobre todo «considerar
+vender»), valores que sigue y nuevas candidatas (según sus preferencias). Nunca se envía dos veces la misma sesión.
+
+**Proyección de patrimonio (página Plan).** Rentabilidades reales a largo plazo por clase de activo, con su fuente:
+- **Acciones:** 4,5 %, volatilidad 16 %. DMS 1900‑2023 da 5,0 %; se rebaja por las valoraciones actuales.
+- **Oro:** 1 % (Erb y Harvey 2013).
+- **Materias primas:** 1 % (Levine et al. 2018).
+- **Bonos a corto y liquidez:** alrededor de 0 %.
+- **Bitcoin:** 0 %, con volatilidad del 60 %. No tiene flujos de caja ni historia suficiente.
+- **Momentum:** sin prima extra.
+
+Se combinan según la mezcla del plan, con correlaciones de largo plazo. Se simulan 2.000 trayectorias mensuales
+log‑normales con semilla fija y se muestran los percentiles 10, 50 y 90 en euros de hoy, antes de impuestos.
 
 **Validación.** El backtest compara «ranking completo» con «solo Candidatas» y «Candidatas con regla de mantener». La
 regla de esperar es de **prudencia** y no promete más rentabilidad. En el mercado sintético de demostración resta

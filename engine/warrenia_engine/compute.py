@@ -52,7 +52,7 @@ class Context:
 
 
 def build_context(cfg: Config, P: Panels, tickers: pd.DataFrame, fundamentals: pd.DataFrame | None,
-                  facts: pd.DataFrame | None = None) -> Context:
+                  facts: pd.DataFrame | None = None, fx: dict[str, float] | None = None) -> Context:
     ref = tickers.drop_duplicates("ticker", keep="last").set_index("ticker")
     cls = classify_assets(tickers.drop_duplicates("ticker", keep="last"), cfg.universe)
     if fundamentals is not None and not fundamentals.empty:
@@ -60,7 +60,7 @@ def build_context(cfg: Config, P: Panels, tickers: pd.DataFrame, fundamentals: p
         shares = pd.to_numeric(f["shares"], errors="coerce")
         sector = f["sic"].map(sic_to_sector)
         net_income = _recent_net_income(f, P.dates[-1], cfg.momentum["action"]["fundamentals_max_age_days"])
-        fund = _recent_fundamentals(compute_fundamentals(facts, f.reset_index()), P.dates[-1],
+        fund = _recent_fundamentals(compute_fundamentals(facts, f.reset_index(), fx), P.dates[-1],
                                     cfg.momentum["fundamentals"]["max_age_days"])
     else:
         shares = pd.Series(dtype=float)
@@ -87,7 +87,7 @@ def _recent_fundamentals(fund: pd.DataFrame, asof: pd.Timestamp, max_age_days: i
 FUND_FIELDS = ["fscore", "zscore", "gross_profitability", "roa", "cfo_assets", "accruals", "gross_margin",
                "operating_margin", "roe", "revenue_growth", "share_change", "debt_assets", "interest_coverage",
                "ebit_ev", "fcf_yield", "earnings_yield", "pb", "shareholder_yield", "cfo", "fcf", "revenue",
-               "financial", "debt_reported", "fy_end", "fscore_signals"]
+               "financial", "debt_reported", "fy_end", "fscore_signals", "standard", "currency"]
 
 
 def _recent_net_income(f: pd.DataFrame, asof: pd.Timestamp, max_age_days: int) -> pd.Series:
@@ -125,11 +125,14 @@ def evaluate(ctx: Context, t: int, with_states: bool = True, weights_override: d
             # Valuation context (informative; never part of the score): P/E on the last annual net
             # income; `profitable` is 1/0, NaN when unknown (IFRS filers, missing or stale data).
             ni = ctx.net_income.reindex(ind.index)
+            # ADRs: the price is per ADR but SEC share counts are ordinary shares, and the ADR ratio
+            # is not in the data, so any price-based ratio could be off several times: left blank.
+            adr = ind.index[ctx.ref["type"].reindex(ind.index).eq("ADRC").to_numpy()] if "type" in ctx.ref else pd.Index([])
             ind["mcap"] = mcap
             ind["net_income"] = ni
-            ind["pe"] = (mcap / ni).where(ni > 0)
+            ind["pe"] = (mcap / ni).where((ni > 0) & ~ind.index.isin(adr))
             ind["profitable"] = np.where(ni.notna(), (ni > 0).astype(float), np.nan)
-            fv = add_valuation(ctx.fund, mcap) if not ctx.fund.empty else pd.DataFrame(index=ind.index)
+            fv = add_valuation(ctx.fund, mcap, adr) if not ctx.fund.empty else pd.DataFrame(index=ind.index)
             fv = fv.reindex(ind.index)
             for k in FUND_FIELDS:
                 ind[k] = fv[k] if k in fv else np.nan

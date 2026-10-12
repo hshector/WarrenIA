@@ -7,6 +7,7 @@
   python -m warrenia_engine eu-prices   EUR prices (EODHD) + ECB FX for portfolio instruments
   python -m warrenia_engine logos       company logos (Logo.dev) cached in storage, once per ticker
   python -m warrenia_engine backtest    walk-forward backtest -> published/backtest.json
+  python -m warrenia_engine notify      Web Push to each user about today's signal changes (once per session)
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from .storage import LocalStorage, storage_from_env
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="warrenia_engine")
-    ap.add_argument("command", choices=["doctor", "demo", "update", "compute", "eu-prices", "logos", "backtest"])
+    ap.add_argument("command", choices=["doctor", "demo", "update", "compute", "eu-prices", "logos", "backtest", "notify"])
     ap.add_argument("--max-minutes", type=float, default=float(os.environ.get("INGEST_MAX_MINUTES", "300")))
     ap.add_argument("--data-dir", default=None, help="local storage dir (overrides env)")
     args = ap.parse_args(argv)
@@ -60,10 +61,10 @@ def main(argv: list[str] | None = None) -> int:
 
         prov = SyntheticProvider(end=last_closed_session(now).session)
         summary = ingest(prov, Lake(storage), cfg, now=now, fundamentals_provider=prov)
-        # Publish the previous session first so the demo shows state changes between runs.
-        prev = previous_sessions(last_closed_session(now).session, 2)[0]
-        compute_and_publish(storage, cfg, now=session_close_utc(prev) + timedelta(hours=5), demo=True,
-                            provider_name="synthetic (DEMO)")
+        # Publish the previous sessions first so the demo shows state and signal changes between runs.
+        for prev in previous_sessions(last_closed_session(now).session, 3)[:-1]:
+            compute_and_publish(storage, cfg, now=session_close_utc(prev) + timedelta(hours=5), demo=True,
+                                provider_name="synthetic (DEMO)")
         out = compute_and_publish(storage, cfg, now=now, demo=True, provider_name="synthetic (DEMO)")
         from .pipeline import refresh_profiles
         if refresh_profiles(prov, Lake(storage), storage, now=now, max_calls=200).get("fetched"):
@@ -115,6 +116,13 @@ def main(argv: list[str] | None = None) -> int:
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
                 f.write("## Logos (Logo.dev)\n\n```json\n" + json.dumps(out, indent=2, ensure_ascii=False) + "\n```\n")
+        return 0
+
+    if args.command == "notify":
+        from .signals import run_from_env as notify_from_env
+
+        out = notify_from_env(storage)
+        print(json.dumps(out, indent=2, ensure_ascii=False))
         return 0
 
     if args.command == "backtest":

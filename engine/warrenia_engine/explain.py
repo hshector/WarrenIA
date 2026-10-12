@@ -115,7 +115,7 @@ def fundamental_lines(ind: pd.Series) -> tuple[list[dict], list[str]]:
             risks.append(f"Expensive: P/E of {num(ind['pe'], 0)}. Momentum also works in expensive stocks, but their falls tend to be sharper.")
     else:
         ev.append({"label": "Fundamentals", "value": "n/a",
-                   "context": "no US GAAP financial statements at the SEC (often a foreign company)"})
+                   "context": "no annual report data (XBRL) at the SEC for this company"})
     return ev, risks
 
 

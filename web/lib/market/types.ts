@@ -63,7 +63,7 @@ export interface RadarRow {
   hold: boolean; // if already owned: keep (true) or review a sale (false)
   pe: number | null; // P/E on last annual net income (stocks; null if loss-making or unknown)
   prof: boolean | null; // profitable in the last fiscal year (null = unknown)
-  fund?: number | null; // Fundamentals score 0-100 (stocks; null = no US GAAP data)
+  fund?: number | null; // Fundamentals score 0-100 (stocks; null = no annual report data)
   fs?: number | null; // Piotroski F-Score 0-9
   flags_f?: number; // fundamental flags: red x10 + yellow
 }
@@ -317,3 +317,23 @@ export const ACTION_EXPLAIN: Record<ActionKey, string> = {
   avoid: "Weak trend, very volatile, losing steam or financially fragile. Not a buy; if you own it, consider selling.",
   none: "No clear momentum signal.",
 };
+
+/** One stock whose action or hold verdict changed between two published sessions (engine signals.py). */
+export interface SignalEvent {
+  asof: string;
+  t: string;
+  n: string | null;
+  from: ActionKey | "out" | null;
+  to: ActionKey | "out" | null;
+  hold_from: boolean;
+  hold_to: boolean;
+  rank: number | null;
+  ov: number | null;
+  fund: number | null;
+}
+
+export interface SignalLog {
+  updated_at: string;
+  asof: string;
+  events: SignalEvent[];
+}

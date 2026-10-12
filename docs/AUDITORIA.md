@@ -83,6 +83,19 @@ La cartera calcula ahora las ganancias por año y por tipo, y avisa de las pérd
   probado con respuestas simuladas, porque el entorno de desarrollo no llega a sec.gov: la primera ejecución real es la
   prueba.
 
+## 4 ter. Fase 3: avisos, Trade Republic, IFRS, liquidez y proyección
+
+- **Avisos de cambio de señal:** el motor registra cada cambio y el proceso diario envía Web Push (VAPID) una vez
+  por sesión. La web tiene página *Alerts*, preferencias y botón de prueba. Probado con un servicio de push
+  simulado y comprobando que una clave generada en el navegador la acepta `pywebpush`.
+- **CSV de Trade Republic:** se lee su exportación oficial (23 columnas, desde abril de 2026). No hay especificación
+  pública: el formato se tomó de importadores abiertos (Portfolio Performance y otros), y lo que no se puede asignar
+  con seguridad se rechaza con una explicación. **Hay que validarlo con tu primera exportación real.**
+- **IFRS:** fundamentales de empresas extranjeras desde *companyfacts*. Además se corrige un error que ya existía:
+  en los ADR, los ratios de precio mezclaban acciones ordinarias con el precio por ADR.
+- **Liquidez:** bloque opcional (0 % por defecto) que cuenta el efectivo del bróker y los fondos monetarios.
+- **Proyección:** simulación reproducible con supuestos citados; no es una previsión.
+
 ## 5. Lo que queda fuera (limitaciones conocidas)
 
 - Con el plan gratuito hay ~2 años de datos: el backtest sigue sin ser concluyente.

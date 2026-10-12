@@ -294,7 +294,7 @@ def decide(ind: pd.Series, sc: pd.Series, state: dict, cfg: dict, cls: str = "st
             why.append("It also just broke to a new high on strong volume")
         has_fund = any(np.isfinite(f(ind.get(k))) for k in ("roa", "fscore", "zscore"))
         if cls == "stock" and not has_fund:
-            why.append("No US GAAP financial statements (e.g. foreign company): check the fundamentals yourself")
+            why.append("No annual report data at the SEC for this company: check its fundamentals yourself")
         elif cls == "stock" and bool(ind.get("financial")) is True:
             why.append("Bank or insurer: the health scores (F-Score, Z'') do not apply; profitability checks passed")
         elif cls == "stock":

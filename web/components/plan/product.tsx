@@ -2,8 +2,12 @@ import { cx } from "@/components/ui/primitives";
 import { dateLabel, num, pct } from "@/lib/format";
 import type { Product } from "@/lib/plan/catalog";
 import type { ProxyStats } from "@/lib/market/types";
+import type { PlanKey } from "@/lib/portfolio/types";
 
-export const TAX_LABEL = { gain: "Capital gain when sold", rcm: "Capital income (rendimiento) when sold" } as const;
+/** Colour of each plan block (dots and bars). */
+export const BUCKET_DOT: Record<PlanKey, string> = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet", cash: "bg-info" };
+
+export const TAX_LABEL = { gain: "Capital gain when sold", rcm: "Capital income (rendimiento) when sold", interest: "Interest taxed every year" } as const;
 
 /** One product: what it is, what's inside, what it costs and how it has behaved. */
 export function ProductCard({ p, stats, compact = false, selected = false }: { p: Product; stats?: ProxyStats; compact?: boolean; selected?: boolean }) {
@@ -15,10 +19,14 @@ export function ProductCard({ p, stats, compact = false, selected = false }: { p
             <p className="mb-1 text-[12px] font-semibold uppercase tracking-[0.04em] text-accent-2">{selected ? "Your choice" : "Recommended"}</p>
           )}
           <p className="text-[15.5px] font-semibold leading-snug">{p.name}</p>
-          <p className="num mt-0.5 select-all text-[13.5px] text-ink-2">ISIN {p.isin}</p>
+          {p.vehicle === "Cash account" ? (
+            <p className="mt-0.5 text-[13.5px] text-ink-2">No ISIN: it is the balance of your account</p>
+          ) : (
+            <p className="num mt-0.5 select-all text-[13.5px] text-ink-2">ISIN {p.isin}</p>
+          )}
         </div>
         <span className="num shrink-0 rounded-full bg-surface px-3 py-1 text-[13px] font-semibold whitespace-nowrap">
-          {pct(p.ter, 2, false)} a year
+          {p.ter === 0 ? "No fee" : `${pct(p.ter, 2, false)} a year`}
         </span>
       </div>
       <p className="mt-2 text-[14.5px]">{p.role}</p>

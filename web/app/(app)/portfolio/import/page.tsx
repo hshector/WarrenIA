@@ -16,12 +16,17 @@ export default function ImportPage() {
         </Panel>
         <Panel title="Accepted format">
           <div className="flex flex-col gap-3 text-[13px] text-ink-2">
+            <p className="text-ink">
+              <b>Trade Republic:</b> upload its CSV as it comes. In the app or at app.traderepublic.com: Profile → Documents (Statements) → Transaction export → pick the period →
+              CSV. It is recognised automatically.
+            </p>
+            <p>Any other broker: a CSV with these columns.</p>
             <p>Required columns: <code className="font-mono text-ink">date</code> and <code className="font-mono text-ink">type</code>. Optional: isin, ticker, name, quantity, price, amount, fees, taxes, currency, fx_rate, ratio, note (Spanish and German headers also work).</p>
             <p>Types: buy, sell, deposit, withdrawal, dividend, interest, fee, tax, split.</p>
             <p>Separator &ldquo;;&rdquo; with decimal commas, or &ldquo;,&rdquo; with decimal points. Dates YYYY-MM-DD or DD/MM/YYYY.</p>
             <p>Repeated rows are detected (re-importing does not duplicate them). Unknown instruments are created with manual pricing; review them afterwards.</p>
             <p className="t-meta">
-              Trade Republic has no public API: no credentials are ever asked for. If you export your activity, map the columns to this format (template in docs/import-template.csv).
+              No credentials are ever asked for: you upload a file you exported yourself. Template for other brokers: docs/import-template.csv.
             </p>
           </div>
         </Panel>

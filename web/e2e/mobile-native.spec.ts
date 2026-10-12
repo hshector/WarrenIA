@@ -48,7 +48,10 @@ test("delete asks in an in-app dialog and confirms with a toast", async ({ page 
   await page.getByRole("button", { name: "Instrument" }).first().click();
   await page.getByLabel("Name").fill(name);
   await page.getByLabel("Price source").selectOption("manual");
-  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  // The sheet scrolls on its own; centre the button first so a long page behind it cannot shift it mid-click.
+  const save = page.getByRole("dialog").getByRole("button", { name: "Save" });
+  await save.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await save.click();
   await expect(page.getByText("Instrument saved")).toBeVisible();
   await expect(page.getByRole("dialog")).toBeHidden(); // success closes the sheet
 

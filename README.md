@@ -1,6 +1,6 @@
 # WarrenIA
 
-Sistema personal de inteligencia financiera: **Plan** (qué comprar cada mes: ETF global, oro y momentum, con fiscalidad española), **Momentum Radar** (screener cuantitativo de momentum, explicable y
+Sistema personal de inteligencia financiera: **Plan** (qué comprar cada mes: ETF global, diversificadores, momentum y liquidez opcional, con fiscalidad española y proyección de patrimonio), **Alertas** (avisos push de cambios de señal), **Momentum Radar** (screener cuantitativo de momentum, explicable y
 reproducible) y **Portfolio** (cartera con FIFO, TWR, TIR y desviación frente a objetivos). Es una web Next.js
 desplegable en Vercel e instalable como PWA.
 
@@ -13,7 +13,7 @@ desplegable en Vercel e instalable como PWA.
 | Web | `web/` (Next.js 16 + TypeScript + Tailwind 4) · Vercel |
 | Persistencia | Supabase: Postgres con RLS, Auth por enlace mágico y Storage privado |
 | Configuración de la metodología | `config/*.yaml` |
-| Documentación | [Metodología](docs/METHODOLOGY.md) · [Auditoría](docs/AUDITORIA.md) · [Fuentes de datos](docs/DATA_SOURCES.md) · [Validación](docs/BACKTEST.md) · [Arquitectura](docs/ARCHITECTURE.md) · [**Puesta en marcha**](docs/DEPLOY.md) · [Plan](docs/PLAN.md) |
+| Documentación | [Metodología](docs/METHODOLOGY.md) · [Auditoría](docs/AUDITORIA.md) · [Fuentes de datos](docs/DATA_SOURCES.md) · [Validación](docs/BACKTEST.md) · [Arquitectura](docs/ARCHITECTURE.md) · [**Puesta en marcha**](docs/DEPLOY.md) · [**Guía paso a paso**](docs/GUIA.md) · [Plan](docs/PLAN.md) |
 
 ## Prueba rápida en local (datos de demostración)
 
@@ -26,9 +26,9 @@ cd web && npm ci && WARRENIA_LOCAL_MODE=1 npm run dev                   # http:/
 ## Tests
 
 ```bash
-cd engine && pytest -q                         # 86 tests: ajustes, indicadores, scores, reglas, señal de acción, fundamentales (F-Score, Z''), proveedores, look-ahead, backtest
-cd web && npm test                             # 62 tests: FIFO, TWR, XIRR, fiscalidad, CSV, frescura, radar, catálogo, formato, seguridad
-cd web && npm run build && npx playwright test # 58 E2E: plan (selector de núcleo y diversificadores), radar, ficha, cartera, importación, responsive, PWA, móvil, modo oscuro, caso peor
+cd engine && pytest -q                         # 100 tests: ajustes, indicadores, scores, reglas, señal de acción, fundamentales (US GAAP e IFRS), avisos, proveedores, look-ahead, backtest
+cd web && npm test                             # 77 tests: FIFO, TWR, XIRR, fiscalidad, CSV y Trade Republic, liquidez, proyección, avisos, radar, catálogo, formato, seguridad
+cd web && npm run build && npx playwright test # 68 E2E: plan (núcleo, diversificadores, liquidez, proyección), alertas y notificaciones, importación de Trade Republic, IFRS, radar, ficha, cartera, importación, responsive, PWA, móvil, modo oscuro, caso peor
 ```
 
 Para ver la interfaz con datos extremos pero realistas (nombres muy largos, cifras de ocho dígitos, posiciones de

@@ -12,6 +12,8 @@ import { dateLabel, dateTimeLabel, int, num, pct } from "@/lib/format";
 import { computeFreshness } from "@/lib/market/freshness";
 import { getBacktest, getExcluded, loadMarket } from "@/lib/market/source";
 import type { Meta } from "@/lib/market/types";
+import { NotifySettings } from "@/components/alerts/notify-settings";
+import { DEFAULT_NOTIFY } from "@/lib/market/signals";
 import { appMode } from "@/lib/supabase/env";
 import { requireStore } from "@/lib/user/store";
 
@@ -22,6 +24,7 @@ const TABS = [
   ["method", "How it is calculated"],
   ["backtest", "Historical test"],
   ["portfolio", "Portfolio target"],
+  ["notifications", "Notifications"],
   ["account", "Account"],
 ] as const;
 
@@ -71,6 +74,13 @@ const MENU: { group: string; items: { href: string; label: string; sub: string }
       { href: "/plan", label: "Products in each block", sub: "Core fund, diversifiers, momentum" },
       { href: "/portfolio/transactions", label: "Transactions and instruments", sub: "Edit or delete" },
       { href: "/portfolio/import", label: "Import CSV", sub: "With preview" },
+    ],
+  },
+  {
+    group: "Alerts",
+    items: [
+      { href: "/settings?tab=notifications", label: "Notifications", sub: "Signal changes on your phone" },
+      { href: "/alerts", label: "Recent signal changes", sub: "What changed after each update" },
     ],
   },
   { group: "Account", items: [{ href: "/settings?tab=account", label: "Account", sub: "Session" }] },
@@ -133,6 +143,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {tab === "method" && (meta ? <MethodTab meta={meta} /> : <EmptyState title="No data published" />)}
       {tab === "backtest" && <BacktestTab />}
       {tab === "portfolio" && <PortfolioTab />}
+      {tab === "notifications" && <NotificationsTab />}
       {tab === "account" && <AccountTab />}
     </div>
   );
@@ -209,7 +220,7 @@ async function DataTab({ latest, meta, q }: { latest: Awaited<ReturnType<typeof 
         <div className="grid gap-4 text-[13px] text-ink-2 md:grid-cols-2">
           <ul className="flex flex-col gap-2">
             <li><span className="text-ink">US prices (stocks and ETFs):</span> Massive (formerly Polygon.io), free plan: end of day, ~2 years of history, 5 requests/min. One request returns the whole market for a day. Company descriptions come from the same provider.</li>
-            <li><span className="text-ink">Company size, sector and annual reports:</span> SEC EDGAR (official, free): shares outstanding × price; sector approximated from the SIC code (not GICS); financial statements from XBRL filings (US GAAP).</li>
+            <li><span className="text-ink">Company size, sector and annual reports:</span> SEC EDGAR (official, free): shares outstanding × price; sector approximated from the SIC code (not GICS); financial statements from XBRL filings (US GAAP frames; IFRS filers such as European ADRs from each company&apos;s own file, converted to USD at ECB rates).</li>
             <li><span className="text-ink">Exchange rates:</span> ECB reference rates (official, daily).</li>
             <li><span className="text-ink">EUR prices of ETFs/ETCs:</span> EODHD free plan (~20 calls/day): enough for a handful of portfolio instruments.</li>
           </ul>
@@ -332,7 +343,7 @@ function MethodTab({ meta }: { meta: Meta }) {
           <p className="t-body">Not available.</p>
         )}
       </Panel>
-      <Panel title="Fundamentals" meta="From the last annual report (SEC, US GAAP) · percentiles among stocks · config/momentum.yaml" className="xl:col-span-2">
+      <Panel title="Fundamentals" meta="From the last annual report (SEC, US GAAP or IFRS) · percentiles among stocks · config/momentum.yaml" className="xl:col-span-2">
         {m.fundamentals ? (
           <div className="grid gap-4 text-[12.5px] md:grid-cols-4">
             {Object.entries(m.fundamentals.scores).map(([s, comps]) => (
@@ -482,6 +493,16 @@ async function PortfolioTab() {
     <Panel title="Target weights and bands" meta="Guidance: you do not have to hit them exactly. Products are chosen in the Plan.">
       <SettingsForm settings={s} />
     </Panel>
+  );
+}
+
+async function NotificationsTab() {
+  const store = await requireStore();
+  const [s, devices] = await Promise.all([store.settings(), store.pushSubscriptions().catch(() => [])]);
+  return (
+    <div className="max-w-[640px]">
+      <NotifySettings publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null} prefs={{ ...DEFAULT_NOTIFY, ...s.notify }} devices={devices.length} />
+    </div>
   );
 }
 

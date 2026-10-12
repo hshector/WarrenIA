@@ -163,6 +163,27 @@ describe("targets and contribution plan", () => {
     expect(plan.core).toBeGreaterThanOrEqual(0);
   });
 
+  it("cash is ignored at 0% and becomes a block (broker cash counts) when it has a target", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 1200 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "etf", quantity: 9, price: 100 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "gold", quantity: 1, price: 100 }),
+    ];
+    const r = computePortfolio([ETF, GOLD], txs, { ...flat("etf", 100), ...flat("gold", 100) }, {}, "2026-01-05");
+    const off = targetDeviation(r, DEFAULT_SETTINGS);
+    expect(off.map((d) => d.bucket)).toEqual(["core", "gold", "momentum"]);
+    expect(off[0].weight).toBeCloseTo(0.9); // the 200 € of idle cash is left out
+    const withCash = { ...DEFAULT_SETTINGS, targets: { core: 0.7, gold: 0.1, momentum: 0.1, cash: 0.1 } };
+    const on = targetDeviation(r, withCash);
+    expect(on.map((d) => d.bucket)).toEqual(["core", "gold", "momentum", "cash"]);
+    expect(on.find((d) => d.bucket === "cash")!.weight).toBeCloseTo(200 / 1200);
+    expect(on.find((d) => d.bucket === "core")!.weight).toBeCloseTo(900 / 1200);
+    const plan = contributionPlan({ core: 900, gold: 100, momentum: 0, cash: 200 }, 0, withCash.targets, 300);
+    expect(plan.core + plan.gold + plan.momentum + plan.cash).toBeCloseTo(300);
+    expect(plan.cash).toBe(0); // cash is above its 10% target: the euros go to the blocks behind
+    expect(contributionPlan({ core: 0, gold: 0, momentum: 0 }, 0, DEFAULT_SETTINGS.targets, 400).cash).toBe(0);
+  });
+
   it("first contribution follows the targets exactly", () => {
     const plan = contributionPlan({ core: 0, gold: 0, momentum: 0 }, 0, DEFAULT_SETTINGS.targets, 400);
     expect(plan.core).toBeCloseTo(300);

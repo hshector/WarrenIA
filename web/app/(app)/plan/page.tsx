@@ -1,15 +1,16 @@
 import Link from "next/link";
 
 import { ActionPill, AssetAvatar, DeltaPill } from "@/components/fin/fin";
-import { CoreChooser, DiversifierPicker, PlanSplit } from "@/components/plan/choosers";
+import { CashPicker, CoreChooser, DiversifierPicker, PlanSplit } from "@/components/plan/choosers";
 import { ProductCard } from "@/components/plan/product";
+import { WealthProjection } from "@/components/plan/projection";
 import { PageHeader } from "@/components/shell/page-header";
 import { Callout, Card } from "@/components/ui/primitives";
 import { dateLabel, money, pct } from "@/lib/format";
 import { hasActions } from "@/lib/market/radar";
 import { getMarket, getRadar, loadMarket } from "@/lib/market/source";
 import { BUCKET_NAME, byIsin, MIN_SLEEVE_FOR_STOCKS_EUR, momentumRoute, normaliseChoices, recommended, STOCK_POSITIONS, VERIFIED_ON } from "@/lib/plan/catalog";
-import { targetDeviation } from "@/lib/portfolio/engine";
+import { activeKeys, blockValues, targetDeviation } from "@/lib/portfolio/engine";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { requireStore } from "@/lib/user/store";
 
@@ -34,7 +35,7 @@ export default async function PlanPage() {
   const [radar, market, pf] = await Promise.all([getRadar(latest), getMarket(latest), loadPortfolio(store, latest, meta)]);
   const res = pf.result;
   const dev = res ? targetDeviation(res, pf.settings) : null;
-  const values = dev ? (Object.fromEntries(dev.map((d) => [d.bucket, d.value])) as Record<"core" | "gold" | "momentum", number>) : { core: 0, gold: 0, momentum: 0 };
+  const values = blockValues(dev);
   const choices = normaliseChoices(pf.settings.choices);
   const stats = market?.proxies ?? {};
   const momEtf = recommended("momentum");
@@ -48,7 +49,12 @@ export default async function PlanPage() {
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
       <PageHeader title="Your plan" sub="What to buy each month, with which product and why. Built for a Spanish tax resident." />
 
-      <Card title="This month" sub={`${BUCKET_NAME.core} ${pct(t.core, 0, false)} · ${BUCKET_NAME.gold} ${pct(t.gold, 0, false)} · ${BUCKET_NAME.momentum} ${pct(t.momentum, 0, false)}`}>
+      <Card
+        title="This month"
+        sub={activeKeys(t)
+          .map((k) => `${BUCKET_NAME[k]} ${pct(t[k], 0, false)}`)
+          .join(" · ")}
+      >
         <PlanSplit
           values={values}
           other={res?.allocation.find((a) => a.bucket === "other")?.value ?? 0}
@@ -68,6 +74,10 @@ export default async function PlanPage() {
             <>Don&apos;t check the portfolio every day. The plan works by being consistent, not by timing the market.</>,
           ]}
         />
+      </Card>
+
+      <Card id="projection" title="Where this could take you" sub="A range of outcomes for your plan, not a promise. Stocks can fall by half along the way.">
+        <WealthProjection start={res?.totals.value ?? 0} monthly={pf.settings.monthly_contribution} targets={t} choices={choices} />
       </Card>
 
       <Card id="core" title={`1. ${BUCKET_NAME.core} (${pct(t.core, 0, false)})`} sub="The base: the world stock market at the lowest cost. No stock picking here.">
@@ -153,6 +163,31 @@ export default async function PlanPage() {
               </Link>
             </div>
           )}
+        </div>
+      </Card>
+
+      <Card id="cash" title={`4. ${BUCKET_NAME.cash} (${pct(t.cash ?? 0, 0, false)}, optional)`} sub="Money you may need in the next few years, kept safe. Not an investment: after inflation it barely grows.">
+        <Bullets
+          items={[
+            <>
+              <b>Usually 0%.</b> Over long periods cash loses to inflation, and the diversifiers already soften falls. Keep cash for an emergency fund (3-6 months of spending) or for
+              something you will pay within ~3 years: that money should not be in stocks.
+            </>,
+            <>
+              To hold it as part of the plan, set a <b>Cash %</b> in{" "}
+              <Link href="/settings?tab=portfolio" className="text-accent">
+                Settings → Target mix
+              </Link>
+              . Then the cash in your broker account (and any money-market ETF you mark as Cash) counts towards it, and the monthly split tops it up when it falls behind.
+            </>,
+            <>
+              <b>Tax:</b> account interest is taxed every year (Trade Republic&apos;s Spanish branch withholds 19%). A money-market ETF that reinvests is taxed only when you sell, as a capital
+              gain.
+            </>,
+          ]}
+        />
+        <div className="mt-4">
+          <CashPicker current={choices.cash} />
         </div>
       </Card>
 

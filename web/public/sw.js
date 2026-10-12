@@ -40,3 +40,39 @@ self.addEventListener("fetch", (event) => {
   }
   // Everything else (API, RSC payloads, data): straight to the network.
 });
+
+// Signal-change notifications (Web Push, sent by the daily job or the test button).
+self.addEventListener("push", (event) => {
+  let d = {};
+  try {
+    d = event.data ? event.data.json() : {};
+  } catch {
+    d = { body: event.data ? event.data.text() : "" };
+  }
+  const title = d.title || "WarrenIA";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: d.body || "Signals changed. Open WarrenIA to see them.",
+      tag: d.tag || "warrenia",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: typeof d.url === "string" && d.url.startsWith("/") ? d.url : "/alerts" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || "/alerts", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if (w.url.startsWith(self.location.origin) && "focus" in w) {
+          w.navigate(url);
+          return w.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

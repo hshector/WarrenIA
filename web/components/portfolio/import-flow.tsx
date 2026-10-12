@@ -67,6 +67,11 @@ export function ImportFlow() {
       </div>
       {result && !result.ok && <Callout tone="neg">{result.message}</Callout>}
       {preview && preview.headerErrors.length > 0 && <Callout tone="neg" title="Invalid header">{preview.headerErrors.join(" · ")}</Callout>}
+      {preview?.format === "trade_republic" && (
+        <Callout tone="accent" title="Trade Republic export recognised">
+          Savings plans, buys, sales, dividends (net of tax), interest, card payments and transfers are mapped for you. Rows we cannot map safely are listed with what to do.
+        </Callout>
+      )}
       {preview && preview.rows.length > 0 && (
         <div className="overflow-x-auto rounded-[10px] border border-line">
           <p className="px-3 py-2 text-[12.5px] text-ink-2">
@@ -85,13 +90,17 @@ export function ImportFlow() {
               </tr>
             </thead>
             <tbody>
-              {preview.rows.map((r) => (
-                <tr key={r.line} className="border-b border-line">
+              {preview.rows.map((r, i) => (
+                <tr key={`${r.line}-${i}`} className="border-b border-line">
                   <td className="num px-3 py-1.5 text-ink-3">{r.line}</td>
                   <td className="num px-3 py-1.5">{r.tx?.trade_date ?? "—"}</td>
-                  <td className="px-3 py-1.5">{r.tx ? TX_LABELS[r.tx.type] : "—"}</td>
+                  <td className="px-3 py-1.5">
+                    {r.tx ? TX_LABELS[r.tx.type] : "—"}
+                    {r.source && <span className="block text-[11px] text-ink-3">{r.source}</span>}
+                  </td>
                   <td className="px-3 py-1.5 text-ink-2">
                     {r.match ?? r.name ?? r.isin ?? r.ticker ?? "—"} {r.willCreate && <Badge tone="info">new</Badge>}
+                    {r.willCreate && r.newAs && <span className="block text-[11px] text-ink-3">{r.newAs}</span>}
                   </td>
                   <td className="num px-3 py-1.5 text-right">{r.tx?.quantity !== null && r.tx?.quantity !== undefined ? num(r.tx.quantity, 4) : ""}</td>
                   <td className="num px-3 py-1.5 text-right">{r.tx ? num(r.tx.price ?? r.tx.amount ?? null) : ""}</td>

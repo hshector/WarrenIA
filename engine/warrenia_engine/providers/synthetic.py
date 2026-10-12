@@ -33,6 +33,9 @@ SECTORS = {
 }
 
 
+IFRS_DEMO = 22  # X023: IFRS filer with ADRs (fundamentals from a companyfacts file, in EUR)
+
+
 class SyntheticProvider:
     name = "synthetic"
     demo = True
@@ -44,6 +47,7 @@ class SyntheticProvider:
         self.rng = np.random.default_rng(seed)
         self.seed = seed
         self.rng_fund = np.random.default_rng(seed + 1)  # separate stream: price paths stay unchanged
+        self._ifrs: dict[int, dict] = {}
         self._build(n_stocks, n_etfs)
 
     # ------------------------------------------------------------------ build
@@ -136,6 +140,8 @@ class SyntheticProvider:
             dvol = mcap * float(rng.uniform(0.002, 0.012))
             start, stop = 0, None
             kind = "CS" if rng.random() > 0.08 else "ADRC"
+            if i == IFRS_DEMO:
+                kind = "ADRC"  # a European company listed through ADRs, reporting under IFRS in EUR
             if i == 3:  # penny stock
                 p0 = 2.0
             if i == 5:  # illiquid
@@ -154,10 +160,16 @@ class SyntheticProvider:
             ni = mcap / float(np.exp(rf.normal(np.log(22), 0.6)))
             if rf.random() < 0.12:
                 ni = -mcap * float(rf.uniform(0.01, 0.08))
-            if i == 11:
-                ni = None  # IFRS / foreign filer: unknown
+            if i in (11, IFRS_DEMO):
+                ni = None  # foreign filer: no US GAAP data (X023's IFRS report comes from companyfacts)
             if ni is not None and shares is not None:
                 facts.extend(self._facts(900000 + i, mcap, ni, shares, rf, fy_end=dates[-200]))
+            elif i == IFRS_DEMO and shares is not None:
+                self._facts(900000 + i, mcap, mcap / 20, shares, rf, fy_end=dates[-200])  # same draws: other companies unchanged
+                ri = np.random.default_rng(self.seed + 3)  # own stream: the other companies stay unchanged
+                ni_usd = mcap / float(np.exp(ri.normal(np.log(18), 0.3)))
+                self._ifrs[900000 + i] = self._companyfacts_json(
+                    self._facts(900000 + i, mcap / self.EURUSD, ni_usd / self.EURUSD, shares, ri, fy_end=dates[-150]))
             fundamentals.append({"ticker": tk, "cik": f"{900000 + i:010d}", "sic": SECTORS[sname][1],
                                  "sic_description": f"Demo SIC {SECTORS[sname][1]}", "shares": shares,
                                  "shares_asof": dates[-60].date(), "net_income": ni,
@@ -254,7 +266,7 @@ class SyntheticProvider:
         def add(concept, tag, k_end, val, kind_="dur"):
             e = ends[k_end]
             start = (e - pd.DateOffset(years=1) + pd.Timedelta(days=1)).date().isoformat() if kind_ == "dur" else None
-            rows.append((cik, concept, tag, kind_, start, e.date().isoformat(), float(val)))
+            rows.append((cik, concept, tag, kind_, start, e.date().isoformat(), float(val), "USD"))
 
         turnover, gm = u(0.4, 1.2), u(0.2, 0.7)
         sh_prev = shares * u(0.97, 1.0)
@@ -291,6 +303,34 @@ class SyntheticProvider:
                 -a * 0.4 if 0.06 <= kind < 0.10 else eq * u(-0.2, 1.0), "inst")
             add("lt_debt_noncurrent", "LongTermDebtNoncurrent", k, liab * u(0.1, 0.6), "inst")
         return rows
+
+    EURUSD = 1.08
+
+    @staticmethod
+    def _companyfacts_json(rows: list[tuple]) -> dict:
+        """The same statements as an IFRS filer's SEC companyfacts file (EUR, form 20-F)."""
+        from ..fundamentals import IFRS_TAGS
+
+        facts: dict = {"ifrs-full": {}}
+        for cik, concept, _tag, kind, start, end, val, _unit in rows:
+            tags = IFRS_TAGS.get(concept)
+            if not tags:
+                continue
+            unit = "shares" if concept == "diluted_shares" else "EUR"
+            item = {"end": end, "val": val, "form": "20-F", "fp": "FY", "filed": "2026-03-01"}
+            if kind == "dur":
+                item["start"] = start
+            facts["ifrs-full"].setdefault(tags[0], {"units": {}})["units"].setdefault(unit, []).append(item)
+        return {"cik": rows[0][0] if rows else None, "entityName": "Demo IFRS filer", "facts": facts}
+
+    def companyfacts(self, cik: int) -> list[tuple]:
+        from ..fundamentals import parse_companyfacts
+
+        js = self._ifrs.get(int(cik))
+        return parse_companyfacts(js, int(cik)) if js else []
+
+    def fx_rates(self) -> dict[str, float]:
+        return {"USD": 1.0, "EUR": self.EURUSD, "GBP": 1.27, "CHF": 1.12, "DKK": 0.145}
 
     def ticker_details(self, ticker: str) -> dict:
         row = self._tickers[self._tickers["ticker"] == ticker]

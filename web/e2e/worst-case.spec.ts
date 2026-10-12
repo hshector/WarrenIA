@@ -10,7 +10,7 @@ import path from "node:path";
 const store = JSON.parse(readFileSync(path.resolve(process.cwd(), ".data", "e2e-worst", "user.json"), "utf8"));
 const TOP = store.instruments[1].market_ticker as string;
 
-const PAGES = ["/", "/plan", "/radar", `/research/${TOP}`, "/portfolio", "/portfolio/transactions", "/watchlist"];
+const PAGES = ["/", "/plan", "/radar", `/research/${TOP}`, "/portfolio", "/portfolio/transactions", "/watchlist", "/alerts", "/settings?tab=notifications"];
 
 for (const p of PAGES) {
   test(`worst case renders without clipping on ${p}`, async ({ page }) => {

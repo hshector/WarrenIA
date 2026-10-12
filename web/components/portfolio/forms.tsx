@@ -158,7 +158,7 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
         <Field label="Pick from your plan" hint="Fills in name, ISIN, type and block" className="mb-3.5">
           <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Pick from your plan">
             <option value="">Another instrument…</option>
-            {PRODUCTS.map((p) => (
+            {PRODUCTS.filter((p) => p.vehicle !== "Cash account").map((p) => (
               <option key={p.isin} value={p.isin}>
                 {BUCKET_LABELS[p.bucket]} · {p.name}
                 {p.recommended ? " (recommended)" : ""}
@@ -186,7 +186,7 @@ export function InstrumentForm({ instrument, trigger }: { instrument?: Instrumen
         </Field>
         <Field label="Plan block">
           <Select name="bucket" defaultValue={d.bucket ?? "core"}>
-            {(["core", "gold", "momentum", "other"] as const).map((b) => (
+            {(["core", "gold", "momentum", "cash", "other"] as const).map((b) => (
               <option key={b} value={b}>
                 {BUCKET_LABELS[b]}
               </option>
@@ -301,6 +301,9 @@ export function SettingsForm({ settings }: { settings: Settings }) {
       </Field>
       <Field label="Momentum %">
         <Input name="momentum" inputMode="decimal" defaultValue={Math.round(settings.targets.momentum * 1000) / 10} />
+      </Field>
+      <Field label="Cash %" hint="Optional, usually 0">
+        <Input name="cash" inputMode="decimal" defaultValue={Math.round((settings.targets.cash ?? 0) * 1000) / 10} />
       </Field>
       <Field label="Absolute band (pp)" hint="Tolerated drift">
         <Input name="band_abs" inputMode="decimal" defaultValue={Math.round(settings.band_abs * 1000) / 10} />

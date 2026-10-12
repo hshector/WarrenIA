@@ -4,6 +4,7 @@ import { Wordmark } from "@/components/shell/brand";
 import { DataBanners, FreshnessStamp } from "@/components/shell/freshness";
 import { TabBar, TopNav } from "@/components/shell/nav";
 import { RefreshButton } from "@/components/shell/refresh-button";
+import { IconBell } from "@/components/ui/icons";
 import { computeFreshness } from "@/lib/market/freshness";
 import { loadMarket } from "@/lib/market/source";
 
@@ -22,6 +23,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <TopNav />
           <div className="flex items-center gap-2">
             <FreshnessStamp latest={latest} fresh={fresh} />
+            <Link href="/alerts" aria-label="Alerts" className="tap inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-3/70 text-ink-2 hover:text-ink">
+              <IconBell size={17} />
+            </Link>
             <RefreshButton />
           </div>
         </div>

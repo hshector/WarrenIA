@@ -106,3 +106,42 @@ test("asset API validates input", async ({ request }) => {
   expect(ok.status()).toBe(200);
   expect(ok.headers()["cache-control"]).toContain("no-store");
 });
+
+test("plan: wealth projection and the optional cash block", async ({ page }) => {
+  await page.goto("/plan");
+  await expect(page.getByRole("heading", { name: "Where this could take you" })).toBeVisible();
+  await expect(page.getByText(/Chance of ending with less than you put in/)).toBeVisible();
+  await page.getByRole("tablist", { name: "Years" }).getByRole("tab", { name: "40 y" }).click();
+  await expect(page.getByText("In 40 years, in today's euros (after inflation)")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /4\. Cash/ })).toBeVisible();
+  await expect(page.getByText("No ISIN: it is the balance of your account").first()).toBeVisible();
+  await expect(page.getByText("ISIN LU0290358497").first()).toBeVisible();
+});
+
+test("alerts page and notification settings", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Alerts", exact: true }).click();
+  await expect(page).toHaveURL(/\/alerts/);
+  await expect(page.getByRole("heading", { name: "Alerts" })).toBeVisible();
+  await expect(page.getByText(/Close of /).first()).toBeVisible();
+  await page.getByText(/Every change that day/).click();
+  await expect(page.getByText(/ → /).first()).toBeVisible();
+  await page.goto("/settings?tab=notifications");
+  await expect(page.getByRole("switch", { name: /Stocks you own/ })).toHaveAttribute("aria-checked", "true");
+  // Without a VAPID key configured, the page offers to generate one in the browser.
+  await page.getByRole("button", { name: "Generate keys" }).click();
+  await expect(page.getByText("Private key (secret)")).toBeVisible();
+  await page.getByRole("switch", { name: /New buy candidates/ }).click();
+  await expect(page.getByRole("switch", { name: /New buy candidates/ })).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("switch", { name: /New buy candidates/ })).toBeEnabled(); // saved
+  await page.reload();
+  await expect(page.getByRole("switch", { name: /New buy candidates/ })).toHaveAttribute("aria-checked", "false");
+  await page.getByRole("switch", { name: /New buy candidates/ }).click();
+});
+
+test("IFRS filer with ADRs: fundamentals from its euro report, no price ratios", async ({ page }) => {
+  await page.goto("/research/X023");
+  await expect(page.getByText(/SEC annual report \(IFRS/)).toBeVisible();
+  await expect(page.getByText(/reported in EUR/)).toBeVisible();
+  await expect(page.getByText("n/a (ADR)").first()).toBeVisible();
+});

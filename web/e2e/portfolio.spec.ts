@@ -78,3 +78,29 @@ test("CSV import: preview, validation errors, idempotent re-import", async ({ pa
   await page.goto("/portfolio/transactions");
   await expect(page.getByText("Transactions (4)")).toBeVisible();
 });
+
+test("Trade Republic CSV is recognised: catalog ETF and US stock found by name", async ({ page }) => {
+  const H =
+    '"datetime","date","account_type","category","type","asset_class","name","symbol","shares","price","amount","fee","tax","currency","original_amount","original_currency","fx_rate","description","transaction_id","counterparty_name","counterparty_iban","payment_reference","mcc_code"';
+  const r = (d: string, cat: string, type: string, cls: string, name: string, isin: string, sh: string, px: string, amt: string, fee: string, id: string) =>
+    `"${d}T08:00:00.000Z","${d}","DEFAULT","${cat}","${type}","${cls}","${name}","${isin}","${sh}","${px}","${amt}","${fee}","","EUR","","","","","${id}","","","",""`;
+  const csv = [
+    H,
+    r("2026-03-09", "CASH", "CUSTOMER_INBOUND", "", "", "", "", "", "1000.00", "", "a1"),
+    r("2026-03-10", "TRADING", "SAVINGS_PLAN_EXECUTED", "FUND", "Vanguard FTSE All-World (Acc)", "IE00BK5BQT80", "2.0000000000", "120.000000", "-240.00", "0.00", "a2"),
+    r("2026-03-11", "TRADING", "BUY", "STOCK", "Demo Materials 682", "US0000006826", "1.0000000000", "50.000000", "-50.00", "-1.00", "a3"),
+    r("2026-03-12", "DELIVERY", "MIGRATION", "STOCK", "Other Corp", "US0000000018", "3.0000000000", "", "", "", "a4"),
+  ].join("\n");
+  await page.goto("/portfolio/import");
+  await page.locator("textarea").fill(csv);
+  await page.getByRole("button", { name: "Preview and check" }).click();
+  await expect(page.getByText("Trade Republic export recognised")).toBeVisible();
+  await expect(page.getByText("3 valid · 1 with errors")).toBeVisible();
+  await expect(page.getByText(/price you originally paid/)).toBeVisible();
+  await expect(page.getByText(/Core · price from your trades/)).toBeVisible();
+  await expect(page.getByText(/US stock X682, priced daily/)).toBeVisible();
+  await page.getByRole("button", { name: /Import 3 valid rows/ }).click();
+  await expect(page.getByText(/3 transactions imported/)).toBeVisible();
+  await page.goto("/portfolio/transactions");
+  await expect(page.getByText("Vanguard FTSE All-World UCITS ETF (USD) Accumulating").first()).toBeVisible();
+});

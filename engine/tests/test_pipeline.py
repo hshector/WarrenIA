@@ -103,3 +103,11 @@ def test_proxy_stats_describe_asset_classes(cfg, now):
     assert st["ACWI"]["corr_stocks"] > 0.8 and st["IEF"]["corr_stocks"] < 0 and st["GLD"]["corr_stocks"] < 0.2
     assert st["IBIT"]["vol"] > st["GLD"]["vol"] > st["IEF"]["vol"]
     assert 0 < st["IBIT"]["max_drawdown"] < 1 and st["IBIT"]["down_months"] >= 0
+
+
+def test_signal_log_written_every_run(published):
+    storage, *_ = published
+    log = read_json(storage, "published/signals.json")
+    assert log is not None and log["asof"] and isinstance(log["events"], list)
+    meta = read_json(storage, "published/" + read_json(storage, "published/latest.json")["path"] + "/meta.json")
+    assert "prev_actions" in meta

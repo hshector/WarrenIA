@@ -9,11 +9,11 @@ describe("product catalog", () => {
     expect(isinValid("IE00B4L5Y98")).toBe(false);
   });
   it("every ISIN in the catalog has a valid check digit and is unique", () => {
-    for (const p of PRODUCTS) expect(isinValid(p.isin), p.isin).toBe(true);
+    for (const p of PRODUCTS.filter((x) => x.vehicle !== "Cash account")) expect(isinValid(p.isin), p.isin).toBe(true);
     expect(new Set(PRODUCTS.map((p) => p.isin)).size).toBe(PRODUCTS.length);
   });
   it("one recommended product per block, listed first, sane fees and a source each", () => {
-    for (const b of ["core", "gold", "momentum"] as const) {
+    for (const b of ["core", "gold", "momentum", "cash"] as const) {
       expect(PRODUCTS.filter((p) => p.bucket === b && p.recommended)).toHaveLength(1);
       expect(productsFor(b)[0]).toBe(recommended(b));
     }
@@ -23,8 +23,8 @@ describe("product catalog", () => {
       expect(p.sources.length).toBeGreaterThan(0);
     }
   });
-  it("ETCs and crypto ETPs are capital-income for Spanish tax; UCITS ETFs and funds are capital gains", () => {
-    for (const p of PRODUCTS) expect(p.tax).toBe(p.vehicle === "ETC" || p.vehicle === "ETP" ? "rcm" : "gain");
+  it("ETCs and crypto ETPs are capital-income for Spanish tax; UCITS ETFs and funds are capital gains; cash pays taxed interest", () => {
+    for (const p of PRODUCTS) expect(p.tax).toBe(p.vehicle === "ETC" || p.vehicle === "ETP" ? "rcm" : p.vehicle === "Cash account" ? "interest" : "gain");
   });
   it("momentum sleeve routes small amounts to the ETF", () => {
     expect(momentumRoute(1200)).toBe("etf");
@@ -37,6 +37,7 @@ describe("choices", () => {
     const d = defaultChoices();
     expect(d.core[0].isin).toBe(recommended("core").isin);
     expect(d.gold).toEqual([{ isin: recommended("gold").isin, weight: 1 }]);
+    expect(d.cash).toEqual([{ isin: "CASH-ACCOUNT", weight: 1 }]);
   });
   it("normalises weights, drops unknown or misplaced products and merges duplicates", () => {
     const c = normaliseChoices({
@@ -57,7 +58,7 @@ describe("choices", () => {
   });
   it("splits each block's euros across its products", () => {
     const c = normaliseChoices({ gold: [{ isin: "IE00B4ND3602", weight: 3 }, { isin: "LU1650487413", weight: 1 }] });
-    const s = splitByProduct({ core: 300, gold: 40, momentum: 60 }, c);
+    const s = splitByProduct({ core: 300, gold: 40, momentum: 60, cash: 0 }, c);
     expect(s.find((x) => x.product.isin === "IE00B4ND3602")?.amount).toBeCloseTo(30);
     expect(s.find((x) => x.product.isin === "LU1650487413")?.amount).toBeCloseTo(10);
     expect(s.reduce((t, x) => t + x.amount, 0)).toBeCloseTo(400);

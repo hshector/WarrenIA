@@ -17,7 +17,9 @@ Necesitas cuentas en: **GitHub** (ya la tienes), **Supabase**, **Vercel** y **Ma
 2. *SQL Editor* → *New query* → pega el contenido de [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql)
    → *Run*. Crea las tablas con Row Level Security y el bucket privado `market`. Después, en otra *query*, pega
    [`supabase/migrations/0002_settings_choices.sql`](../supabase/migrations/0002_settings_choices.sql) → *Run* (guarda
-   los productos que eliges en Plan). Si la base ya existía, ejecuta solo la 0002.
+   los productos que eliges en Plan) y lo mismo con
+   [`0003_cash_notifications.sql`](../supabase/migrations/0003_cash_notifications.sql) (liquidez y notificaciones). Si la
+   base ya existía, ejecuta solo las que falten (se pueden repetir sin problema).
 3. *Project Settings → API Keys*. Anota:
    - **Project URL** (`https://xxxx.supabase.co`)
    - **Publishable key** (`sb_publishable_…`): se puede exponer al navegador.
@@ -50,6 +52,8 @@ En el repositorio: *Settings → Secrets and variables → Actions → New repos
 | `MASSIVE_API_KEY` | API key de Massive |
 | `SEC_USER_AGENT` | `WarrenIA tu-email@dominio.com`: la SEC exige identificarse con un e-mail de contacto |
 | `EODHD_API_KEY` | *(opcional)* clave gratuita de <https://eodhd.com> para los precios en EUR de tus ETF/ETC |
+| `VAPID_PRIVATE_KEY` | *(opcional)* clave privada para los avisos de cambio de señal: se genera en la app, *Settings → Notifications → Generate keys* ([GUIA.md](GUIA.md)) |
+| `VAPID_SUBJECT` | *(opcional)* tu e-mail, para los avisos |
 | `LOGO_DEV_TOKEN` | *(opcional)* clave **publicable** (`pk_…`) de <https://logo.dev> para los logos de las empresas. Nunca la secreta (`sk_…`). Primer llenado: pestaña *Actions → logos → Run workflow* |
 
 Después:
@@ -74,6 +78,8 @@ A partir de ahí se ejecuta solo de martes a sábado a las 05:15 UTC (pasada la 
 | `SUPABASE_SECRET_KEY` | Secret key (sin `NEXT_PUBLIC_`) |
 | `ALLOWED_EMAILS` | tu correo (los correos permitidos, separados por comas) |
 | `NEXT_PUBLIC_SITE_URL` | `https://TU-APP.vercel.app` |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | *(opcional, avisos)* clave pública generada en *Settings → Notifications* |
+| `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | *(opcional, avisos)* los mismos valores que en GitHub; sirven para el botón «Send a test» |
 
 4. *Deploy*. Abre la URL, introduce tu correo y entra con el enlace que recibirás.
 
@@ -102,8 +108,14 @@ La app nunca guarda precios ni rankings para uso sin conexión: sin red muestra 
    símbolo `TICKER.XETRA`, el oro igual, y las acciones de EE. UU. con fuente **Mercado EE. UU.** y su ticker.
 2. Registra **cada aportación** al bróker (*Aportación*) y cada compra con su comisión. Sin las aportaciones, la app
    las infiere y te avisa.
-3. *Importar CSV* acepta el formato de [`docs/import-template.csv`](import-template.csv), con vista previa y
-   validación. No se piden credenciales del bróker: Trade Republic no ofrece una API pública.
+3. *Importar CSV* acepta **el CSV de Trade Republic tal cual** (Perfil → Documentos → Exportar transacciones) y, para
+   otros brókers, el formato de [`docs/import-template.csv`](import-template.csv), siempre con vista previa y validación.
+   No se piden credenciales del bróker.
+
+## 7. Notificaciones de cambios de señal
+
+Paso a paso en [GUIA.md](GUIA.md): generar las claves en la app, ponerlas en Vercel y GitHub, instalar la PWA y
+pulsar *Turn on*. El proceso diario envía como mucho un aviso al día por dispositivo.
 
 ---
 

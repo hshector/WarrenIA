@@ -2,7 +2,8 @@
 // until the user confirms. Generic format (see docs/import-template.csv); column
 // names accept Spanish or English aliases. Delimiter and decimal comma are detected.
 
-import type { Transaction, TxType } from "./types";
+import type { Bucket, InstrumentKind, Transaction, TxType } from "./types";
+import { isTradeRepublic, parseTradeRepublic } from "./tr";
 
 export interface ParsedRow {
   line: number;
@@ -12,6 +13,10 @@ export interface ParsedRow {
   isin: string | null;
   ticker: string | null;
   name: string | null;
+  /** Broker's own type (e.g. TRADING/SAVINGS_PLAN_EXECUTED), shown in the preview. */
+  source?: string;
+  /** What a new instrument should be (from the broker's asset class). */
+  hint?: { kind: InstrumentKind; bucket: Bucket };
 }
 
 const ALIASES: Record<string, string[]> = {
@@ -111,11 +116,14 @@ export function rowHash(parts: (string | number | null)[]): string {
   return fnv(s, 2166136261) + fnv(s, 0x811c9dc5 ^ 0x5bd1e995);
 }
 
-export function parseTransactionsCsv(text: string, today: string): { rows: ParsedRow[]; headerErrors: string[]; columns: string[] } {
+export type CsvFormat = "generic" | "trade_republic";
+
+export function parseTransactionsCsv(text: string, today: string): { rows: ParsedRow[]; headerErrors: string[]; columns: string[]; format: CsvFormat } {
   const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim().length);
-  if (!lines.length) return { rows: [], headerErrors: ["The file is empty"], columns: [] };
+  if (!lines.length) return { rows: [], headerErrors: ["The file is empty"], columns: [], format: "generic" };
   const d = detectDelimiter(lines[0]);
   const header = splitLine(lines[0], d).map((h) => h.toLowerCase());
+  if (d === "," && isTradeRepublic(header)) return { ...parseTradeRepublic(lines, today), format: "trade_republic" };
   const idx: Record<string, number> = {};
   for (const [key, aliases] of Object.entries(ALIASES)) {
     const i = header.findIndex((h) => aliases.includes(h));
@@ -123,7 +131,7 @@ export function parseTransactionsCsv(text: string, today: string): { rows: Parse
   }
   const headerErrors: string[] = [];
   for (const req of ["date", "type"]) if (idx[req] === undefined) headerErrors.push(`Missing required column "${req}"`);
-  if (headerErrors.length) return { rows: [], headerErrors, columns: header };
+  if (headerErrors.length) return { rows: [], headerErrors, columns: header, format: "generic" };
   const decimalComma = d === ";";
 
   const rows: ParsedRow[] = lines.slice(1).map((line, k) => {
@@ -191,5 +199,5 @@ export function parseTransactionsCsv(text: string, today: string): { rows: Parse
       r.tx = null;
     } else seen.set(r.tx.import_hash, r.line);
   }
-  return { rows, headerErrors, columns: header };
+  return { rows, headerErrors, columns: header, format: "generic" };
 }

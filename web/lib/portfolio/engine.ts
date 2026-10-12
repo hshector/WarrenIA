@@ -27,7 +27,7 @@
 import { money } from "../format";
 
 import { xirr } from "./xirr";
-import type { Bucket, Instrument, Settings, Transaction } from "./types";
+import { PLAN_KEYS, type Bucket, type Instrument, type PlanKey, type Settings, type Transaction } from "./types";
 
 export interface PricePoint {
   date: string;
@@ -109,7 +109,7 @@ export interface PortfolioResult {
   series: DailyPoint[];
   twr: { cumulative: number | null; annualized: number | null; days: number };
   mwr: { xirr: number | null; note: string | null };
-  allocation: { bucket: Bucket | "cash"; value: number; weight: number }[];
+  allocation: { bucket: Bucket; value: number; weight: number }[];
   byCurrency: { currency: string; value: number; weight: number }[];
   sales: SaleRecord[];
   taxByYear: { year: string; gp: number; rcm: number; deferred: number }[];
@@ -431,7 +431,7 @@ export function computePortfolio(
   if (x !== null && !Number.isFinite(x)) x = null;
 
   // ---- Allocation
-  const alloc = new Map<Bucket | "cash", number>();
+  const alloc = new Map<Bucket, number>();
   const cur = new Map<string, number>();
   for (const p of positions) {
     if (!p.valueEur) continue;
@@ -440,7 +440,7 @@ export function computePortfolio(
     cur.set(c, (cur.get(c) ?? 0) + p.valueEur);
   }
   if (L.cash > 0.005) {
-    alloc.set("cash", L.cash);
+    alloc.set("cash", (alloc.get("cash") ?? 0) + L.cash); // broker cash + money-market funds
     cur.set("EUR", (cur.get("EUR") ?? 0) + L.cash);
   }
   const w = (v: number) => (value > 0 ? v / value : 0);
@@ -513,7 +513,7 @@ function taxView(raw: RawSale[], txs: Transaction[], byId: Map<string, Instrumen
 // ------------------------------------------------------------ targets & plan
 
 export interface TargetRow {
-  bucket: "core" | "gold" | "momentum";
+  bucket: PlanKey;
   target: number;
   weight: number;
   value: number;
@@ -521,31 +521,50 @@ export interface TargetRow {
   outsideBand: boolean;
 }
 
-/** Deviation vs targets on invested assets (cash excluded), 5/25-style bands. */
-export function targetDeviation(res: PortfolioResult, s: Settings): TargetRow[] {
-  const invested = res.allocation.filter((a) => a.bucket !== "cash").reduce((t, a) => t + a.value, 0);
-  return (Object.keys(s.targets) as ("core" | "gold" | "momentum")[]).map((b) => {
-    const v = res.allocation.find((a) => a.bucket === b)?.value ?? 0;
-    const weight = invested > 0 ? v / invested : 0;
-    const dev = weight - s.targets[b];
-    const outside = invested > 0 && (Math.abs(dev) > s.band_abs || (s.targets[b] > 0 && Math.abs(dev) / s.targets[b] > s.band_rel));
-    return { bucket: b, target: s.targets[b], weight, value: v, deviation: dev, outsideBand: outside };
-  });
+/** Blocks shown against their targets: cash only when you gave it a target. */
+export function activeKeys(targets: Settings["targets"]): PlanKey[] {
+  return PLAN_KEYS.filter((k) => k !== "cash" || (targets.cash ?? 0) > 0);
 }
 
 /**
- * Split a new contribution across buckets to move towards the targets without
+ * Deviation vs targets, 5/25-style bands. Uninvested cash is left out unless cash is one of
+ * your blocks (target above 0%): then broker cash and money-market funds count as that block.
+ */
+export function targetDeviation(res: PortfolioResult, s: Settings): TargetRow[] {
+  const keys = activeKeys(s.targets);
+  const withCash = keys.includes("cash");
+  const invested = res.allocation.filter((a) => withCash || a.bucket !== "cash").reduce((t, a) => t + a.value, 0);
+  return keys.map((b) => {
+    const v = res.allocation.find((a) => a.bucket === b)?.value ?? 0;
+    const weight = invested > 0 ? v / invested : 0;
+    const target = s.targets[b] ?? 0;
+    const dev = weight - target;
+    const outside = invested > 0 && (Math.abs(dev) > s.band_abs || (target > 0 && Math.abs(dev) / target > s.band_rel));
+    return { bucket: b, target, weight, value: v, deviation: dev, outsideBand: outside };
+  });
+}
+
+/** Current value of each plan block (0 for blocks not shown). */
+export function blockValues(dev: TargetRow[] | null): Record<PlanKey, number> {
+  const out: Record<PlanKey, number> = { core: 0, gold: 0, momentum: 0, cash: 0 };
+  for (const d of dev ?? []) out[d.bucket] = d.value;
+  return out;
+}
+
+/**
+ * Split a new contribution across blocks to move towards the targets without
  * selling (cash-flow rebalancing). Informational only.
  */
-export function contributionPlan(values: Record<"core" | "gold" | "momentum", number>, otherValue: number, targets: Settings["targets"], amount: number) {
-  const keys = Object.keys(targets) as ("core" | "gold" | "momentum")[];
+export function contributionPlan(values: Partial<Record<PlanKey, number>>, otherValue: number, targets: Settings["targets"], amount: number): Record<PlanKey, number> {
+  const keys = PLAN_KEYS;
+  const t = (k: PlanKey) => targets[k] ?? 0;
   const base = keys.reduce((s, k) => s + (values[k] ?? 0), 0) + otherValue + amount;
-  const need = Object.fromEntries(keys.map((k) => [k, Math.max(0, targets[k] * base - (values[k] ?? 0))])) as Record<string, number>;
+  const need = Object.fromEntries(keys.map((k) => [k, Math.max(0, t(k) * base - (values[k] ?? 0))])) as Record<PlanKey, number>;
   const totalNeed = keys.reduce((s, k) => s + need[k], 0);
-  const tw = keys.reduce((s, k) => s + targets[k], 0) || 1;
-  const out: Record<string, number> = {};
+  const tw = keys.reduce((s, k) => s + t(k), 0) || 1;
+  const out = {} as Record<PlanKey, number>;
   for (const k of keys) {
-    out[k] = totalNeed >= amount ? (totalNeed > 0 ? (amount * need[k]) / totalNeed : 0) : need[k] + ((amount - totalNeed) * targets[k]) / tw;
+    out[k] = totalNeed >= amount ? (totalNeed > 0 ? (amount * need[k]) / totalNeed : 0) : need[k] + ((amount - totalNeed) * t(k)) / tw;
   }
-  return out as Record<"core" | "gold" | "momentum", number>;
+  return out;
 }

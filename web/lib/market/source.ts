@@ -6,7 +6,7 @@ import { gunzipSync } from "node:zlib";
 
 import { supabaseBaseUrl } from "@/lib/supabase/env";
 
-import type { AssetDetail, Backtest, Excluded, FxFile, Latest, Market, Meta, PriceFile, Radar } from "./types";
+import type { AssetDetail, Backtest, Excluded, FxFile, Latest, Market, Meta, PriceFile, Radar, SignalLog } from "./types";
 
 // Market artifacts are read server-side only, from Supabase Storage (production,
 // private bucket + secret key) or from a local directory (development / demo).
@@ -137,6 +137,11 @@ function quiet(e: unknown): null {
 
 export async function getBacktest() {
   return readJson<Backtest>("backtest/latest.json", false).catch(quiet);
+}
+
+/** Rolling log of signal changes (published/signals.json, rewritten by every compute). */
+export async function getSignals() {
+  return readJson<SignalLog>("signals.json", false).catch(quiet);
 }
 
 export async function getFx() {

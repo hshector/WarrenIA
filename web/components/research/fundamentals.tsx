@@ -28,14 +28,16 @@ export function FundamentalsCard({ f }: { f: Fundamentals | null | undefined }) 
   if (!f || !f.available || !f.metrics) {
     return (
       <p className="text-[15px] leading-relaxed text-ink-2">
-        No US GAAP financial statements at the SEC for this company (usually a foreign company reporting under IFRS). The checks below cannot run: look at its annual report
-        yourself before buying.
+        No annual report data at the SEC for this company (it does not file structured XBRL reports there). The checks cannot run: look at its annual report yourself before
+        buying.
       </p>
     );
   }
   const m = f.metrics;
   const s = f.scores;
   const fin = m.financial === true;
+  const adr = m.adr === true;
+  const noPrice = adr ? "n/a (ADR)" : "—";
   const evEbit = isNum(m.ebit_ev) && m.ebit_ev > 0 ? 1 / m.ebit_ev : null;
   const z = m.zscore;
   const rows: { label: string; value: string; tone: Tone; help: string }[] = [
@@ -77,19 +79,19 @@ export function FundamentalsCard({ f }: { f: Fundamentals | null | undefined }) 
     },
     {
       label: "Price vs operating profit (EV/EBIT)",
-      value: evEbit !== null ? `${num(evEbit, 0)}x` : isNum(m.ebit_ev) ? "operating loss" : "—",
+      value: evEbit !== null ? `${num(evEbit, 0)}x` : isNum(m.ebit_ev) ? "operating loss" : noPrice,
       tone: evEbit === null ? (isNum(m.ebit_ev) ? "bad" : "na") : evEbit <= 15 ? "good" : evEbit > 40 ? "bad" : "ok",
       help: "What you pay for the whole business (shares + debt − cash) per euro of yearly operating profit. Lower is cheaper; the market is often 15-25x (Greenblatt).",
     },
     {
       label: "Free cash flow yield",
-      value: pct(m.fcf_yield as number, 1),
+      value: isNum(m.fcf_yield) ? pct(m.fcf_yield, 1) : noPrice,
       tone: grade(m.fcf_yield, (x) => x >= 0.05, (x) => x < 0),
       help: "Cash left after investments, as a % of the share price. Higher is cheaper.",
     },
     {
       label: "P/E",
-      value: isNum(m.pe) ? num(m.pe, 1) : isNum(m.net_income) && (m.net_income as number) <= 0 ? "loss" : "—",
+      value: isNum(m.pe) ? num(m.pe, 1) : isNum(m.net_income) && (m.net_income as number) <= 0 ? "loss" : noPrice,
       tone: grade(m.pe, (x) => x <= 20, (x) => x > 60),
       help: "Share price divided by profit per share.",
     },
@@ -165,8 +167,11 @@ export function FundamentalsCard({ f }: { f: Fundamentals | null | undefined }) 
         </details>
       )}
       <p className="text-[12.5px] text-ink-3">
-        Source: SEC annual report (US GAAP){isNum(m.revenue) ? ` · revenue ${compactUsd(m.revenue as number)}` : ""}. These checks filter out fragile companies; they do not
-        predict the share price on their own.
+        Source: SEC annual report ({m.standard === "IFRS" ? "IFRS" : "US GAAP"}
+        {m.currency && m.currency !== "USD" ? `, reported in ${m.currency}, amounts converted to USD at ECB rates` : ""})
+        {isNum(m.revenue) ? ` · revenue ${compactUsd(m.revenue as number)}` : ""}.
+        {adr ? " Price-based ratios are not shown for ADRs: the price is per ADR and the number of shares per ADR is not in the data." : ""} These checks filter out fragile
+        companies; they do not predict the share price on their own.
       </p>
     </div>
   );

@@ -101,7 +101,9 @@ export function Select({ className, children, ...p }: SelectHTMLAttributes<HTMLS
     <select
       {...p}
       className={cx(
-        "h-11 appearance-none rounded-[12px] bg-surface-2 bg-[length:14px] bg-[right_12px_center] bg-no-repeat pl-3.5 pr-9 text-[15px] pointer-coarse:text-[16px] text-ink outline-none focus:ring-2 focus:ring-accent/40",
+        // A <select> is as wide as its longest option unless told otherwise: long product names would push the page sideways.
+        className?.match(/(^|\s)w-/) ? "min-w-0" : "w-full min-w-0",
+        "h-11 appearance-none text-ellipsis rounded-[12px] bg-surface-2 bg-[length:14px] bg-[right_12px_center] bg-no-repeat pl-3.5 pr-9 text-[15px] pointer-coarse:text-[16px] text-ink outline-none focus:ring-2 focus:ring-accent/40",
         "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6966' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")]",
         className,
       )}
@@ -119,7 +121,7 @@ export function Field({ label, hint, children, className }: { label: string; hin
     : children;
   const forId = isValidElement<{ id?: string }>(children) ? (children.props.id ?? id) : undefined;
   return (
-    <div className={cx("flex flex-col gap-1.5", className)}>
+    <div className={cx("flex min-w-0 flex-col gap-1.5", className)}>
       <label htmlFor={forId} className="text-[13px] font-medium text-ink-2">
         {label}
       </label>

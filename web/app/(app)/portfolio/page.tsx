@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BUCKET_DOT } from "@/components/plan/product";
 import { AssetAvatar, Delta } from "@/components/fin/fin";
 import { InstrumentForm, TransactionForm } from "@/components/portfolio/forms";
 import { ValueChart } from "@/components/portfolio/value-chart";
@@ -10,14 +11,13 @@ import { dateLabel, money, moneyHeadline, pct, units } from "@/lib/format";
 import { getRadar, loadMarket } from "@/lib/market/source";
 import { hasActions, holdLabel } from "@/lib/market/radar";
 import { STATE_SIMPLE } from "@/lib/market/types";
-import { targetDeviation } from "@/lib/portfolio/engine";
+import { blockValues, targetDeviation } from "@/lib/portfolio/engine";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { BUCKET_LABELS } from "@/lib/portfolio/types";
 import { requireStore } from "@/lib/user/store";
 
 export const metadata = { title: "Portfolio" };
 
-const BUCKET_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
   const sp = await searchParams;

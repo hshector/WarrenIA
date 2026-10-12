@@ -108,3 +108,80 @@ def test_fundamental_scores_rank_quality_and_value(cfg):
     assert sc.at["GOOD", "fund"] > sc.at["JUNK", "fund"]
     assert sc.at["GOOD", "f_quality"] > sc.at["JUNK", "f_quality"]
     assert np.isnan(sc.at["UNKNOWN", "fund"])  # unknown is never scored as bad
+
+
+# ------------------------------------------------------------------ IFRS filers (SEC companyfacts)
+
+IFRS = {"revenue": "Revenue", "gross_profit": "GrossProfit", "operating_income": "ProfitLossFromOperatingActivities",
+        "net_income": "ProfitLossAttributableToOwnersOfParent", "cfo": "CashFlowsFromUsedInOperatingActivities",
+        "capex": "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+        "diluted_shares": "AdjustedWeightedAverageShares", "interest": "FinanceCosts", "assets": "Assets",
+        "assets_current": "CurrentAssets", "liabilities_current": "CurrentLiabilities", "liabilities": "Liabilities",
+        "equity": "EquityAttributableToOwnersOfParent", "cash": "CashAndCashEquivalents",
+        "retained_earnings": "RetainedEarnings", "lt_debt_noncurrent": "NoncurrentPortionOfNoncurrentBorrowings"}
+
+
+def companyfacts_json():
+    from datetime import date, timedelta
+
+    f: dict = {}
+
+    def add(tag, unit, item):
+        f.setdefault(tag, {"units": {}})["units"].setdefault(unit, []).append(item)
+
+    for c, vals in FLOWS.items():
+        for k, v in enumerate(vals):
+            end = date.fromisoformat(ENDS[k])
+            add(IFRS[c], "shares" if c == "diluted_shares" else "EUR",
+                {"start": (end - timedelta(days=364)).isoformat(), "end": ENDS[k], "val": v, "form": "20-F", "fp": "FY",
+                 "filed": "2026-09-01"})
+    for c, vals in BAL.items():
+        for k, v in enumerate(vals):
+            add(IFRS[c], "EUR", {"end": ENDS[k], "val": v, "form": "20-F", "fp": "FY", "filed": "2026-09-01"})
+    # Noise the parser must ignore: a half-year report, an older (restated) value, a per-share unit.
+    add("Revenue", "EUR", {"start": "2026-01-01", "end": "2026-06-30", "val": 5, "form": "6-K", "fp": "H1", "filed": "2026-08-01"})
+    add("Revenue", "EUR", {"start": "2024-07-01", "end": "2025-06-30", "val": 990, "form": "20-F", "fp": "FY", "filed": "2025-09-01"})
+    add("BasicEarningsLossPerShare", "EUR/shares", {"start": "2025-07-01", "end": "2026-06-30", "val": 1.5, "form": "20-F", "fp": "FY",
+                                                    "filed": "2026-09-01"})
+    return {"cik": 77, "facts": {"ifrs-full": f}}
+
+
+def test_companyfacts_parser_keeps_annual_reports_and_latest_restatement():
+    from warrenia_engine.fundamentals import FACT_COLUMNS, parse_companyfacts
+
+    rows = pd.DataFrame(parse_companyfacts(companyfacts_json(), 77), columns=FACT_COLUMNS)
+    rev = rows[rows["concept"] == "revenue"].sort_values("end")
+    assert list(rev["val"]) == [1000.0, 1200.0]  # half-year dropped, restated FY-1 (filed later) wins
+    assert set(rows["unit"]) == {"EUR", "shares"}
+    assert rows["tag"].str.startswith("ifrs-full:").all()
+    assert len(rows[rows["kind"] == "inst"]) == 8 * 3
+
+
+def test_ifrs_filer_gets_the_same_ratios_and_usd_amounts():
+    from warrenia_engine.fundamentals import parse_companyfacts, FACT_COLUMNS
+
+    ifrs = pd.DataFrame(parse_companyfacts(companyfacts_json(), 77), columns=FACT_COLUMNS)
+    gaap = facts_for(1, ENDS, FLOWS, BAL)
+    tk = pd.DataFrame({"ticker": ["IFR", "GAP"], "cik": ["0000000077", "0000000001"], "sic": [3670, 3670]})
+    out = compute_fundamentals(pd.concat([ifrs, gaap], ignore_index=True), tk, fx={"EUR": 1.1})
+    a, b = out.loc["IFR"], out.loc["GAP"]
+    for k in ("roa", "gross_profitability", "accruals", "fscore", "zscore", "share_change", "debt_assets"):
+        assert a[k] == pytest.approx(b[k]), k
+    assert a["revenue"] == pytest.approx(1200 * 1.1)
+    assert a["standard"] == "IFRS" and a["currency"] == "EUR" and not a["fx_missing"]
+    assert b["standard"] == "US GAAP" and b["currency"] == "USD"
+
+
+def test_no_exchange_rate_or_adr_means_no_price_ratios():
+    from warrenia_engine.fundamentals import parse_companyfacts, FACT_COLUMNS
+
+    ifrs = pd.DataFrame(parse_companyfacts(companyfacts_json(), 77), columns=FACT_COLUMNS)
+    gaap = facts_for(1, ENDS, FLOWS, BAL)
+    tk = pd.DataFrame({"ticker": ["IFR", "GAP"], "cik": ["0000000077", "0000000001"], "sic": [3670, 3670]})
+    fund = compute_fundamentals(pd.concat([ifrs, gaap], ignore_index=True), tk, fx={})
+    assert bool(fund.loc["IFR", "fx_missing"]) is True
+    assert fund.loc["IFR", "fscore"] == fund.loc["GAP", "fscore"]  # ratios still work in local currency
+    v = add_valuation(fund, pd.Series({"IFR": 3000.0, "GAP": 3000.0}))
+    assert np.isnan(v.loc["IFR", "ebit_ev"]) and np.isfinite(v.loc["GAP", "ebit_ev"])
+    adr = add_valuation(fund, pd.Series({"IFR": 3000.0, "GAP": 3000.0}), pd.Index(["GAP"]))
+    assert np.isnan(adr.loc["GAP", "ebit_ev"]) and np.isnan(adr.loc["GAP", "pe"])

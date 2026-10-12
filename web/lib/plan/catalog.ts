@@ -3,14 +3,17 @@
 // holdings change: the UI always shows the date and asks to check the KID before buying.
 // This is data, not advice generated at runtime: every number here has a source.
 
-import type { Bucket } from "@/lib/portfolio/types";
+import { PLAN_KEYS, type Bucket } from "@/lib/portfolio/types";
 
 export const VERIFIED_ON = "2026-10-11";
 
 export type PlanBucket = Exclude<Bucket, "other">;
-export type AssetClass = "world" | "world_dev" | "world_imi" | "momentum" | "gold" | "silver" | "commodities" | "bonds" | "bitcoin";
-/** Spanish income tax treatment when you sell (see the Plan page). */
-export type TaxKind = "gain" | "rcm";
+export type AssetClass = "world" | "world_dev" | "world_imi" | "momentum" | "gold" | "silver" | "commodities" | "bonds" | "bitcoin" | "cash";
+/** Spanish income tax treatment (see the Plan page): gain or capital income when sold, or interest taxed every year. */
+export type TaxKind = "gain" | "rcm" | "interest";
+
+/** The cash balance of your broker account is not a security: it has no ISIN. */
+export const CASH_ACCOUNT = "CASH-ACCOUNT";
 
 export interface Inside {
   asof: string;
@@ -28,12 +31,12 @@ export interface Product {
   short: string; // plain name for lists
   bucket: PlanBucket;
   assetClass: AssetClass;
-  vehicle: "UCITS ETF" | "ETC" | "ETP" | "Index fund";
+  vehicle: "UCITS ETF" | "ETC" | "ETP" | "Index fund" | "Cash account";
   ter: number; // total expense ratio, fraction per year
   terNote?: string;
   index: string;
   coverage: string;
-  distribution: "accumulating" | "no income";
+  distribution: "accumulating" | "no income" | "pays interest";
   domicile: string;
   tax: TaxKind;
   /** US-listed fund used only to measure how the asset class behaves (engine: market.proxies). */
@@ -298,6 +301,59 @@ export const PRODUCTS: Product[] = [
     ],
     sources: ["https://www.blackrock.com/uk/individual/products/337088/ishares-bitcoin-etp", "https://www.justetf.com/en/etf-profile.html?isin=XS2940466316"],
   },
+  // ------------------------------------------------------------------ cash (optional block)
+  {
+    isin: CASH_ACCOUNT,
+    name: "Cash in your Trade Republic account",
+    short: "Trade Republic cash (interest)",
+    bucket: "cash",
+    assetClass: "cash",
+    vehicle: "Cash account",
+    ter: 0,
+    index: "ECB deposit rate",
+    coverage: "Your uninvested euros, paid interest that follows the ECB deposit rate",
+    distribution: "pays interest",
+    domicile: "Trade Republic Bank (Germany, Spanish branch)",
+    tax: "interest",
+    role: "Money you can use any day, earning interest, protected up to €100,000",
+    recommended: true,
+    pros: [
+      "No fees and nothing to buy or sell",
+      "Covered by the deposit guarantee up to €100,000",
+      "With a Spanish IBAN, Trade Republic withholds the 19% for Hacienda on each payment",
+    ],
+    cons: [
+      "Interest is taxed every year (19-30%), even if you leave it there",
+      "The rate falls when the ECB cuts rates; check the current rate and limit in the app",
+      "After inflation it barely grows: it is for safety, not for growth",
+    ],
+    sources: [
+      "https://support.traderepublic.com/es-es",
+      "https://www.rankia.com/blog/cuentas-corrientes/6780762-declarar-intereses-trade-republic",
+    ],
+  },
+  {
+    isin: "LU0290358497",
+    name: "Xtrackers II EUR Overnight Rate Swap UCITS ETF 1C",
+    short: "Euro overnight rate ETF (XEON)",
+    bucket: "cash",
+    assetClass: "cash",
+    vehicle: "UCITS ETF",
+    ter: 0.001,
+    index: "Solactive €STR +8.5 Daily",
+    coverage: "Earns the euro overnight interest rate (€STR) day by day, through a fully collateralised swap",
+    distribution: "accumulating",
+    domicile: "Luxembourg",
+    tax: "gain",
+    role: "Cash-like, earning about the ECB rate, taxed only when you sell",
+    pros: ["Reinvests the interest: no tax until you sell", "Moves very little (follows the overnight rate)", "One of Europe's largest funds (over €20bn)"],
+    cons: [
+      "Not covered by the deposit guarantee (it is a fund; its assets are kept apart from the issuer)",
+      "Each buy or sell costs the broker fee (savings plans are usually free)",
+      "0.10% a year",
+    ],
+    sources: ["https://www.finect.com/etfs/LU0290358497-Xtrackers_ii_eur_overnight_rt_swap_etf1c", "https://www.etfstream.com/etf-screener/XEON"],
+  },
   // ------------------------------------------------------------------ momentum
   {
     isin: "IE00BP3QZ825",
@@ -329,6 +385,7 @@ export const BUCKET_NAME: Record<PlanBucket, string> = {
   core: "Core",
   gold: "Diversifiers",
   momentum: "Momentum",
+  cash: "Cash",
 };
 
 export function productsFor(bucket: PlanBucket): Product[] {
@@ -388,6 +445,7 @@ export function defaultChoices(): Required<Choices> {
     core: [{ isin: recommended("core").isin, weight: 1 }],
     gold: [{ isin: recommended("gold").isin, weight: 1 }],
     momentum: [{ isin: recommended("momentum").isin, weight: 1 }],
+    cash: [{ isin: recommended("cash").isin, weight: 1 }],
   };
 }
 
@@ -405,12 +463,12 @@ export function normaliseChoices(c: Choices | null | undefined): Required<Choice
 }
 
 /** Split each block's euros across the chosen products. */
-export function splitByProduct(amounts: Record<PlanBucket, number>, choices: Required<Choices>): { bucket: PlanBucket; product: Product; amount: number }[] {
+export function splitByProduct(amounts: Partial<Record<PlanBucket, number>>, choices: Required<Choices>): { bucket: PlanBucket; product: Product; amount: number }[] {
   const out: { bucket: PlanBucket; product: Product; amount: number }[] = [];
-  for (const b of ["core", "gold", "momentum"] as PlanBucket[]) {
+  for (const b of PLAN_KEYS) {
     for (const c of choices[b]) {
       const p = byIsin(c.isin);
-      if (p) out.push({ bucket: b, product: p, amount: amounts[b] * c.weight });
+      if (p) out.push({ bucket: b, product: p, amount: (amounts[b] ?? 0) * c.weight });
     }
   }
   return out;
@@ -442,7 +500,8 @@ export function chooseCore(a: CoreAnswers): { isin: string; why: string[] } {
 }
 
 /** Portfolio instrument type for a catalog product (ETPs are debt securities like ETCs for tax). */
-export function instrumentKind(p: Product): "etf" | "etc" | "fund" {
+export function instrumentKind(p: Product): "etf" | "etc" | "fund" | "other" {
+  if (p.vehicle === "Cash account") return "other";
   return p.vehicle === "Index fund" ? "fund" : p.vehicle === "UCITS ETF" ? "etf" : "etc";
 }
 

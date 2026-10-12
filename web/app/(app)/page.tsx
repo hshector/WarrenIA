@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BUCKET_DOT } from "@/components/plan/product";
 import { ActionPill, AssetAvatar, DeltaPill } from "@/components/fin/fin";
 import { PlanSplit } from "@/components/plan/choosers";
 import { Card } from "@/components/ui/primitives";
@@ -8,14 +9,13 @@ import { hasActions } from "@/lib/market/radar";
 import { getMarket, getRadar, loadMarket } from "@/lib/market/source";
 import { STATE_SIMPLE } from "@/lib/market/types";
 import { momentumRoute, normaliseChoices, STOCK_POSITIONS } from "@/lib/plan/catalog";
-import { targetDeviation } from "@/lib/portfolio/engine";
+import { blockValues, targetDeviation } from "@/lib/portfolio/engine";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { BUCKET_LABELS } from "@/lib/portfolio/types";
 import { requireStore } from "@/lib/user/store";
 
 export const metadata = { title: "Home" };
 
-const BUCKET_DOT = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" } as const;
 
 export default async function Home() {
   const { latest, meta } = await loadMarket();
@@ -30,7 +30,7 @@ export default async function Home() {
     .slice(0, 5);
   const byT = new Map((radar?.rows ?? []).map((r) => [r.t, r]));
   const dev = res ? targetDeviation(res, pf.settings) : null;
-  const values = dev ? (Object.fromEntries(dev.map((d) => [d.bucket, d.value])) as Record<"core" | "gold" | "momentum", number>) : { core: 0, gold: 0, momentum: 0 };
+  const values = blockValues(dev);
 
   // Only facts that matter to the user: their positions and the assets they follow.
   const news: { t: string; text: string }[] = [];
@@ -121,7 +121,14 @@ export default async function Home() {
       )}
 
       {news.length > 0 && (
-        <Card title="News">
+        <Card
+          title="News"
+          action={
+            <Link href="/alerts" className="text-accent">
+              All alerts
+            </Link>
+          }
+        >
           <ul className="flex flex-col gap-3">
             {news.slice(0, 4).map((n, i) => (
               <li key={n.t + i}>
@@ -156,7 +163,7 @@ export default async function Home() {
                     {r.t} · {withActions ? `momentum ${Math.round(r.ov)}${r.fund !== null && r.fund !== undefined ? ` · fundamentals ${Math.round(r.fund)}` : ""}` : STATE_SIMPLE[r.st]}
                   </span>
                 </span>
-                {withActions ? <ActionPill action={r.act} className="hidden sm:inline-flex" /> : null}
+                {withActions ? <ActionPill action={r.act} desktopOnly /> : null}
                 <DeltaPill v={r.r6m} />
               </Link>
             </li>

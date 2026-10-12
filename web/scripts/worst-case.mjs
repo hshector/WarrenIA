@@ -152,7 +152,8 @@ const instruments = [
   ins(2, { name: top.n, kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: top.t }),
   ins(3, { name: penny.n, kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: penny.t }),
   ins(4, { name: loser.n, kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: loser.t }),
-  ins(5, { name: "Gold", kind: "etc", bucket: "gold" }),
+  // Manual price: its long name also fills the "manual price" select (a <select> sizes to its longest option).
+  ins(5, { name: "iShares Physical Gold ETC — physically backed by allocated London Good Delivery bars (USD), traded in EUR on Xetra", isin: "IE00B4ND3602", kind: "etc", bucket: "gold" }),
 ];
 let n = 0;
 const tx = (o) => ({ id: id(1000 + ++n), instrument_id: null, quantity: null, price: null, amount: null, fees: 0, taxes: 0, currency: "EUR", fx_rate: 1, split_ratio: null, note: null, source: "manual", ...o });
@@ -176,7 +177,7 @@ const store = {
   manual_prices: [{ id: id(9001), instrument_id: id(5), price_date: "2026-10-01", price: 2_904.15 }],
   watchlist: [...patched.keys()].map((t) => ({ ticker: t, note: null, added_at: "2026-01-01T00:00:00Z" })),
   settings: {
-    targets: { core: 0.75, gold: 0.1, momentum: 0.15 },
+    targets: { core: 0.7, gold: 0.1, momentum: 0.15, cash: 0.05 },
     band_abs: 0.05,
     band_rel: 0.25,
     monthly_contribution: 125_000,
@@ -190,8 +191,33 @@ const store = {
         { isin: "IE00B4NCWG09", weight: 0.1 },
         { isin: "XS2940466316", weight: 0.1 },
       ],
+      cash: [
+        { isin: "CASH-ACCOUNT", weight: 0.5 },
+        { isin: "LU0290358497", weight: 0.5 },
+      ],
     },
+    notify: { holdings: true, watchlist: true, candidates: true },
   },
 };
+
+// Signal log: a sell alert on a long-named holding, changes on followed stocks and many new candidates.
+{
+  const latestPub = JSON.parse(readFileSync(path.join(out, "published", "latest.json"), "utf8"));
+  const radarW = readGz(path.join(out, "published", latestPub.path, "radar.json.gz"));
+  const asof = latestPub.data_asof;
+  const stocksW = radarW.rows.filter((r) => r.cls === "stock");
+  const ev = (r, from, to, holdFrom, holdTo, day = asof) => ({ asof: day, t: r.t, n: r.n, from, to, hold_from: holdFrom, hold_to: holdTo, rank: r.rank, ov: r.ov, fund: r.fund ?? null });
+  const events = [
+    ev(top, "candidate", "avoid", true, false),
+    ev(penny, "watch", "out", true, false),
+    ...[...patched.keys()]
+      .filter((t) => t !== top.t && t !== penny.t)
+      .slice(0, 4)
+      .map((t) => ev(stocksW.find((r) => r.t === t) ?? top, "watch", "candidate", true, true)),
+    ...stocksW.filter((r) => !patched.has(r.t)).slice(0, 40).map((r) => ev(r, "none", "candidate", false, true)),
+    ...stocksW.filter((r) => !patched.has(r.t)).slice(40, 60).map((r) => ev(r, "candidate", "wait", true, true, "2026-01-02")),
+  ];
+  writeFileSync(path.join(out, "published", "signals.json"), JSON.stringify({ updated_at: new Date().toISOString(), asof, events }));
+}
 writeFileSync(path.join(out, "user.json"), JSON.stringify(store, null, 1));
 console.log(`Worst-case data in ${out} (${patched.size} rows rewritten; store: ${instruments.length} instruments, ${transactions.length} transactions)`);

@@ -73,17 +73,17 @@ FUND_METRICS = [
     "fy_end", "revenue", "revenue_growth", "gross_margin", "operating_margin", "roa", "roe", "gross_profitability",
     "cfo", "fcf", "accruals", "share_change", "debt_assets", "interest_coverage", "fscore", "zscore",
     "ebit_ev", "fcf_yield", "earnings_yield", "pe", "pb", "shareholder_yield", "mcap", "net_income",
-    "financial", "debt_reported", "fscore_signals",
+    "financial", "debt_reported", "fscore_signals", "standard", "currency",
 ]
 
 
-def fundamentals_block(i: pd.Series, s: pd.Series, cfg) -> dict | None:
+def fundamentals_block(i: pd.Series, s: pd.Series, cfg, adr: bool = False) -> dict | None:
     """Everything the stock page needs to explain the fundamental verdict."""
     if not np.isfinite(i.get("fscore", np.nan)) and not np.isfinite(i.get("roa", np.nan)) and not np.isfinite(i.get("zscore", np.nan)):
         return {"available": False}
     return clean({
         "available": True,
-        "metrics": {k: i.get(k) for k in FUND_METRICS},
+        "metrics": {k: i.get(k) for k in FUND_METRICS} | {"adr": adr},
         "scores": {k: s.get(k) for k in ("fund", "f_quality", "f_safety", "f_value")},
         "rules": cfg.momentum["fundamentals"]["rules"],
     })
@@ -231,7 +231,7 @@ def build_artifacts(ctx: Context, t: int, res: dict[str, ClassResult], hist: dic
             details[tk] = {
                 "row": row, "indicators": clean({k: i.get(k) for k in DETAIL_INDICATORS}),
                 "components": comps, "state": clean(st), "action": clean(act), "report": rep, "hist": hist_for(c, tk),
-                "fundamentals": fundamentals_block(i, s, cfg) if c == "stock" else None,
+                "fundamentals": fundamentals_block(i, s, cfg, adr=ctx.ref["type"].get(tk) == "ADRC") if c == "stock" else None,
                 "eligible": True,
             }
         top_n = cfg.momentum["reports"]["top_stocks" if c == "stock" else "top_etfs"]
@@ -369,6 +369,17 @@ def previous_states(storage: Storage, prefix: str = "published") -> tuple[dict[s
         return {}, None
     radar = read_json(storage, f"{prefix}/{latest['path']}/radar.json.gz") or {"rows": []}
     return {r["t"]: r["st"] for r in radar["rows"]}, latest.get("data_asof")
+
+
+def previous_actions(storage: Storage, prefix: str = "published") -> dict[str, list]:
+    """Ticker -> [action, hold, name] of the latest published run (signal-change notifications)."""
+    from .signals import snapshot
+
+    latest = read_json(storage, f"{prefix}/latest.json")
+    if not latest:
+        return {}
+    radar = read_json(storage, f"{prefix}/{latest['path']}/radar.json.gz") or {"rows": []}
+    return snapshot(radar["rows"])
 
 
 def previous_meta(storage: Storage, prefix: str = "published") -> dict | None:

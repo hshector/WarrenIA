@@ -128,7 +128,7 @@ def test_action_avoid_and_sell_signal(cfg):
 def test_action_loss_making_company_is_watch_not_candidate(cfg):
     assert _decide(cfg, ind=_ind(profitable=0.0))["action"] == "watch"
     unknown = _decide(cfg, ind=_ind(profitable=np.nan))
-    assert unknown["action"] == "candidate" and any("check the fundamentals yourself" in w for w in unknown["why"])
+    assert unknown["action"] == "candidate" and any("check its fundamentals yourself" in w for w in unknown["why"])
     etf = _decide(cfg, ind=_ind(profitable=np.nan), cls="etf")
     assert etf["action"] == "candidate" and not any("fundamentals" in w for w in etf["why"])
 

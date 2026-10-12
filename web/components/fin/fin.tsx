@@ -60,10 +60,10 @@ const ACTION_DOT: Record<ActionKey, string> = {
 };
 
 /** What to do with the asset now: the primary signal of the radar (neutral pill + coloured dot). */
-export function ActionPill({ action, className }: { action: ActionKey | undefined; className?: string }) {
+export function ActionPill({ action, className, desktopOnly = false }: { action: ActionKey | undefined; className?: string; desktopOnly?: boolean }) {
   const a = action ?? "none";
   return (
-    <span className={cx("inline-flex h-6 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[12px] font-semibold whitespace-nowrap text-ink", className)}>
+    <span className={cx(desktopOnly ? "hidden sm:inline-flex" : "inline-flex", "h-6 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[12px] font-semibold whitespace-nowrap text-ink", className)}>
       <span aria-hidden className={cx("h-1.5 w-1.5 shrink-0 rounded-full", ACTION_DOT[a])} />
       {ACTION_LABELS[a]}
     </span>

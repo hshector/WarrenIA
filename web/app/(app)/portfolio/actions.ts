@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { computePortfolio, PortfolioError } from "@/lib/portfolio/engine";
-import { parseTransactionsCsv, type ParsedRow } from "@/lib/portfolio/csv";
-import type { Instrument, Transaction } from "@/lib/portfolio/types";
-import { normaliseChoices } from "@/lib/plan/catalog";
+import { parseTransactionsCsv, type CsvFormat, type ParsedRow } from "@/lib/portfolio/csv";
+import { matchTicker } from "@/lib/portfolio/tr";
+import { getRadar, loadMarket } from "@/lib/market/source";
+import { BUCKET_LABELS, type Instrument, type PlanKey, type Transaction } from "@/lib/portfolio/types";
+import { byIsin, instrumentKind, normaliseChoices } from "@/lib/plan/catalog";
 import { requireStore } from "@/lib/user/store";
 
 export type ActionResult = { ok: boolean; message: string } | null;
@@ -20,7 +22,7 @@ const InstrumentSchema = z.object({
   name: z.string().trim().min(1).max(120),
   isin: opt(z.string().trim().toUpperCase().regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/, "Invalid ISIN")),
   kind: z.enum(["etf", "stock", "etc", "fund", "other"]),
-  bucket: z.enum(["core", "gold", "momentum", "other"]),
+  bucket: z.enum(["core", "gold", "momentum", "cash", "other"]),
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   price_source: z.enum(["us_market", "eodhd", "manual"]),
   market_ticker: opt(z.string().trim().toUpperCase().regex(/^[A-Z0-9.\-]{1,12}$/, "Invalid ticker")),
@@ -127,10 +129,39 @@ export async function deleteTransaction(id: string) {
 export interface ImportPreview {
   ok: boolean;
   message: string;
+  format?: CsvFormat;
   headerErrors: string[];
-  rows: (ParsedRow & { match: string | null; willCreate: boolean })[];
+  rows: (ParsedRow & { match: string | null; willCreate: boolean; newAs?: string })[];
   valid: number;
   invalid: number;
+}
+
+type NewInstrument = Omit<Instrument, "id">;
+
+/** How an unknown instrument will be created: catalog product, US stock found in the radar, or manual. */
+function newInstrumentFor(r: ParsedRow, usTicker: string | null): NewInstrument {
+  const p = r.isin ? byIsin(r.isin) : undefined;
+  if (p) return { name: p.name, isin: p.isin, kind: instrumentKind(p), bucket: p.bucket, currency: "EUR", price_source: "manual", market_ticker: null, eodhd_symbol: null, sector: null };
+  const isStock = r.hint?.kind === "stock" || ((r.isin ?? "").startsWith("US") && !!r.ticker);
+  const ticker = usTicker ?? (r.hint ? null : r.ticker);
+  if (isStock && ticker) {
+    return { name: r.name || ticker, isin: r.isin, kind: "stock", bucket: "momentum", currency: "USD", price_source: "us_market", market_ticker: ticker, eodhd_symbol: null, sector: null };
+  }
+  return {
+    name: r.name || r.ticker || r.isin || "Instrument", isin: r.isin, kind: r.hint?.kind ?? (isStock ? "stock" : "etf"), bucket: r.hint?.bucket ?? (isStock ? "momentum" : "other"),
+    currency: "EUR", price_source: "manual", market_ticker: r.hint ? null : r.ticker, eodhd_symbol: null, sector: null,
+  };
+}
+
+function describeNew(n: NewInstrument): string {
+  const src = n.price_source === "us_market" ? `US stock ${n.market_ticker}, priced daily` : "price from your trades (set a price source later)";
+  return `${BUCKET_LABELS[n.bucket]} · ${src}`;
+}
+
+async function radarStocks(): Promise<{ t: string; n: string }[]> {
+  const { latest } = await loadMarket();
+  const radar = await getRadar(latest).catch(() => null);
+  return (radar?.rows ?? []).filter((r) => r.cls === "stock").map((r) => ({ t: r.t, n: r.n }));
 }
 
 async function buildPreview(text: string): Promise<ImportPreview> {
@@ -138,13 +169,16 @@ async function buildPreview(text: string): Promise<ImportPreview> {
   const store = await requireStore();
   const instruments = await store.instruments();
   const parsed = parseTransactionsCsv(text, today());
+  const stocks = parsed.rows.some((r) => r.hint?.kind === "stock") ? await radarStocks() : [];
   const rows = parsed.rows.map((r) => {
     const m = instruments.find((i) => (r.isin && i.isin === r.isin) || (r.ticker && i.market_ticker === r.ticker));
     const needs = r.tx && ["buy", "sell", "dividend", "split"].includes(r.tx.type);
-    return { ...r, match: m?.name ?? null, willCreate: !!(needs && !m) };
+    const willCreate = !!(needs && !m);
+    const nu = willCreate ? newInstrumentFor(r, r.hint?.kind === "stock" ? matchTicker(r.name, stocks) : null) : null;
+    return { ...r, match: m?.name ?? null, willCreate, newAs: nu ? describeNew(nu) : undefined };
   });
   const valid = rows.filter((r) => r.ok).length;
-  return { ok: !parsed.headerErrors.length, message: "", headerErrors: parsed.headerErrors, rows, valid, invalid: rows.length - valid };
+  return { ok: !parsed.headerErrors.length, message: "", format: parsed.format, headerErrors: parsed.headerErrors, rows, valid, invalid: rows.length - valid };
 }
 
 export async function previewImport(text: string): Promise<ImportPreview> {
@@ -159,14 +193,11 @@ export async function commitImport(text: string): Promise<{ ok: boolean; message
   if (!good.length) return { ok: false, message: "No valid rows to import" };
   const store = await requireStore();
   let instruments = await store.instruments();
+  const stocks = good.some((r) => r.willCreate && r.hint?.kind === "stock") ? await radarStocks() : [];
   for (const r of good) {
     if (!r.willCreate) continue;
     if (instruments.some((i) => (r.isin && i.isin === r.isin) || (r.ticker && i.market_ticker === r.ticker))) continue;
-    const isUs = (r.isin ?? "").startsWith("US") && !!r.ticker;
-    await store.upsertInstrument({
-      name: r.name || r.ticker || r.isin || "Instrumento", isin: r.isin, kind: isUs ? "stock" : "etf", bucket: isUs ? "momentum" : "other",
-      currency: isUs ? "USD" : "EUR", price_source: isUs ? "us_market" : "manual", market_ticker: r.ticker, eodhd_symbol: null, sector: null,
-    });
+    await store.upsertInstrument(newInstrumentFor(r, r.hint?.kind === "stock" ? matchTicker(r.name, stocks) : null));
     instruments = await store.instruments();
   }
   const txs = good.map((r) => {
@@ -194,6 +225,7 @@ const SettingsSchema = z.object({
   core: numStr.pipe(z.number().min(0).max(100)),
   gold: numStr.pipe(z.number().min(0).max(100)),
   momentum: numStr.pipe(z.number().min(0).max(100)),
+  cash: z.preprocess((v) => (v === "" || v === undefined ? "0" : v), numStr.pipe(z.number().min(0).max(100))),
   band_abs: numStr.pipe(z.number().min(0.5).max(50)),
   band_rel: numStr.pipe(z.number().min(5).max(100)),
   monthly_contribution: numStr.pipe(z.number().min(0).max(1_000_000)),
@@ -202,10 +234,10 @@ const SettingsSchema = z.object({
 export async function saveSettings(_: ActionResult, form: FormData): Promise<ActionResult> {
   try {
     const d = SettingsSchema.parse(Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).replace(",", ".")])));
-    if (Math.abs(d.core + d.gold + d.momentum - 100) > 0.01) return { ok: false, message: "Target weights must add up to 100%" };
+    if (Math.abs(d.core + d.gold + d.momentum + d.cash - 100) > 0.01) return { ok: false, message: "Target weights must add up to 100%" };
     const store = await requireStore();
     await store.saveSettings({
-      targets: { core: d.core / 100, gold: d.gold / 100, momentum: d.momentum / 100 },
+      targets: { core: d.core / 100, gold: d.gold / 100, momentum: d.momentum / 100, cash: d.cash / 100 },
       band_abs: d.band_abs / 100, band_rel: d.band_rel / 100, monthly_contribution: d.monthly_contribution,
     });
     revalidatePath("/", "layout");
@@ -231,12 +263,12 @@ export async function addManualPrice(_: ActionResult, form: FormData): Promise<A
 }
 
 const ChoicesSchema = z.object({
-  bucket: z.enum(["core", "gold", "momentum"]),
-  items: z.array(z.object({ isin: z.string().regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/), weight: z.number().min(0).max(100) })).max(10),
+  bucket: z.enum(["core", "gold", "momentum", "cash"]),
+  items: z.array(z.object({ isin: z.string().regex(/^([A-Z]{2}[A-Z0-9]{9}[0-9]|CASH-ACCOUNT)$/), weight: z.number().min(0).max(100) })).max(10),
 });
 
 /** Products chosen for one block of the plan. Weights are relative; they are normalised to 100%. */
-export async function saveChoices(input: { bucket: "core" | "gold" | "momentum"; items: { isin: string; weight: number }[] }): Promise<ActionResult> {
+export async function saveChoices(input: { bucket: PlanKey; items: { isin: string; weight: number }[] }): Promise<ActionResult> {
   try {
     const d = ChoicesSchema.parse(input);
     const store = await requireStore();

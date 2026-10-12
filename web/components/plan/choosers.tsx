@@ -4,15 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { saveChoices } from "@/app/(app)/portfolio/actions";
-import { ProductCard } from "@/components/plan/product";
+import { BUCKET_DOT, ProductCard } from "@/components/plan/product";
 import { Button, cx, Segmented } from "@/components/ui/primitives";
 import { money, pct } from "@/lib/format";
 import type { ProxyStats } from "@/lib/market/types";
 import { answersFor, BUCKET_NAME, byIsin, chooseCore, productsFor, splitByProduct, type Choices, type CoreAnswers, type PlanBucket } from "@/lib/plan/catalog";
-import { contributionPlan } from "@/lib/portfolio/engine";
+import { activeKeys, contributionPlan } from "@/lib/portfolio/engine";
 import type { Settings } from "@/lib/portfolio/types";
 
-const DOT: Record<PlanBucket, string> = { core: "bg-accent", gold: "bg-gold", momentum: "bg-violet" };
 
 function useSave(bucket: PlanBucket) {
   const [pending, start] = useTransition();
@@ -59,11 +58,11 @@ export function PlanSplit({
         </span>
       </label>
       <ul className="flex flex-col gap-3">
-        {(["core", "gold", "momentum"] as PlanBucket[]).map((b) => (
+        {activeKeys(settings.targets).map((b) => (
           <li key={b}>
             <div className="flex items-center justify-between gap-3 text-[15px]">
               <span className="flex items-center gap-2.5 font-medium">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${DOT[b]}`} />
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_DOT[b]}`} />
                 {BUCKET_NAME[b]}
               </span>
               <span className="num shrink-0 whitespace-nowrap font-semibold">{money(plan[b], "EUR", 0)}</span>
@@ -144,16 +143,42 @@ const MIXES: { label: string; help: string; w: Record<string, number> }[] = [
 
 /** Pick the diversifiers and their weights inside the block, with each one's behaviour side by side. */
 export function DiversifierPicker({ current, stats }: { current: { isin: string; weight: number }[]; stats: Record<string, ProxyStats> }) {
-  const products = productsFor("gold");
+  return <BlockPicker bucket="gold" current={current} stats={stats} mixes={MIXES} />;
+}
+
+const CASH_MIXES: typeof MIXES = [
+  { label: "Account only", help: "Simplest and protected by the deposit guarantee", w: { "CASH-ACCOUNT": 100 } },
+  { label: "Half and half", help: "Some tax deferral, some instant money", w: { "CASH-ACCOUNT": 50, LU0290358497: 50 } },
+  { label: "Money-market ETF", help: "Tax only when you sell; for larger, long-held amounts", w: { LU0290358497: 100 } },
+];
+
+export function CashPicker({ current }: { current: { isin: string; weight: number }[] }) {
+  return <BlockPicker bucket="cash" current={current} stats={{}} mixes={CASH_MIXES} saveLabel="Save cash choice" />;
+}
+
+function BlockPicker({
+  bucket,
+  current,
+  stats,
+  mixes,
+  saveLabel = "Save mix",
+}: {
+  bucket: PlanBucket;
+  current: { isin: string; weight: number }[];
+  stats: Record<string, ProxyStats>;
+  mixes: typeof MIXES;
+  saveLabel?: string;
+}) {
+  const products = productsFor(bucket);
   const initial = useMemo(() => Object.fromEntries(products.map((p) => [p.isin, Math.round(100 * (current.find((c) => c.isin === p.isin)?.weight ?? 0))])), [products, current]);
   const [w, setW] = useState<Record<string, number>>(initial);
   const total = Object.values(w).reduce((s, x) => s + x, 0);
-  const { pending, save } = useSave("gold");
+  const { pending, save } = useSave(bucket);
   const dirty = products.some((p) => (w[p.isin] ?? 0) !== initial[p.isin]);
   return (
     <div className="flex flex-col gap-4">
       <div className="-mx-1 flex gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none]">
-        {MIXES.map((m) => (
+        {mixes.map((m) => (
           <button
             key={m.label}
             title={m.help}
@@ -196,7 +221,7 @@ export function DiversifierPicker({ current, stats }: { current: { isin: string;
           disabled={pending || total === 0 || !dirty}
           onClick={() => save(products.filter((p) => (w[p.isin] ?? 0) > 0).map((p) => ({ isin: p.isin, weight: w[p.isin] })))}
         >
-          {pending ? "Saving…" : "Save mix"}
+          {pending ? "Saving…" : saveLabel}
         </Button>
       </div>
     </div>

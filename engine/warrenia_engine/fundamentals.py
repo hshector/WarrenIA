@@ -17,9 +17,15 @@ Data: SEC "frames" API, one call per concept and period for every filer. Flows c
 from annual duration frames (CY####), balance sheet items from quarterly instant frames
 (CY####Q#I) matched to each company's fiscal year end, so non-December fiscal years work.
 
-Limitations (documented in the UI): US GAAP filers only (IFRS filers such as many ADRs
-are "not available", never "bad"); banks and insurers have no gross profit / current
-assets, so the F-Score and Z'' are not computed for them (SIC 6000-6799).
+Foreign filers reporting under IFRS (most European ADRs: SAP, Novo Nordisk, AstraZeneca...)
+are not in the US GAAP frames: their facts come from each company's "companyfacts" file
+(ifrs-full taxonomy, annual 20-F/40-F reports), in the reporting currency. Ratios are
+currency-free; amounts are converted to USD with ECB reference rates for valuation.
+
+Limitations (documented in the UI): companies without XBRL data at the SEC are "not
+available", never "bad"; banks and insurers have no gross profit / current assets, so the
+F-Score and Z'' are not computed for them (SIC 6000-6799); for ADRs the price is per ADR
+and the ADR-to-share ratio is not in the data, so price-based ratios are not shown.
 """
 
 from __future__ import annotations
@@ -55,7 +61,75 @@ CONCEPTS: dict[str, tuple[str, list[str], str]] = {
     "short_borrowings": ("inst", ["ShortTermBorrowings"], "USD"),
 }
 
-FACT_COLUMNS = ["cik", "concept", "tag", "kind", "start", "end", "val"]
+# Same concepts in the IFRS taxonomy (ifrs-full), priority order. Borrowings are split so that
+# current and non-current debt are never counted twice.
+IFRS_TAGS: dict[str, list[str]] = {
+    "revenue": ["Revenue", "RevenueFromContractsWithCustomers"],
+    "cogs": ["CostOfSales"],
+    "gross_profit": ["GrossProfit"],
+    "operating_income": ["ProfitLossFromOperatingActivities"],
+    "net_income": ["ProfitLossAttributableToOwnersOfParent", "ProfitLoss"],
+    "cfo": ["CashFlowsFromUsedInOperatingActivities"],
+    "capex": ["PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "PurchaseOfPropertyPlantAndEquipment"],
+    "interest": ["InterestExpense", "FinanceCosts"],
+    "dividends": ["DividendsPaidClassifiedAsFinancingActivities", "DividendsPaid"],
+    "buybacks": ["PaymentsToAcquireOrRedeemEntitysShares"],
+    "diluted_shares": ["AdjustedWeightedAverageShares"],
+    "assets": ["Assets"],
+    "assets_current": ["CurrentAssets"],
+    "liabilities_current": ["CurrentLiabilities"],
+    "liabilities": ["Liabilities"],
+    "equity": ["EquityAttributableToOwnersOfParent", "Equity"],
+    "cash": ["CashAndCashEquivalents"],
+    "retained_earnings": ["RetainedEarnings"],
+    "lt_debt_noncurrent": ["NoncurrentPortionOfNoncurrentBorrowings", "LongtermBorrowings"],
+    "lt_debt_current": ["CurrentPortionOfLongtermBorrowings"],
+    "short_borrowings": ["ShorttermBorrowings"],
+}
+
+FACT_COLUMNS = ["cik", "concept", "tag", "kind", "start", "end", "val", "unit"]
+ANNUAL_FORMS = {"10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A", "10-KT"}
+
+
+def parse_companyfacts(js: dict, cik: int) -> list[tuple]:
+    """Annual facts of one company from SEC companyfacts JSON (ifrs-full, or us-gaap in USD).
+
+    Flows: fiscal-year durations (330-400 days) from annual reports. Balances: any reported
+    year-end. When a value was restated, the latest filing wins.
+    """
+    facts = js.get("facts", {}) if isinstance(js, dict) else {}
+    out: dict[tuple, tuple] = {}
+    for taxonomy, mapping in (("ifrs-full", IFRS_TAGS), ("us-gaap", {c: v[1] for c, v in CONCEPTS.items()})):
+        tax = facts.get(taxonomy) or {}
+        for concept, tags in mapping.items():
+            kind = CONCEPTS[concept][0]
+            for tag in tags:
+                units = (tax.get(tag) or {}).get("units") or {}
+                for unit, items in units.items():
+                    if concept == "diluted_shares":
+                        if unit != "shares":
+                            continue
+                    elif taxonomy == "us-gaap" and unit != "USD":
+                        continue
+                    elif not (len(unit) == 3 and unit.isalpha() and unit.isupper()):
+                        continue  # monetary facts only (EUR, USD, DKK…), not per-share units
+                    for it in items:
+                        if it.get("form") not in ANNUAL_FORMS or it.get("val") is None:
+                            continue
+                        end, start = it.get("end"), it.get("start")
+                        if kind == "dur":
+                            if not start:
+                                continue
+                            days = (pd.Timestamp(end) - pd.Timestamp(start)).days
+                            if not 330 <= days <= 400:
+                                continue
+                        key = (concept, taxonomy, tag, end)
+                        filed = it.get("filed") or ""
+                        if key not in out or filed >= out[key][0]:
+                            name = f"ifrs-full:{tag}" if taxonomy == "ifrs-full" else tag
+                            out[key] = (filed, (cik, concept, name, kind, start if kind == "dur" else None, end,
+                                                float(it["val"]), unit))
+    return [v[1] for v in out.values()]
 
 
 def frame_names(today: date, years: int = 4) -> dict[str, list[str]]:
@@ -69,6 +143,7 @@ def merge_tags(facts: pd.DataFrame) -> pd.DataFrame:
     if facts.empty:
         return facts
     prio = {(c, t): i for c, (_, tags, _) in CONCEPTS.items() for i, t in enumerate(tags)}
+    prio |= {(c, f"ifrs-full:{t}"): 50 + i for c, tags in IFRS_TAGS.items() for i, t in enumerate(tags)}
     f = facts.copy()
     f["_p"] = [prio.get((c, t), 99) for c, t in zip(f["concept"], f["tag"])]
     f = f.sort_values(["cik", "concept", "end", "_p"]).drop_duplicates(["cik", "concept", "end"], keep="first")
@@ -195,11 +270,30 @@ def company_metrics(facts: pd.DataFrame, sic: int | None = None) -> dict:
     return m
 
 
-def compute_fundamentals(facts: pd.DataFrame, tickers: pd.DataFrame) -> pd.DataFrame:
-    """Per-ticker metrics. `tickers` has ticker, cik (10-digit string or int) and sic."""
+MONETARY = {c for c, (_, _, unit) in CONCEPTS.items() if unit == "USD"}
+
+
+def to_usd(facts: pd.DataFrame, fx: dict[str, float] | None) -> pd.DataFrame:
+    """Monetary facts in USD (ECB cross rates); a currency without a rate keeps its value and
+    is marked so price-based ratios are not computed for that company."""
+    f = facts.copy()
+    if "unit" not in f:
+        f["unit"] = "USD"  # facts stored before IFRS support: all US GAAP frames in USD
+    f["unit"] = f["unit"].fillna("USD")
+    cur = f["unit"].where(f["concept"].isin(MONETARY), "USD")
+    rate = cur.map(lambda c: 1.0 if c == "USD" else (fx or {}).get(c, np.nan))
+    f["fx_missing"] = rate.isna()
+    f["val"] = np.where(rate.notna(), f["val"] * rate.fillna(1.0), f["val"])
+    f["currency"] = cur
+    return f
+
+
+def compute_fundamentals(facts: pd.DataFrame, tickers: pd.DataFrame, fx: dict[str, float] | None = None) -> pd.DataFrame:
+    """Per-ticker metrics. `tickers` has ticker, cik (10-digit string or int) and sic. `fx` gives USD
+    per unit of each reporting currency (needed for IFRS filers reporting in EUR, DKK...)."""
     if facts is None or facts.empty or tickers is None or tickers.empty:
         return pd.DataFrame()
-    f = merge_tags(facts)
+    f = merge_tags(to_usd(facts, fx))
     groups = {int(c): g for c, g in f.groupby("cik")}
     rows = []
     for r in tickers.dropna(subset=["cik"]).itertuples(index=False):
@@ -213,14 +307,25 @@ def compute_fundamentals(facts: pd.DataFrame, tickers: pd.DataFrame) -> pd.DataF
         sic = getattr(r, "sic", None)
         m = company_metrics(g, int(sic) if sic is not None and pd.notna(sic) else None)
         if m:
+            cur = g.loc[g["currency"] != "USD", "currency"]
+            m["currency"] = cur.mode().iat[0] if len(cur) else "USD"
+            m["standard"] = "IFRS" if g["tag"].str.startswith("ifrs-full:").mean() > 0.5 else "US GAAP"
+            m["fx_missing"] = bool(g["fx_missing"].any())
             rows.append({"ticker": r.ticker, **m})
     return pd.DataFrame(rows).set_index("ticker") if rows else pd.DataFrame()
 
 
-def add_valuation(fund: pd.DataFrame, mcap: pd.Series) -> pd.DataFrame:
-    """Price-dependent ratios at the evaluation date (market cap = shares x price)."""
+def add_valuation(fund: pd.DataFrame, mcap: pd.Series, no_price_ratios: pd.Index | None = None) -> pd.DataFrame:
+    """Price-dependent ratios at the evaluation date (market cap = shares x price).
+
+    `no_price_ratios`: tickers whose market cap is not comparable with their statements (ADRs:
+    the price is per ADR; reports in a currency without an exchange rate). Ratios are left blank."""
     out = fund.copy()
     mc = mcap.reindex(out.index)
+    bad = out.index.isin(no_price_ratios if no_price_ratios is not None else [])
+    if "fx_missing" in out:
+        bad |= out["fx_missing"].fillna(False).astype(bool).to_numpy()
+    mc = mc.where(~bad)
     debt = out["debt"].fillna(0.0)  # no debt reported -> treated as debt-free (flagged in the UI)
     cash = out["cash"].fillna(0.0)
     ev = mc + debt - cash

@@ -144,3 +144,9 @@ export const IconFilter = (p: P) => (
     <path d="M4 6h16M7 12h10M10 18h4" />
   </Base>
 );
+export const IconBell = (p: P) => (
+  <Base {...p}>
+    <path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z" />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </Base>
+);
