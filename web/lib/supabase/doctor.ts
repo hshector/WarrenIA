@@ -3,6 +3,10 @@ import "server-only";
 import { allowedEmails, supabaseBaseUrl } from "./env";
 
 // Deployment self-check shown at /setup/check. Never returns secret values.
+// The page is reachable without signing in, because it is how you fix a sign-in that does
+// not work yet. Visitors who are not signed in (once Supabase is configured) get only what
+// sign-in depends on: no call is made with the secret key and nothing about your data,
+// tables or allowlist is disclosed. The full check needs an allowed, signed-in user.
 
 export type Check = { name: string; ok: boolean; detail: string; warn?: boolean };
 
@@ -34,7 +38,7 @@ async function get(url: string, key: string) {
   }
 }
 
-export async function runDoctor(): Promise<Check[]> {
+export async function runDoctor({ full }: { full: boolean }): Promise<Check[]> {
   const out: Check[] = [];
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const pub = (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
@@ -63,7 +67,7 @@ export async function runDoctor(): Promise<Check[]> {
   });
 
   const sk = keyKind(sec);
-  out.push({
+  if (full) out.push({
     name: "SUPABASE_SECRET_KEY",
     ok: sk === "secret" || sk === "service_role",
     detail:
@@ -77,7 +81,11 @@ export async function runDoctor(): Promise<Check[]> {
   });
 
   const emails = allowedEmails();
-  out.push({ name: "ALLOWED_EMAILS", ok: emails.length > 0, detail: emails.length ? `${emails.length} allowed email(s).` : `Missing. Add your email in ${VERCEL_VARS}.` });
+  out.push({
+    name: "ALLOWED_EMAILS",
+    ok: emails.length > 0,
+    detail: !emails.length ? `Missing. Add your email in ${VERCEL_VARS}.` : full ? `${emails.length} allowed email(s).` : "Set.",
+  });
 
   if (!urlOk) return out;
 
@@ -101,7 +109,7 @@ export async function runDoctor(): Promise<Check[]> {
     });
   }
 
-  if (sk === "secret" || sk === "service_role") {
+  if (full && (sk === "secret" || sk === "service_role")) {
     const db = await get(`${url}/rest/v1/settings?select=user_id&limit=1`, sec);
     out.push({
       name: "Database",

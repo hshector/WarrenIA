@@ -1,16 +1,6 @@
 "use client";
 
-import {
-  AreaSeries,
-  ColorType,
-  createChart,
-  CrosshairMode,
-  HistogramSeries,
-  LineSeries,
-  LineStyle,
-  type IChartApi,
-  type Time,
-} from "lightweight-charts";
+import type { IChartApi, Time } from "lightweight-charts";
 import { useEffect, useRef } from "react";
 
 import { useThemeClass } from "@/components/shell/theme";
@@ -63,33 +53,39 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ink3 = cssVar("var(--ink-3)");
-    // Phones: no price axis and no last-value badges. At ~330px they collide with each
-    // other and with the axis; the figures are already printed above every chart.
-    const compact = window.matchMedia("(max-width: 639px)").matches;
-    const nf = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
-    const chart = createChart(el, {
-      height,
-      localization: { locale: "en-GB", priceFormatter: (v: number) => nf.format(v), dateFormat: "dd MMM yyyy" },
-      autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: ink3, fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 11, attributionLogo: false },
-      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-      rightPriceScale: { visible: !compact, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
-      leftPriceScale: { visible: false, borderVisible: false },
-      timeScale: {
-        borderVisible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
-        tickMarkFormatter: (time: Time, type: number) => {
-          const d = typeof time === "string" ? new Date(time + "T00:00:00Z") : new Date(Number(time) * 1000);
-          if (type === 0) return String(d.getUTCFullYear());
-          if (type === 1) return MONTHS[d.getUTCMonth()];
-          return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+    let chart: IChartApi | null = null;
+    let cancelled = false;
+    // The charting library is loaded on demand: screens without a chart never download it,
+    // and screens with one show their figures before it arrives (the box keeps its height).
+    import("lightweight-charts").then(({ AreaSeries, ColorType, createChart, CrosshairMode, HistogramSeries, LineSeries, LineStyle }) => {
+      if (cancelled) return;
+      const ink3 = cssVar("var(--ink-3)");
+      // Phones: no price axis and no last-value badges. At ~330px they collide with each
+      // other and with the axis; the figures are already printed above every chart.
+      const compact = window.matchMedia("(max-width: 639px)").matches;
+      const nf = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
+      chart = createChart(el, {
+        height,
+        localization: { locale: "en-GB", priceFormatter: (v: number) => nf.format(v), dateFormat: "dd MMM yyyy" },
+        autoSize: true,
+        layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: ink3, fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 11, attributionLogo: false },
+        grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+        rightPriceScale: { visible: !compact, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
+        leftPriceScale: { visible: false, borderVisible: false },
+        timeScale: {
+          borderVisible: false,
+          fixLeftEdge: true,
+          fixRightEdge: true,
+          tickMarkFormatter: (time: Time, type: number) => {
+            const d = typeof time === "string" ? new Date(time + "T00:00:00Z") : new Date(Number(time) * 1000);
+            if (type === 0) return String(d.getUTCFullYear());
+            if (type === 1) return MONTHS[d.getUTCMonth()];
+            return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+          },
         },
-      },
-      crosshair: { mode: CrosshairMode.Magnet, vertLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)") }, horzLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)"), labelVisible: !compact } },
-      handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: false },
+        crosshair: { mode: CrosshairMode.Magnet, vertLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)") }, horzLine: { color: cssVar("var(--line-2)"), labelBackgroundColor: cssVar("var(--surface-3)"), labelVisible: !compact } },
+        handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+        handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: false },
     });
     chartRef.current = chart;
     for (const s of series) {
@@ -115,8 +111,10 @@ export function TimeSeriesChart({ series, height = 280, className, ariaLabel }: 
       }
     }
     chart.timeScale().fitContent();
+    });
     return () => {
-      chart.remove();
+      cancelled = true;
+      chart?.remove();
       chartRef.current = null;
     };
   }, [series, height, themeClass]);

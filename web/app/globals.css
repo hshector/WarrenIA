@@ -308,6 +308,19 @@ body {
   border-radius: 12px;
 }
 
+/* Route placeholder: invisible for the first 150 ms, so quick navigations go straight
+   from one screen to the next without a flash. */
+.route-loading {
+  animation: fade-in 150ms ease-out 150ms both;
+}
+
+/* Long lists (the radar): rows outside the screen are neither laid out nor painted until
+   they scroll near it. The intrinsic size keeps the scrollbar and the page height stable. */
+.radar-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 68px;
+}
+
 /* -------------------------------------------------------------- sheets
    Bottom sheet on phones (slides up with the drawer curve, leaves faster than it
    came), centred modal from `sm` (fades in from 0.96, origin centre). Keyframes,

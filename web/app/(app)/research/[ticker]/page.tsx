@@ -16,9 +16,18 @@ import { loadPortfolio } from "@/lib/portfolio/load";
 import { portfolioRelevance } from "@/lib/portfolio/relevance";
 import { requireStore } from "@/lib/user/store";
 
+/** The ticker in the URL; a malformed escape ("%E0") is a not-found, not a crash. */
+function tickerOf(raw: string): string {
+  try {
+    return decodeURIComponent(raw).toUpperCase();
+  } catch {
+    return "";
+  }
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
-  return { title: decodeURIComponent(ticker).toUpperCase() };
+  return { title: tickerOf(ticker) || "Not found" };
 }
 
 const SCORES = [
@@ -71,9 +80,18 @@ function ComponentsTable({ list }: { list: Component[] }) {
 
 export default async function AssetPage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker: raw } = await params;
-  const ticker = decodeURIComponent(raw).toUpperCase();
+  const ticker = tickerOf(raw);
+  if (!ticker) notFound();
   const { latest, meta } = await loadMarket();
-  const [asset, radar] = await Promise.all([getAsset(latest, ticker), getRadar(latest)]);
+  const store = await requireStore();
+  // Everything in parallel: the asset, the ranking, the benchmark and your portfolio.
+  const [asset, radar, bench, watch, pf] = await Promise.all([
+    getAsset(latest, ticker),
+    getRadar(latest),
+    meta ? getAsset(latest, meta.primary_benchmark) : null,
+    store.watchlist(),
+    loadPortfolio(store, latest, meta),
+  ]);
   if (!meta)
     return (
       <EmptyState title="No market data yet">
@@ -81,15 +99,13 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
       </EmptyState>
     );
   if (!asset) notFound();
-  const bench = await getAsset(latest, meta.primary_benchmark);
-  const store = await requireStore();
-  const [watch, pf] = await Promise.all([store.watchlist(), loadPortfolio(store, latest, meta)]);
   const r = asset.row;
   const total = radar?.rows.filter((x) => x.cls === r.cls).length ?? 0;
   const rep = asset.report;
   const risk = riskLabel(r.rk);
   const act = asset.action;
-  const owned = pf.result?.positions.some((p) => p.instrument.market_ticker === ticker && p.qty > 0) ?? false;
+  const ownedPos = pf.result?.positions.find((p) => p.instrument.market_ticker === ticker && p.qty > 1e-9);
+  const owned = !!ownedPos;
   const hold = act ? holdLabel(act) : null;
   const BENCH = radar?.bench[meta.primary_benchmark];
 
@@ -150,6 +166,11 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
             <p className="mt-4 text-[14.5px] text-ink-2">
               {owned ? "You own it: " : "If you owned it: "}
               <span className={`font-semibold ${hold.cls}`}>{hold.text}</span>
+              {ownedPos && (
+                <Link href={`/portfolio?sell=${encodeURIComponent(ownedPos.instrument.id)}#sell`} className="ml-2 whitespace-nowrap font-medium text-accent">
+                  Tax if you sell ›
+                </Link>
+              )}
             </p>
           )}
           <div className="mt-5 flex flex-col gap-4">

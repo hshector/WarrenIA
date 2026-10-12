@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AssetAvatar, Delta } from "@/components/fin/fin";
 import { InstrumentForm, TransactionForm } from "@/components/portfolio/forms";
+import { SellEstimatePanel } from "@/components/portfolio/sell-estimate";
 import { ValueChart } from "@/components/portfolio/value-chart";
 import { PageHeader } from "@/components/shell/page-header";
 import { MixBar, MiniStat } from "@/components/portfolio/mix";
@@ -18,7 +19,7 @@ import { requireStore } from "@/lib/user/store";
 export const metadata = { title: "Portfolio" };
 
 
-export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
+export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ add?: string; sell?: string }> }) {
   const sp = await searchParams;
   const { latest, meta } = await loadMarket();
   const store = await requireStore();
@@ -146,6 +147,13 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
           )}
         </ul>
       </Card>
+
+      {held.length > 0 && (
+        <SellEstimatePanel
+          initial={sp.sell}
+          positions={held.map((p) => ({ id: p.instrument.id, name: p.instrument.name, qty: p.qty, price: p.price, currency: p.priceCurrency ?? p.instrument.currency }))}
+        />
+      )}
 
       <Card title="Mix" action={<Link href="/plan" className="text-accent">Plan</Link>}>
         <MixBar dev={dev} />

@@ -117,6 +117,21 @@ describe("contributions, cash and returns", () => {
   it("converts with ECB rates (units per EUR)", () => {
     expect(toEur(110, "USD", { USD: [["2026-01-01", 1.1]] }, "2026-01-05")).toBeCloseTo(100);
     expect(toEur(110, "USD", {}, "2026-01-05")).toBeNull();
+    const usd: [string, number][] = [["2026-01-01", 1.1], ["2026-01-02", 1.2], ["2026-01-05", 1.0]];
+    expect(toEur(120, "USD", { USD: usd }, "2026-01-04")).toBeCloseTo(100); // weekend: Friday's rate
+    expect(toEur(110, "USD", { USD: usd }, "2025-12-01")).toBeCloseTo(100); // before the file: first rate
+  });
+
+  it("keeps foreign holdings in the value before the first ECB rate (no fake jump)", () => {
+    const txs = [
+      tx({ type: "deposit", trade_date: "2026-01-02", amount: 1000 }),
+      tx({ type: "buy", trade_date: "2026-01-02", instrument_id: "nvda", quantity: 10, price: 100, currency: "USD", fx_rate: 1 / 1.25 }),
+    ];
+    const r = computePortfolio([NVDA], txs, flat("nvda", 100, "2026-01-01", 60, "USD"), { USD: [["2026-02-01", 1.25]] }, "2026-02-27");
+    // 200 EUR cash + 1000 USD at 1.25 = 1000 EUR every day: before Feb the first rate is used, so no jump on 1 Feb.
+    expect(r.series.find((p) => p.date === "2026-01-15")!.value).toBeCloseTo(1000, 6);
+    expect(r.twr.cumulative).toBeCloseTo(0, 6);
+    expect(r.warnings.some((w) => w.includes("USD holdings before 2026-02-01"))).toBe(true);
   });
 });
 

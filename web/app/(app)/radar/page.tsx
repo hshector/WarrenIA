@@ -1,6 +1,7 @@
 import { RadarView } from "@/components/radar/radar-view";
 import { PageHeader } from "@/components/shell/page-header";
 import { EmptyState } from "@/components/ui/primitives";
+import { toListRow } from "@/lib/market/radar";
 import { getRadar, loadMarket } from "@/lib/market/source";
 import { heldTickers } from "@/lib/user/holdings";
 import { requireStore } from "@/lib/user/store";
@@ -10,9 +11,8 @@ export const metadata = { title: "Radar" };
 export default async function RadarPage({ searchParams }: { searchParams: Promise<{ cls?: string; preset?: string; group?: string }> }) {
   const sp = await searchParams;
   const { latest, meta } = await loadMarket();
-  const radar = await getRadar(latest);
   const store = await requireStore();
-  const [held, watch] = await Promise.all([heldTickers(store), store.watchlist()]);
+  const [radar, held, watch] = await Promise.all([getRadar(latest), heldTickers(store), store.watchlist()]);
 
   if (!latest || !radar || !meta) {
     return (
@@ -26,9 +26,8 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title="Radar" sub="Strongest trends, and whether to buy, wait or avoid." />
       <RadarView
-        rows={radar.rows}
+        rows={radar.rows.map(toListRow)}
         bench={radar.bench}
-        benchmarks={meta.benchmarks}
         primary={meta.primary_benchmark}
         held={held.tickers}
         watch={watch.map((w) => w.ticker)}

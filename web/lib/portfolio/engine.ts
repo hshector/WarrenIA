@@ -143,13 +143,32 @@ export function lastOnOrBefore<T extends { date: string }>(arr: T[], d: string):
   return ans >= 0 ? arr[ans] : null;
 }
 
+/**
+ * ECB rate on or before `d` (binary search straight on the [date, rate] pairs: this runs for
+ * every position on every day of the replay). Before the first published rate, the first
+ * one is used: the ECB file covers ~2 years, and leaving a holding out of the value instead
+ * would show a fake jump in the returns the day the rates start.
+ */
 export function fxRate(fx: FxTable, currency: string, d: string): number | null {
   if (currency === "EUR") return 1;
   const s = fx[currency];
   if (!s || !s.length) return null;
-  const pts = s.map(([date, rate]) => ({ date, rate }));
-  const p = lastOnOrBefore(pts, d);
-  return p ? p.rate : null;
+  let lo = 0;
+  let hi = s.length - 1;
+  let ans = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (s[mid][0] <= d) {
+      ans = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  return s[ans][1];
+}
+
+/** First date with an ECB rate for `currency` (null for EUR or an unknown currency). */
+function fxStart(fx: FxTable, currency: string): string | null {
+  return currency === "EUR" ? null : (fx[currency]?.[0]?.[0] ?? null);
 }
 
 /** Convert an amount in `currency` to EUR using ECB rates (units per EUR). */
@@ -334,6 +353,7 @@ export function computePortfolio(
   let prevValue = 0;
   let invested = 0;
   const missingPrice = new Set<string>();
+  const earlyFx = new Map<string, string>();
   const start = txs[0].trade_date;
   for (let d = start; d <= asOf; d = addDays(d, 1)) {
     const flowsBefore = L.flows.length;
@@ -356,6 +376,8 @@ export function computePortfolio(
         missingPrice.add(`${ins.name} (no ${p.currency} exchange rate)`);
         continue;
       }
+      const f0 = fxStart(fx, p.currency);
+      if (f0 && d < f0) earlyFx.set(p.currency, f0);
       value += v;
     }
     const base = prevValue > EPS ? prevValue : dayFlow;
@@ -364,6 +386,7 @@ export function computePortfolio(
     prevValue = value;
   }
   if (missingPrice.size) warnings.push(`No price to value: ${[...missingPrice].join(", ")}.`);
+  for (const [c, f0] of earlyFx) warnings.push(`${c} holdings before ${f0} are converted at the ${f0} ECB rate (the first one available).`);
 
   // ---- Positions at asOf
   const positions: Position[] = [];
