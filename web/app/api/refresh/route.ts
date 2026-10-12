@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { forgetLatest } from "@/lib/market/source";
 import { AuthError, requireStore } from "@/lib/user/store";
 
 // Triggers the GitHub Actions market-data workflow (workflow_dispatch).
@@ -42,6 +43,9 @@ export async function GET() {
   if (!g) return NextResponse.json({ configured: false });
   try {
     const run = await lastRun(g);
+    // A run just finished: the client refreshes next, so let it see the new latest.json now
+    // instead of after the short in-memory cache expires.
+    if (run?.status === "completed") forgetLatest();
     return NextResponse.json({ configured: true, status: run?.status, conclusion: run?.conclusion, created_at: run?.created_at, html_url: run?.html_url });
   } catch (e) {
     return NextResponse.json({ configured: true, message: (e as Error).message });

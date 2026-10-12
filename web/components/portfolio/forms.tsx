@@ -7,6 +7,7 @@ import { addManualPrice, addTransaction, deleteInstrument, deleteTransaction, sa
 import { IconPlus, IconTrash } from "@/components/ui/icons";
 import { Button, Field, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Sheet } from "@/components/ui/sheet";
+import { localToday } from "@/lib/format";
 import { instrumentKind, PRODUCTS } from "@/lib/plan/catalog";
 import { BUCKET_LABELS, TX_LABELS, type Instrument, type Settings, type TxType } from "@/lib/portfolio/types";
 
@@ -58,7 +59,7 @@ export function TransactionForm({ instruments, defaultOpen = false }: { instrume
           </Select>
         </Field>
         <Field label="Date">
-          <Input type="date" name="trade_date" required defaultValue={new Date().toISOString().slice(0, 10)} max={new Date().toISOString().slice(0, 10)} />
+          <Input type="date" name="trade_date" required defaultValue={localToday()} max={localToday()} />
         </Field>
         {needsIns && (
           <Field label="Instrument" className="col-span-2" hint={instruments.length ? undefined : "Add an instrument first."}>
@@ -275,7 +276,7 @@ export function ManualPriceForm({ instruments }: { instruments: Instrument[] }) 
         </Select>
       </Field>
       <Field label="Date">
-        <Input type="date" name="price_date" required defaultValue={new Date().toISOString().slice(0, 10)} />
+        <Input type="date" name="price_date" required defaultValue={localToday()} max={localToday()} />
       </Field>
       <Field label="Price">
         <Input name="price" inputMode="decimal" required className="w-28" />

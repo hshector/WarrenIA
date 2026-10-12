@@ -16,9 +16,18 @@ import { loadPortfolio } from "@/lib/portfolio/load";
 import { portfolioRelevance } from "@/lib/portfolio/relevance";
 import { requireStore } from "@/lib/user/store";
 
+/** The ticker in the URL; a malformed escape ("%E0") is a not-found, not a crash. */
+function tickerOf(raw: string): string {
+  try {
+    return decodeURIComponent(raw).toUpperCase();
+  } catch {
+    return "";
+  }
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
-  return { title: decodeURIComponent(ticker).toUpperCase() };
+  return { title: tickerOf(ticker) || "Not found" };
 }
 
 const SCORES = [
@@ -71,9 +80,18 @@ function ComponentsTable({ list }: { list: Component[] }) {
 
 export default async function AssetPage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker: raw } = await params;
-  const ticker = decodeURIComponent(raw).toUpperCase();
+  const ticker = tickerOf(raw);
+  if (!ticker) notFound();
   const { latest, meta } = await loadMarket();
-  const [asset, radar] = await Promise.all([getAsset(latest, ticker), getRadar(latest)]);
+  const store = await requireStore();
+  // Everything in parallel: the asset, the ranking, the benchmark and your portfolio.
+  const [asset, radar, bench, watch, pf] = await Promise.all([
+    getAsset(latest, ticker),
+    getRadar(latest),
+    meta ? getAsset(latest, meta.primary_benchmark) : null,
+    store.watchlist(),
+    loadPortfolio(store, latest, meta),
+  ]);
   if (!meta)
     return (
       <EmptyState title="No market data yet">
@@ -81,9 +99,6 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
       </EmptyState>
     );
   if (!asset) notFound();
-  const bench = await getAsset(latest, meta.primary_benchmark);
-  const store = await requireStore();
-  const [watch, pf] = await Promise.all([store.watchlist(), loadPortfolio(store, latest, meta)]);
   const r = asset.row;
   const total = radar?.rows.filter((x) => x.cls === r.cls).length ?? 0;
   const rep = asset.report;

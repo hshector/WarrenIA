@@ -308,6 +308,12 @@ body {
   border-radius: 12px;
 }
 
+/* Route placeholder: invisible for the first 150 ms, so quick navigations go straight
+   from one screen to the next without a flash. */
+.route-loading {
+  animation: fade-in 150ms ease-out 150ms both;
+}
+
 /* -------------------------------------------------------------- sheets
    Bottom sheet on phones (slides up with the drawer curve, leaves faster than it
    came), centred modal from `sm` (fades in from 0.96, origin centre). Keyframes,

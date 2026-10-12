@@ -12,6 +12,27 @@ export function riskLabel(rk: number | null | undefined): { text: string; cls: s
 }
 
 
+/** The fields the radar list filters, sorts and shows. The page sends only these to the
+ *  browser: the full rows are several times larger and the list can hold thousands. */
+export const LIST_FIELDS = [
+  "t", "n", "cls", "ex", "sec", "mcap", "adv", "vol", "rvol", "r1m", "r3m", "r6m", "r12m",
+  "m", "a", "rk", "ov", "rank", "dr", "dm", "st", "act", "prof", "bo", "h52",
+] as const satisfies readonly (keyof RadarRow)[];
+export type RadarListRow = Pick<RadarRow, (typeof LIST_FIELDS)[number]>;
+
+// Decimals kept per field: enough for every figure the list prints (returns to 0.1 %).
+const ROUND: Partial<Record<keyof RadarListRow, number>> = { mcap: 0, adv: 0, vol: 4, rvol: 2, r1m: 4, r3m: 4, r6m: 4, r12m: 4, dm: 1 };
+
+export function toListRow(r: RadarRow): RadarListRow {
+  const out = {} as Record<string, unknown>;
+  for (const k of LIST_FIELDS) {
+    const v = r[k];
+    const d = ROUND[k];
+    out[k] = d !== undefined && typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : v;
+  }
+  return out as RadarListRow;
+}
+
 export type Horizon = "r1m" | "r3m" | "r6m" | "r12m";
 export type PresetKey = "buy" | "all" | "wait" | "strongest" | "accel" | "lowvol" | "fading" | "breakouts" | "improvers" | "watch";
 
@@ -20,11 +41,11 @@ export interface Preset {
   label: string;
   question: string;
   note?: string;
-  filter?: (r: RadarRow) => boolean;
+  filter?: (r: RadarListRow) => boolean;
   sort: { key: SortKey; dir: "asc" | "desc" };
 }
 
-export type SortKey = keyof RadarRow | "ret" | "rel";
+export type SortKey = keyof RadarListRow | "ret" | "rel";
 
 export const PRESETS: Preset[] = [
   {
@@ -114,17 +135,17 @@ export const DEFAULT_FILTERS: Filters = {
   onlyWatch: false,
 };
 
-export function relReturn(r: RadarRow, h: Horizon, bench: BenchReturns, b: string): number | null {
+export function relReturn(r: RadarListRow, h: Horizon, bench: BenchReturns, b: string): number | null {
   const a = r[h];
   const rb = bench[b]?.[h];
   if (a === null || a === undefined || rb === null || rb === undefined) return null;
   return (1 + a) / (1 + rb) - 1;
 }
 
-export function sortValue(r: RadarRow, key: SortKey, h: Horizon, bench: BenchReturns, b: string): number | string | null {
+export function sortValue(r: RadarListRow, key: SortKey, h: Horizon, bench: BenchReturns, b: string): number | string | null {
   if (key === "ret") return r[h];
   if (key === "rel") return relReturn(r, h, bench, b);
-  const v = r[key as keyof RadarRow];
+  const v = r[key as keyof RadarListRow];
   return typeof v === "number" || typeof v === "string" ? v : null;
 }
 
@@ -142,17 +163,17 @@ export function etfGroup(r: Pick<RadarRow, "t" | "n">): EtfGroup {
 }
 
 /** Sector for stocks, holding group for ETFs. */
-export function groupOf(r: RadarRow): string {
+export function groupOf(r: RadarListRow): string {
   return r.cls === "etf" ? etfGroup(r) : (r.sec ?? "—");
 }
 
-export function applyRadar(
-  rows: RadarRow[],
+export function applyRadar<R extends RadarListRow>(
+  rows: R[],
   f: Filters,
   preset: Preset,
   sort: { key: SortKey; dir: "asc" | "desc" },
   ctx: { horizon: Horizon; bench: BenchReturns; benchmark: string; held: Set<string>; watch: Set<string> },
-): RadarRow[] {
+): R[] {
   const q = f.search.trim().toLowerCase();
   const out = rows.filter((r) => {
     if (r.cls !== f.cls) return false;
@@ -186,7 +207,7 @@ export function applyRadar(
 }
 
 /** Artifacts published before the action layer existed have no `act`: fall back to the full ranking. */
-export function hasActions(rows: RadarRow[]): boolean {
+export function hasActions(rows: Pick<RadarRow, "act">[]): boolean {
   return rows.some((r) => typeof r.act === "string");
 }
 

@@ -8,8 +8,8 @@ import { ActionPill, AssetAvatar, Delta, DeltaPill, StatePill } from "@/componen
 import { IconFilter, IconSearch } from "@/components/ui/icons";
 import { Button, cx, Field, Input, Segmented, Select } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
-import { applyRadar, DEFAULT_FILTERS, ETF_GROUPS, groupOf, hasActions, PRESETS, riskLabel, type Filters, type Horizon, type PresetKey } from "@/lib/market/radar";
-import { ACTION_LABELS, STATE_SIMPLE, type ActionKey, type BenchReturns, type RadarRow, type StateKey } from "@/lib/market/types";
+import { applyRadar, DEFAULT_FILTERS, ETF_GROUPS, groupOf, hasActions, PRESETS, riskLabel, type Filters, type Horizon, type PresetKey, type RadarListRow } from "@/lib/market/radar";
+import { ACTION_LABELS, STATE_SIMPLE, type ActionKey, type BenchReturns, type StateKey } from "@/lib/market/types";
 
 const PAGE = 40;
 const H_LABEL: Record<Horizon, string> = { r1m: "1 month", r3m: "3 months", r6m: "6 months", r12m: "1 year" };
@@ -22,9 +22,8 @@ export function RadarView({
   watch,
   initial,
 }: {
-  rows: RadarRow[];
+  rows: RadarListRow[];
   bench: BenchReturns;
-  benchmarks: Record<string, string>;
   primary: string;
   held: string[];
   watch: string[];

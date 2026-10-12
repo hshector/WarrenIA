@@ -188,16 +188,16 @@ export function parseTransactionsCsv(text: string, today: string): { rows: Parse
       : null;
     return { line: k + 2, ok, errors, tx, isin, ticker, name };
   });
-  // Duplicate rows inside the same file
+  // Identical rows inside one file are real (two equal deposits the same day): the 2nd,
+  // 3rd… copy gets its occurrence number in the hash. Re-importing the same file yields
+  // the same hashes, so nothing is duplicated; the first copy keeps the original hash.
   const seen = new Map<string, number>();
   for (const r of rows) {
     if (!r.tx?.import_hash) continue;
-    const prev = seen.get(r.tx.import_hash);
-    if (prev) {
-      r.ok = false;
-      r.errors.push(`Duplicate of line ${prev}`);
-      r.tx = null;
-    } else seen.set(r.tx.import_hash, r.line);
+    const base = r.tx.import_hash;
+    const occ = (seen.get(base) ?? 0) + 1;
+    seen.set(base, occ);
+    if (occ > 1) r.tx.import_hash = rowHash([base, occ]);
   }
   return { rows, headerErrors, columns: header, format: "generic" };
 }

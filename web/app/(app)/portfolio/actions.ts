@@ -9,11 +9,13 @@ import { matchTicker } from "@/lib/portfolio/tr";
 import { getRadar, loadMarket } from "@/lib/market/source";
 import { BUCKET_LABELS, type Instrument, type PlanKey, type Transaction } from "@/lib/portfolio/types";
 import { byIsin, instrumentKind, normaliseChoices } from "@/lib/plan/catalog";
+import { latestToday, parseDecimal } from "@/lib/format";
 import { requireStore } from "@/lib/user/store";
 
 export type ActionResult = { ok: boolean; message: string } | null;
 
-const today = () => new Date().toISOString().slice(0, 10);
+// "In the future" means after today anywhere on Earth: the user may be on a phone in any time zone.
+const today = () => latestToday();
 const opt = <T extends z.ZodTypeAny>(s: T) => z.preprocess((v) => (v === "" || v === null ? undefined : v), s.optional());
 const numStr = z.coerce.number().refine(Number.isFinite);
 
@@ -83,8 +85,9 @@ async function validateLedger(instruments: Instrument[], txs: Transaction[]) {
 
 export async function addTransaction(_: ActionResult, form: FormData): Promise<ActionResult> {
   try {
-    const raw = Object.fromEntries([...form.entries()].map(([k, v]) => [k, typeof v === "string" ? v.replace(",", ".") : v]));
-    const d = TxSchema.parse({ ...raw, note: form.get("note") });
+    const DECIMALS = ["quantity", "price", "amount", "fees", "taxes", "fx_rate", "split_ratio"];
+    const raw = Object.fromEntries([...form.entries()].map(([k, v]) => [k, typeof v === "string" && DECIMALS.includes(k) ? parseDecimal(v) : v]));
+    const d = TxSchema.parse(raw);
     if (d.trade_date > today()) return { ok: false, message: "The date cannot be in the future" };
     const needsIns = ["buy", "sell", "dividend", "split"].includes(d.type);
     if (needsIns && !d.instrument_id) return { ok: false, message: "Choose the instrument" };
@@ -111,6 +114,7 @@ export async function addTransaction(_: ActionResult, form: FormData): Promise<A
 }
 
 export async function deleteTransaction(id: string) {
+  id = z.string().min(1).max(64).parse(id);
   const store = await requireStore();
   const [instruments, txs] = await Promise.all([store.instruments(), store.transactions()]);
   try {
@@ -233,7 +237,7 @@ const SettingsSchema = z.object({
 
 export async function saveSettings(_: ActionResult, form: FormData): Promise<ActionResult> {
   try {
-    const d = SettingsSchema.parse(Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).replace(",", ".")])));
+    const d = SettingsSchema.parse(Object.fromEntries([...form.entries()].map(([k, v]) => [k, parseDecimal(String(v))])));
     if (Math.abs(d.core + d.gold + d.momentum + d.cash - 100) > 0.01) return { ok: false, message: "Target weights must add up to 100%" };
     const store = await requireStore();
     await store.saveSettings({
@@ -251,7 +255,7 @@ const PriceSchema = z.object({ instrument_id: z.string().uuid(), price_date: z.s
 
 export async function addManualPrice(_: ActionResult, form: FormData): Promise<ActionResult> {
   try {
-    const d = PriceSchema.parse({ ...Object.fromEntries(form), price: String(form.get("price") ?? "").replace(",", ".") });
+    const d = PriceSchema.parse({ ...Object.fromEntries(form), price: parseDecimal(String(form.get("price") ?? "")) });
     if (d.price_date > today()) return { ok: false, message: "Future date" };
     const store = await requireStore();
     await store.addManualPrice(d);

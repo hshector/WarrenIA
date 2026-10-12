@@ -1,5 +1,6 @@
 import "server-only";
 
+import { todayMadrid } from "@/lib/format";
 import { getAssets, getFx, getPriceFile } from "@/lib/market/source";
 import type { Latest, Meta } from "@/lib/market/types";
 import type { UserStore } from "@/lib/user/store";
@@ -18,8 +19,10 @@ export interface LoadedPortfolio {
   priceInfo: Record<string, { source: string; asof: string | null }>;
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Valued on today's date in Spain, or on the latest trade if one is dated later (a trade
+ *  entered from a time zone already on tomorrow must not vanish from the portfolio). */
+function valuationDate(txs: Transaction[]): string {
+  return txs.reduce((d, t) => (t.trade_date > d ? t.trade_date : d), todayMadrid());
 }
 
 export async function loadPortfolio(store: UserStore, latest: Latest | null, meta: Meta | null): Promise<LoadedPortfolio> {
@@ -34,7 +37,12 @@ export async function loadPortfolio(store: UserStore, latest: Latest | null, met
   const priceInfo: LoadedPortfolio["priceInfo"] = {};
 
   const usTickers = instruments.filter((i) => i.price_source === "us_market" && i.market_ticker).map((i) => i.market_ticker!);
-  const assets = usTickers.length ? await getAssets(latest, usTickers) : {};
+  const eodhd = [...new Set(instruments.filter((i) => i.price_source === "eodhd" && i.eodhd_symbol).map((i) => i.eodhd_symbol!))];
+  // US closes and EUR price files are independent downloads: fetch them all at once.
+  const [assets, files] = await Promise.all([
+    usTickers.length ? getAssets(latest, usTickers) : Promise.resolve({} as Awaited<ReturnType<typeof getAssets>>),
+    Promise.all(eodhd.map(async (s) => [s, await getPriceFile(s).catch(() => null)] as const)).then((xs) => new Map(xs)),
+  ]);
   for (const ins of instruments) {
     if (ins.price_source === "us_market" && ins.market_ticker) {
       const a = assets[ins.market_ticker];
@@ -43,7 +51,7 @@ export async function loadPortfolio(store: UserStore, latest: Latest | null, met
         priceInfo[ins.id] = { source: "Cierre EE. UU. (USD) + BCE", asof: latest?.data_asof ?? null };
       }
     } else if (ins.price_source === "eodhd" && ins.eodhd_symbol) {
-      const f = await getPriceFile(ins.eodhd_symbol).catch(() => null);
+      const f = files.get(ins.eodhd_symbol);
       if (f?.series.length) {
         prices[ins.id] = { currency: f.currency, source: f.source, points: f.series.map(([date, price]) => ({ date, price })) };
         priceInfo[ins.id] = { source: f.source, asof: f.asof };
@@ -59,7 +67,7 @@ export async function loadPortfolio(store: UserStore, latest: Latest | null, met
   let result: PortfolioResult | null = null;
   let error: string | null = null;
   try {
-    result = transactions.length ? computePortfolio(instruments, transactions, prices, fx, today()) : null;
+    result = transactions.length ? computePortfolio(instruments, transactions, prices, fx, valuationDate(transactions)) : null;
   } catch (e) {
     if (e instanceof PortfolioError) error = e.message;
     else throw e;

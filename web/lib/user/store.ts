@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { cache } from "react";
+
 import { DEFAULT_SETTINGS, normTargets, type Instrument, type ManualPrice, type Settings, type Transaction } from "@/lib/portfolio/types";
 import { appMode, isAllowedEmail } from "@/lib/supabase/env";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -46,16 +48,20 @@ export interface UserStore {
 
 export class AuthError extends Error {}
 
-/** Resolve the store for the current request. Throws AuthError if not signed in / not allowed. */
-export async function requireStore(): Promise<UserStore> {
+/** Resolve the store for the current request (once per request: pages, layouts and their
+ *  children share it). Throws AuthError if not signed in / not allowed. */
+export const requireStore = cache(async (): Promise<UserStore> => {
   const mode = appMode();
   if (mode === "local") return new LocalStore();
   if (mode === "misconfigured") throw new AuthError("App not configured");
   const sb = await supabaseServer();
-  const { data } = await sb.auth.getUser();
-  if (!data.user || !isAllowedEmail(data.user.email)) throw new AuthError("No autorizado");
-  return new SupabaseStore(sb, data.user.email ?? null);
-}
+  // getClaims verifies the JWT signature locally against the project's cached public keys
+  // (asymmetric signing keys); with a legacy shared secret it falls back to asking Auth.
+  const { data } = await sb.auth.getClaims();
+  const email = typeof data?.claims?.email === "string" ? data.claims.email : null;
+  if (!data?.claims?.sub || !isAllowedEmail(email)) throw new AuthError("No autorizado");
+  return new SupabaseStore(sb, email);
+});
 
 // ------------------------------------------------------------------ Supabase
 
