@@ -1,0 +1,40 @@
+{
+  "fps": 60,
+  "durationInFrames": 1170,
+  "bpm": 120,
+  "hook": {
+    "texts": {
+      "A": "Tus finanzas al día\nen tu bolsillo",
+      "B": "Tu cartera, al día\ny en tu bolsillo",
+      "C": "Tus finanzas,\nsiempre al día"
+    },
+    "typeStart": 14,
+    "charEvery": 2.4,
+    "sendAt": 128
+  },
+  "reveal": {
+    "start": 150,
+    "burst": 168,
+    "brackets": 210,
+    "word": 214
+  },
+  "product": {
+    "start": 300,
+    "phoneIn": 372,
+    "countStart": 396,
+    "countEnd": 470
+  },
+  "features": {
+    "plan": 540,
+    "radar": 660,
+    "sell": 780,
+    "summary": 900
+  },
+  "close": {
+    "flip": 930,
+    "flipEnd": 962,
+    "cta": 1002,
+    "outro": 1104,
+    "black": 1136
+  }
+}
