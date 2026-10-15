@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, Freeze, useCurrentFrame } from "remotion";
-import { Bracket } from "../components/Brand";
+import { Bracket, BrandMarkDraw } from "../components/Brand";
 import { Caret, PillField, useField } from "../components/PillField";
 import { EASE_IN, EASE_IN_OUT, mix, prog, sp } from "../lib/anim";
 import { useLayout } from "../lib/layout";
@@ -11,7 +11,7 @@ import { SummaryChips } from "./Features";
 
 const C = TL.close;
 const at = (abs: number) => abs - C.flip; // local frame of an absolute time
-export const CTA = "Instálala en el móvil · 0 €/mes";
+export const CTA = "Instálala en el móvil";
 export const LEGAL = "Contenido informativo. No es asesoramiento financiero. Cifras de demostración.";
 
 /** Flip to white (the app's light tokens), [ WarrenIA ], CTA and legal line; then fold back
@@ -75,10 +75,27 @@ const LightEnd: React.FC = () => {
   const inK = (i: number) => sp(f, 60, at(C.flipEnd) + 10 + i * 2.5, { damping: 22, stiffness: 200, mass: 1 });
   const outK = (i: number) => prog(f, at(C.outro) + 2 + (letters.length - 1 - i) * 1.5, at(C.outro) + 12 + (letters.length - 1 - i) * 1.5, EASE_IN);
   const ctaK = sp(f, 60, at(C.cta));
+  // The app's mark draws in above the wordmark, then leaves with the CTA.
+  const markSize = L.wide ? 172 : 148;
+  const markIn = sp(f, 60, at(C.flipEnd) + 2, { damping: 24, stiffness: 180, mass: 1 });
+  const markDraw = prog(f, at(C.flipEnd) + 2, at(C.flipEnd) + 24, EASE_IN_OUT);
+  const squares = [0, 1].map((i) => sp(f, 60, at(C.flipEnd) + 18 + i * 3));
   const legalK = prog(f, at(C.cta) + 8, at(C.cta) + 22);
 
   return (
     <AbsoluteFill style={{ background: light.bg }}>
+      <div
+        style={{
+          position: "absolute",
+          left: L.cx - markSize / 2,
+          top: L.cy - size * 0.62 - markSize - (L.wide ? 36 : 28),
+          opacity: Math.min(1, markIn * 1.5) * fadeOut,
+          scale: String(0.92 + 0.08 * markIn),
+          translate: `0 ${(1 - markIn) * 16}px`,
+        }}
+      >
+        <BrandMarkDraw size={markSize} draw={markDraw} squares={squares} />
+      </div>
       {toCaret < 1 && (
         <>
           <Bracket h={G.bh * (1 - toCaret)} side="l" color={light.accent} draw={draw} style={{ position: "absolute", left: L.cx - off * (1 - toCaret), top: L.cy - (G.bh * (1 - toCaret)) / 2 }} />

@@ -13,6 +13,35 @@ export const BrandMark: React.FC<{ size: number; ink: string; accent: string; ti
   </svg>
 );
 
+/** The mark drawing itself: the "w" stroke traces in, then the two Salvia squares pop. Light tokens. */
+export const BrandMarkDraw: React.FC<{ size: number; draw: number; squares: number[]; ink?: string; accent?: string }> = ({
+  size,
+  draw,
+  squares,
+  ink = "#111111",
+  accent = "#527f62",
+}) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" style={{ overflow: "visible" }}>
+    <g transform="translate(2.24 2.24) scale(0.86)">
+      <path
+        d="M6 11.55v8.5a5 5 0 0 0 10 0a5 5 0 0 0 10 0V11.55"
+        fill="none"
+        stroke={ink}
+        strokeWidth="3.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        pathLength={1}
+        strokeDasharray="1 1"
+        strokeDashoffset={1 - draw}
+        opacity={draw > 0.001 ? 1 : 0}
+      />
+      {[4.5, 24.5].map((x, i) => (
+        <rect key={x} x={x} y="5.15" width="3" height="3" rx="0.6" fill={accent} style={{ transformBox: "fill-box", transformOrigin: "center", scale: String(0.4 + 0.6 * squares[i]), opacity: Math.min(1, squares[i] * 2) }} />
+      ))}
+    </g>
+  </svg>
+);
+
 /** One square bracket, drawn as a stroke so it can be revealed. */
 export const Bracket: React.FC<{ h: number; side: "l" | "r"; color: string; draw?: number; style?: React.CSSProperties }> = ({
   h,

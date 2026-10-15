@@ -6,7 +6,7 @@ Proyecto Remotion (TypeScript) del vídeo para X. Brief: [`briefs/x-18s.md`](bri
 
 | Archivo | Qué es |
 | --- | --- |
-| `warrenia-x-1080x1080.mp4` | Master 1:1, 18 s, H.264, 60 fps, en bucle |
+| `warrenia-x-1080x1080.mp4` | Master 1:1, 19,5 s, H.264, 60 fps, en bucle |
 | `warrenia-x-1920x1080.mp4` | Versión 16:9 |
 | `hooks/hook-{A,B,C}-1080x1080.mp4` | Las tres variantes de los primeros 2,5 s |
 | `cover-1080x1080.png`, `cover-1920x1080.png` | Portadas |
@@ -17,7 +17,7 @@ Proyecto Remotion (TypeScript) del vídeo para X. Brief: [`briefs/x-18s.md`](bri
 src/
   timeline.json        tiempos de cada escena (60 fps); lo leen también el audio y los stills
   theme.ts             tokens de web/app/globals.css + paleta de datos para vídeo
-  scenes/              HookReveal (0–5 s), Product (5–9 s), Features (9–14 s), Close (14–18 s)
+  scenes/              HookReveal (0–5 s), Product (5–9 s), Features (9–15,5 s), Close (15,5–19,5 s)
   screens/             pantallas de la app redibujadas con datos de demostración
   components/          campo píldora, corchetes, teléfono genérico, gráficas
   lib/data.ts          todas las cifras (sintéticas)

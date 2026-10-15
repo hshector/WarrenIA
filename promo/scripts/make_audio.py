@@ -2,7 +2,7 @@
 
 A minimal 120 BPM electronic bed in A minor plus UI effects, placed on the same timeline as the
 video (src/timeline.json). The mix is rendered 2 s longer and the tail is wrapped onto the start,
-so the 18 s file loops without a seam, like the picture.
+so the file loops without a seam, like the picture.
 
 Usage: python scripts/make_audio.py            (writes public/audio/*.wav)
 Needs numpy and scipy; ffmpeg for loudness normalisation (-14 LUFS, -1.5 dBTP).
@@ -225,6 +225,9 @@ BAR = 4 * BEAT
 
 
 def chord_at(t: float):
+    # From the flip to the end, hold Am9 so the loop point (end → start) stays on one chord.
+    if t >= sec(TL["close"]["flip"]) - BAR / 4:
+        return CHORDS[0]
     return CHORDS[int(t // BAR) % 4]
 
 
@@ -234,7 +237,7 @@ def music(text: str, total: float, full: bool) -> np.ndarray:
     # Pad: continuous, one chord per bar, overlapping so changes are soft.
     bars = int(np.ceil(total / BAR)) + 1
     for b in range(bars):
-        root, tones = CHORDS[b % 4]
+        root, tones = chord_at(b * BAR + 0.01)
         sig = pad_chord([note(x) for x in tones], BAR + 0.9, attack=0.45, release=0.8)
         pad.add(b * BAR - 0.2, sig, 0.16, 0)
 
