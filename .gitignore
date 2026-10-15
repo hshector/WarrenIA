@@ -22,3 +22,9 @@ next-env.d.ts
 .env.*.local
 # OS
 .DS_Store
+# Promo video (Remotion project lives in promo/)
+promo/node_modules/
+promo/out/
+promo/assets/raw/
+# video-shotcraft is installed per session (77 MB, third-party media); see promo/KICKOFF.md
+.claude/skills/video-shotcraft/
