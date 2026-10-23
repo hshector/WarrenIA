@@ -41,8 +41,7 @@ LEAK = re.compile(r"today \$?\d[\d,]*(?:\.\d+)?(?![\d,.]*\s*(?:/|%))")
 
 SOURCES = """# WarrenIA, public extract
 
-Computed every night by the WarrenIA engine (https://github.com/hshector/warrenia) from end-of-day
-market data. Market prices are not included: the providers do not allow redistributing them.
+Computed every night by the WarrenIA engine from end-of-day market data. Market prices are not included: the providers do not allow redistributing them.
 
 - Scores, ranks, states, reasons, returns and risk measures: computed by WarrenIA.
 - Annual accounts: SEC EDGAR (public domain).
