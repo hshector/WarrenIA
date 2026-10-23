@@ -24,6 +24,8 @@ import json
 import logging
 import re
 import shutil
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +119,13 @@ def check(out: Path) -> None:
         _walk(json.loads(f.read_text()), f, "")
 
 
-def build(storage: Storage, out: Path, prefix: str = "published") -> dict:
+def build(storage: Storage, out: Path, prefix: str = "published", workers: int = 8) -> dict:
+    t0 = time.monotonic()
+    timings: dict[str, float] = {}
+
+    def lap(name: str) -> None:
+        timings[name] = round(time.monotonic() - t0 - sum(timings.values()), 1)
+
     latest = read_json(storage, f"{prefix}/latest.json")
     if not latest:
         raise RuntimeError("nothing published yet")
@@ -144,32 +152,39 @@ def build(storage: Storage, out: Path, prefix: str = "published") -> dict:
             put(name, obj)
             optional.append(name)
 
+    lap("summary files")
+
+    # the shards and the logos are many small downloads: several at a time
     tickers = {r["t"] for r in radar["rows"]}
     n_assets = 0
-    for f in storage.list(f"{run}/assets"):
-        if not f.endswith(".json.gz"):
-            continue
-        for tk, d in (read_json(storage, f) or {}).items():
-            # (benchmarks and sector ETFs also have a detail: only their series, which is dropped)
-            if tk in tickers and TICKER_RE.match(tk) and "row" in d:
-                put(f"assets/{tk}.json", asset(d))
-                n_assets += 1
+    shards = [f for f in storage.list(f"{run}/assets") if f.endswith(".json.gz")]
+    with ThreadPoolExecutor(workers) as pool:
+        for shard in pool.map(lambda f: read_json(storage, f) or {}, shards):
+            for tk, d in shard.items():
+                # (benchmarks and sector ETFs also have a detail: only their series, which is dropped)
+                if tk in tickers and TICKER_RE.match(tk) and "row" in d:
+                    put(f"assets/{tk}.json", asset(d))
+                    n_assets += 1
+    lap("assets")
 
+    wanted = [f for f in storage.list(f"{prefix}/logos")
+              if f.endswith(".png") and (tk := f.rsplit("/", 1)[1][:-4]) in tickers and TICKER_RE.match(tk)]
     logos = []
-    for f in storage.list(f"{prefix}/logos"):
-        tk = f.rsplit("/", 1)[1][:-4]
-        if f.endswith(".png") and tk in tickers and TICKER_RE.match(tk):
-            data = storage.read_bytes(f)
+    with ThreadPoolExecutor(workers) as pool:
+        for f, data in zip(wanted, pool.map(storage.read_bytes, wanted)):
             if data:
+                tk = f.rsplit("/", 1)[1][:-4]
                 (out / "logos" / f"{tk}.png").write_bytes(data)
                 logos.append(tk)
     put("logos/index.json", {"have": sorted(logos)})
+    lap("logos")
     (out / "SOURCES.md").write_text(SOURCES)
     # (last, and with the optional files it has, so a reader never asks for one that is not there)
     put("latest.json", {**latest, "path": ".", "files": optional})
 
     check(out)
+    lap("check")
     summary = {"run_id": latest["run_id"], "data_asof": latest["data_asof"], "demo": latest.get("demo", False),
-               "rows": len(radar["rows"]), "assets": n_assets, "logos": len(logos)}
+               "rows": len(radar["rows"]), "assets": n_assets, "logos": len(logos), "seconds": timings}
     log.info("public extract: %s", summary)
     return summary
