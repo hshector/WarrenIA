@@ -33,6 +33,7 @@
 | **Artefactos versionados en lugar de tablas de mercado** | Cada ejecución publica ficheros inmutables (`runs/<run_id>`), y `latest.json` se escribe al final, así que nadie ve una ejecución a medias. Son reproducibles (llevan `config_hash`, `git_sha` y la fecha de los datos) y caben en el plan Free (~4‑30 MB por ejecución; se guardan las 7 últimas). |
 | **Postgres solo para datos del usuario** | Instrumentos, operaciones, watchlist y ajustes, con RLS por `auth.uid()`. |
 | **Datos de mercado privados** | Bucket privado, leído solo por el servidor. Las condiciones de los proveedores prohíben redistribuir, y por eso toda la app requiere login. |
+| **Extracto público sin precios** | Tras cada ejecución, `public-data.yml` publica en la release `public-data` lo que calcula WarrenIA (puntuaciones, estados, razones, rentabilidades y riesgo en %), los fundamentales de la SEC, los tipos del BCE y los logos, **sin ningún precio ni serie de precios** (`engine/warrenia_engine/public.py`, que falla si se cuela uno). Lo usa la demo del portfolio. |
 | **Fail closed** | Sin Supabase en Vercel, la app no muestra nada (`/setup`). Con la lista de correos vacía, no entra nadie. El modo local sin login nunca funciona en Vercel (tests en `lib/supabase/env.test.ts`). |
 
 ## Módulos principales
