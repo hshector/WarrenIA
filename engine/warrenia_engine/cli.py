@@ -27,9 +27,10 @@ from .storage import LocalStorage, storage_from_env
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="warrenia_engine")
-    ap.add_argument("command", choices=["doctor", "demo", "update", "compute", "eu-prices", "logos", "backtest", "notify"])
+    ap.add_argument("command", choices=["doctor", "demo", "update", "compute", "eu-prices", "logos", "backtest", "notify", "public"])
     ap.add_argument("--max-minutes", type=float, default=float(os.environ.get("INGEST_MAX_MINUTES", "300")))
     ap.add_argument("--data-dir", default=None, help="local storage dir (overrides env)")
+    ap.add_argument("--out", default="public-data", help="public: folder to write the extract to")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -123,6 +124,14 @@ def main(argv: list[str] | None = None) -> int:
 
         out = notify_from_env(storage)
         print(json.dumps(out, indent=2, ensure_ascii=False))
+        return 0
+
+    if args.command == "public":
+        from pathlib import Path
+
+        from .public import build
+
+        print(json.dumps(build(storage, Path(args.out)), indent=2, ensure_ascii=False))
         return 0
 
     if args.command == "backtest":

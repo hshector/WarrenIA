@@ -1,0 +1,52 @@
+# Public extract for the WarrenIA demo in Héctor's portfolio: after each market-data run,
+# the scores, reasons, SEC fundamentals and logos, WITHOUT prices (the providers do not
+# allow redistributing them; engine/warrenia_engine/public.py). Published as the asset of the
+# `public-data` release, which the portfolio downloads when it builds.
+name: public-data
+
+on:
+  workflow_run:
+    workflows: [market-data]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: public-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # (only to replace the release asset)
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_BUCKET: ${{ vars.SUPABASE_BUCKET || 'market' }}
+      WARRENIA_CONFIG_DIR: ${{ github.workspace }}/config
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+      - name: Install engine
+        run: pip install -e ./engine
+      - name: Build the extract (fails if a price slipped through)
+        run: python -m warrenia_engine public --out public-data
+      - name: Publish it as the public-data release
+        run: |
+          if [ "$(jq -r .demo public-data/latest.json)" != "false" ]; then
+            echo "::warning::demo data: not published"; exit 0
+          fi
+          tar -czf public-data.tar.gz -C public-data .
+          ls -la public-data.tar.gz
+          gh release view public-data >/dev/null 2>&1 || gh release create public-data --latest=false \
+            --title "Public data (nightly)" \
+            --notes "WarrenIA's nightly scores, reasons, SEC fundamentals and company logos, without market prices. Read by the portfolio demo. See SOURCES.md inside. Not investment advice."
+          gh release upload public-data public-data.tar.gz --clobber
+          echo "Published $(jq -r .data_asof public-data/latest.json) · $(ls public-data/assets | wc -l) assets · $(ls public-data/logos | wc -l) logo files" >> "$GITHUB_STEP_SUMMARY"
