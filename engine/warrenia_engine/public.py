@@ -14,7 +14,7 @@ is public by origin, and drops every price:
 `check()` fails the run if a price slipped through, so a new field in the engine cannot leak one.
 
 Output (plain JSON, one file per asset, so a static host can serve it as is):
-  latest.json · meta.json · market.json · radar.json · excluded.json · signals.json
+  latest.json (with `files`: which of signals, backtest and fx it has) · meta.json · market.json · radar.json · excluded.json · signals.json
   backtest.json · fx.json · assets/<TICKER>.json · logos/<TICKER>.png · logos/index.json · SOURCES.md
 """
 
@@ -130,18 +130,19 @@ def build(storage: Storage, out: Path, prefix: str = "published") -> dict:
     def put(name: str, obj: Any) -> None:
         (out / name).write_text(json.dumps(obj, separators=(",", ":"), ensure_ascii=False, allow_nan=False))
 
-    put("latest.json", {**latest, "path": "."})
     put("meta.json", meta(read_json(storage, f"{run}/meta.json")))
     put("market.json", market(read_json(storage, f"{run}/market.json")))
     radar = read_json(storage, f"{run}/radar.json.gz")
     put("radar.json", {**radar, "rows": [row(r) for r in radar["rows"]]})
     excluded = read_json(storage, f"{run}/excluded.json.gz") or []
     put("excluded.json", [{**e, "px": None} for e in excluded])
+    optional = []
     for name, path in (("signals.json", f"{prefix}/signals.json"), ("backtest.json", f"{prefix}/backtest/latest.json"),
                        ("fx.json", f"{prefix}/fx/ecb.json")):
         obj = read_json(storage, path)
         if obj is not None:
             put(name, obj)
+            optional.append(name)
 
     tickers = {r["t"] for r in radar["rows"]}
     n_assets = 0
@@ -164,6 +165,8 @@ def build(storage: Storage, out: Path, prefix: str = "published") -> dict:
                 logos.append(tk)
     put("logos/index.json", {"have": sorted(logos)})
     (out / "SOURCES.md").write_text(SOURCES)
+    # (last, and with the optional files it has, so a reader never asks for one that is not there)
+    put("latest.json", {**latest, "path": ".", "files": optional})
 
     check(out)
     summary = {"run_id": latest["run_id"], "data_asof": latest["data_asof"], "demo": latest.get("demo", False),

@@ -39,6 +39,7 @@ def test_build_keeps_the_analysis_and_drops_every_price(tmp_path):
     out = tmp_path / "out"
     summary = build(published(tmp_path), out)
     assert summary == {"run_id": "r1", "data_asof": "2026-10-22", "demo": False, "rows": 1, "assets": 1, "logos": 1}
+    assert json.loads((out / "latest.json").read_text())["files"] == ["signals.json"]
     radar = json.loads((out / "radar.json").read_text())
     assert radar["rows"][0]["px"] is None and radar["rows"][0]["m"] == 90.0 and radar["rows"][0]["s50"] == 0.05
     a = json.loads((out / "assets" / "AAA.json").read_text())
