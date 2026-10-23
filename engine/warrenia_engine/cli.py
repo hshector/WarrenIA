@@ -131,7 +131,10 @@ def main(argv: list[str] | None = None) -> int:
 
         from .public import build
 
-        print(json.dumps(build(storage, Path(args.out)), indent=2, ensure_ascii=False))
+        out = build(storage, Path(args.out))
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        if os.environ.get("GITHUB_ACTIONS"):
+            print(f"::notice title=public extract::{json.dumps(out, ensure_ascii=False)}")
         return 0
 
     if args.command == "backtest":

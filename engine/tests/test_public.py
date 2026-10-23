@@ -38,6 +38,7 @@ def published(tmp_path):
 def test_build_keeps_the_analysis_and_drops_every_price(tmp_path):
     out = tmp_path / "out"
     summary = build(published(tmp_path), out)
+    assert set(summary.pop("seconds")) == {"summary files", "assets", "logos", "check"}
     assert summary == {"run_id": "r1", "data_asof": "2026-10-22", "demo": False, "rows": 1, "assets": 1, "logos": 1}
     assert json.loads((out / "latest.json").read_text())["files"] == ["signals.json"]
     radar = json.loads((out / "radar.json").read_text())
